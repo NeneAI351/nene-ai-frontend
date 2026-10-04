@@ -1,11 +1,11 @@
-const CACHE = 'nene-ai-shell-v1';
+const CACHE = 'nene-ai-shell-v2';
 
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './icon-192.svg',
-  './icon-512.svg'
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 self.addEventListener('install', event => {
