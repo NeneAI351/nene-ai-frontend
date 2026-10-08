@@ -318,7 +318,7 @@ function openTool(type){
  type==="ad" ? `<div class="block"><div class="label">Ad style</div><div class="chips">${chips(["Realistic","Cinematic","Luxury","Modern","Minimalist"])}</div></div>` :
  type==="social" ? `<div class="block"><div class="label">Platform</div><div class="chips">${chips(["TikTok","Instagram Reels","YouTube Shorts","Facebook"])}</div></div><div class="block"><div class="label">Add-ons</div><div class="chips">${chips(["Captions","AI Voice","Music"])}</div></div>` :
  `<div class="block"><div class="label">Visual style</div><div class="chips">${chips(["Cinematic","Realistic","Animated","3D","Vintage","Dynamic"])}</div></div>`;
- screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider"><option value="auto">Auto (Best available)</option><option value="pixazo">Pixazo</option><option value="magic-hour">Magic Hour</option><option value="ltx">LTX</option></select></div><div class="notice">Real LTX generation is enabled when your secure NENE AI backend is connected. Image → Video uses your uploaded image as the first frame. Free exports will carry NENE AI branding; paid credits can later unlock watermark-free HD/4K exports.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">✨ Generate ${titles[type].replace(" → Video","")} Video · ${costs[type]} credits</button></div></main>`;
+ screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider" onchange="syncVideoProviderOptions()"><option value="auto">Auto (Best available)</option><option value="pixazo">Pixazo</option><option value="magic-hour">Magic Hour</option><option value="ltx">LTX</option></select></div><div class="notice">Real LTX generation is enabled when your secure NENE AI backend is connected. Image → Video uses your uploaded image as the first frame. Free exports will carry NENE AI branding; paid credits can later unlock watermark-free HD/4K exports.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">✨ Generate ${titles[type].replace(" → Video","")} Video · ${costs[type]} credits</button></div></main>`;
  const genBtn=document.getElementById('neneGenerateBtn');
 window.currentNeneToolType=type;
 if(genBtn){
@@ -407,7 +407,7 @@ window.generate = async function generate(type) {
   const durationEl = document.getElementById('neneDuration');
   const resolutionEl = document.getElementById('neneResolution');
   const requestedDuration = Number(durationEl ? durationEl.value : 10);
-  const resolution = resolutionEl ? resolutionEl.value : '1920x1080';
+  let resolution = resolutionEl ? resolutionEl.value : '1920x1080';
 
   // LTX-2.5 Fast supports 6/8/10 seconds at 4K and 6–20 seconds at 720p/1080p.
   let duration = requestedDuration;
@@ -452,6 +452,13 @@ window.generate = async function generate(type) {
     if (button) button.innerHTML = '⏳ Sending to NENE AI…';
     const providerEl = document.getElementById('neneProvider');
     const provider = providerEl ? providerEl.value : 'auto';
+    syncVideoProviderOptions();
+    const effectiveResolutionEl = document.getElementById('neneResolution');
+    if(provider === 'magic-hour'){
+      if(resolution === '1920x1080') resolution = '1080p';
+      else if(resolution === '1280x720') resolution = '720p';
+      else if(resolution === '3840x2160') resolution = '1080p';
+    }
     const payload = {
       type: type === 'image' ? 'image-to-video' : 'text-to-video',
       prompt,
@@ -537,7 +544,7 @@ window.generate = async function generate(type) {
     } catch (_) {}
     const pendingStillActive = err && err.code === 'NENE_JOB_PENDING';
     if (!pendingStillActive) {
-      if (typeof credits !== 'undefined') credits += cost;
+      if (typeof credits !== 'undefined') credits = Math.min(1000, credits + cost);
       if (typeof updateCredits === 'function') updateCredits();
     }
     alert((pendingStillActive ? 'Video is still processing: ' : 'Video generation failed: ') + (err?.message || err));
@@ -551,6 +558,26 @@ window.generate = async function generate(type) {
 
 function typeLabel(t){return {text:"Text → Video",image:"Image → Video",ad:"AI Advertisement",social:"Social Content",story:"Story → Video"}[t]}
 function typeIcon(t){return {text:"🎬",image:"🖼️",ad:"📢",social:"📱",story:"📖"}[t]}
+function syncVideoProviderOptions(){
+  const providerEl=document.getElementById('neneProvider');
+  const resolutionEl=document.getElementById('neneResolution');
+  if(!providerEl || !resolutionEl) return;
+  const provider=providerEl.value;
+  const current=resolutionEl.value;
+  if(provider==='magic-hour'){
+    resolutionEl.innerHTML='<option value="480p">480p (Free)</option><option value="720p">720p (Paid)</option><option value="1080p">1080p (Paid)</option>';
+    if(current==='1920x1080') resolutionEl.value='1080p';
+    if(current==='1280x720') resolutionEl.value='720p';
+    if(!['480p','720p','1080p'].includes(resolutionEl.value)) resolutionEl.value='480p';
+  }else{
+    resolutionEl.innerHTML='<option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option>';
+    if(current==='480p') resolutionEl.value='1280x720';
+    else if(current==='720p') resolutionEl.value='1280x720';
+    else if(current==='1080p') resolutionEl.value='1920x1080';
+    else if(['1920x1080','1280x720','3840x2160'].includes(current)) resolutionEl.value=current;
+    else resolutionEl.value='1920x1080';
+  }
+}
 function updateCredits(){document.getElementById('credits').textContent=credits.toLocaleString()}
 function showModal(x){document.getElementById('modalbox').innerHTML=x;document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
