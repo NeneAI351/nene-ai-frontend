@@ -198,10 +198,128 @@ function saveState(){
 const JOBS_KEY='nene_ai_jobs_v1';
 let neneJobs=[];try{neneJobs=JSON.parse(localStorage.getItem(JOBS_KEY)||'[]');if(!Array.isArray(neneJobs))neneJobs=[];}catch(_){neneJobs=[];}
 function saveJobs(){try{localStorage.setItem(JOBS_KEY,JSON.stringify(neneJobs.slice(0,100)));}catch(_){}}
-function recordNeneJob(data){const job={id:data.id,status:data.status||'QUEUED',type:data.type||'Video',mode:data.mode||'text-to-video',provider:data.provider||'auto',prompt:data.prompt||'',createdAt:data.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),videoUrl:data.videoUrl||null,error:data.error||null,duration:data.duration,resolution:data.resolution};const idx=neneJobs.findIndex(x=>x.id===job.id);if(idx>=0)neneJobs[idx]={...neneJobs[idx],...job};else neneJobs.unshift(job);saveJobs();}
+const neneActivePolls=new Set();
+function recordNeneJob(data){
+ const existing=neneJobs.find(x=>x.id===data.id);
+ const job={
+  id:data.id,
+  status:data.status||'QUEUED',
+  type:data.type||'Video',
+  mode:data.mode||'text-to-video',
+  provider:data.provider||'auto',
+  prompt:data.prompt||'',
+  createdAt:data.createdAt||(existing&&existing.createdAt)||new Date().toISOString(),
+  updatedAt:new Date().toISOString(),
+  videoUrl:data.videoUrl||null,
+  error:data.error||null,
+  duration:data.duration,
+  resolution:data.resolution,
+  creditCharged:data.creditCharged===true ? true : !!(existing&&existing.creditCharged),
+  creditRefunded:data.creditRefunded===true ? true : !!(existing&&existing.creditRefunded)
+ };
+ if(existing) neneJobs[neneJobs.indexOf(existing)]={...existing,...job};
+ else neneJobs.unshift(job);
+ saveJobs();
+}
 function updateNeneJob(id,patch){const j=neneJobs.find(x=>x.id===id);if(!j)return;Object.assign(j,patch,{updatedAt:new Date().toISOString()});saveJobs();}
-function renderJobCenter(){setNav('creations');const active=neneJobs.filter(j=>!['COMPLETED','FAILED','CANCELLED'].includes(String(j.status).toUpperCase())).length;screen.innerHTML='<main><div class="eyebrow">Production control</div><h1>Generation Center</h1><p class="subtitle">Track every generation without submitting duplicates. Accepted jobs stay here until they finish.</p><div class="grid"><div class="notice"><b>'+active+'</b><br>active jobs</div><div class="notice"><b>'+neneJobs.filter(j=>String(j.status).toUpperCase()==='COMPLETED').length+'</b><br>completed</div><div class="notice"><b>'+neneJobs.filter(j=>String(j.status).toUpperCase()==='FAILED').length+'</b><br>failed</div></div><div class="section-title">Jobs</div><div class="list">'+(neneJobs.length?neneJobs.map(j=>'<div class="creation"><div class="thumb">'+(String(j.status).toUpperCase()==='COMPLETED'?'✅':String(j.status).toUpperCase()==='FAILED'?'⚠️':'⏳')+'</div><div style="flex:1"><b>'+String(j.prompt||'Generation').slice(0,90)+'</b><div><span class="badge">'+j.type+'</span> <span class="badge">'+j.provider+'</span> <span class="badge">'+String(j.status).toUpperCase()+'</span></div><small>'+new Date(j.updatedAt||j.createdAt).toLocaleString()+'</small>'+(j.error?'<div class="notice" style="margin-top:8px">'+j.error+'</div>':'')+(j.videoUrl?'<video controls playsinline style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+j.videoUrl+'"></video>':'')+'</div></div>').join(''):'<div class="notice">No generations yet.</div>')+'</div><button class="btn secondary" style="margin-top:12px" onclick="renderCreations()">← My Creations</button></main>';}
-function recoverPendingJob(){try{const p=JSON.parse(localStorage.getItem('nene_pending_job')||'null');if(!p||!p.jobId)return;const existing=neneJobs.find(j=>j.id===p.jobId);if(existing)return;recordNeneJob({id:p.jobId,status:'PROCESSING',type:p.type==='image'?'Image → Video':'Text → Video',mode:p.mode,provider:p.provider,prompt:p.prompt});}catch(_){} }
+function neneExtractVideoUrl(final){
+ return final?.video_url||final?._nene_video_url||final?.result?.video_url||final?.output?.video_url||
+ final?.output?.media_url?.[0]||final?.result?.media_url?.[0]||final?.downloads?.[0]?.url||
+ final?.result?.downloads?.[0]?.url||final?.result?.url||final?.url||null;
+}
+function neneClearPendingForJob(id){
+ try{
+  const p=JSON.parse(localStorage.getItem('nene_pending_job')||'null');
+  if(p&&p.jobId===id)localStorage.removeItem('nene_pending_job');
+ }catch(_){}
+}
+function neneSaveCreationFromJob(job,videoUrl){
+ if(typeof creations==='undefined')return;
+ const already=creations.some(c=>c.jobId===job.id||c.videoUrl===videoUrl);
+ if(already)return;
+ const label=job.type||'Text → Video';
+ creations.unshift({
+  jobId:job.id,
+  name:neneCreationName(job.prompt||'Generation',label),
+  type:label,
+  prompt:job.prompt||'',
+  videoUrl,
+  provider:job.provider||'auto',
+  duration:job.duration,
+  resolution:job.resolution,
+  icon:label==='Image → Video'?'🖼️':'🎬',
+  createdAt:new Date().toISOString()
+ });
+ if(typeof saveState==='function')saveState();
+}
+async function resumeNeneJob(id){
+ if(neneActivePolls.has(id))return;
+ const job=neneJobs.find(j=>j.id===id);
+ if(!job)return;
+ const status=String(job.status||'').toUpperCase();
+ if(['COMPLETED','FAILED','CANCELLED'].includes(status))return;
+ if(!window.NENEBackend.getUrl()){toast('Connect the NENE AI backend before resuming this job.');return;}
+ neneActivePolls.add(id);
+ updateNeneJob(id,{status:'PROCESSING',error:null});
+ try{
+  localStorage.setItem('nene_pending_job',JSON.stringify({
+   jobId:id,mode:job.mode,type:job.type==='Image → Video'?'image':'text',prompt:job.prompt||'',provider:job.provider,createdAt:job.createdAt
+  }));
+ }catch(_){}
+ try{
+  const final=await window.NENEBackend.waitForJob(id,job.mode,job.provider,function(update){
+   const s=String(update?.status||'').toUpperCase();
+   updateNeneJob(id,{status:s||'PROCESSING'});
+  },900000,7000);
+  const finalStatus=String(final?.status||'').toLowerCase();
+  if(['failed','error','cancelled','canceled'].includes(finalStatus)){
+   const detail=final?.error?.message||final?.error||final?.message||'Generation failed.';
+   throw new Error(typeof detail==='string'?detail:JSON.stringify(detail));
+  }
+  const videoUrl=neneExtractVideoUrl(final);
+  if(!videoUrl)throw new Error('Generation finished, but no video URL was returned.');
+  updateNeneJob(id,{status:'COMPLETED',videoUrl,error:null});
+  neneClearPendingForJob(id);
+  const fresh=neneJobs.find(j=>j.id===id);
+  if(fresh)neneSaveCreationFromJob(fresh,videoUrl);
+  toast('Generation completed and was saved.');
+ }catch(err){
+  const pendingStillActive=err&&err.code==='NENE_JOB_PENDING';
+  if(pendingStillActive){
+   updateNeneJob(id,{status:'PROCESSING',error:null});
+  }else{
+   const fresh=neneJobs.find(j=>j.id===id);
+   updateNeneJob(id,{status:'FAILED',error:err?.message||String(err)});
+   neneClearPendingForJob(id);
+   if(fresh&&fresh.creditCharged&&!fresh.creditRefunded){
+    if(typeof credits!=='undefined')credits=Math.min(1000,credits+10);
+    updateNeneJob(id,{creditRefunded:true});
+    if(typeof updateCredits==='function')updateCredits();
+   }
+  }
+ }finally{
+  neneActivePolls.delete(id);
+  if(typeof renderJobCenter==='function')renderJobCenter();
+ }
+}
+function resumeActiveNeneJobs(){
+ if(!window.NENEBackend.getUrl())return;
+ neneJobs.filter(j=>!['COMPLETED','FAILED','CANCELLED'].includes(String(j.status||'').toUpperCase())).slice(0,5).forEach(j=>resumeNeneJob(j.id));
+}
+function renderJobCenter(){
+ setNav('creations');
+ const active=neneJobs.filter(j=>!['COMPLETED','FAILED','CANCELLED'].includes(String(j.status).toUpperCase())).length;
+ screen.innerHTML='<main><div class="eyebrow">Production control</div><h1>Generation Center</h1><p class="subtitle">Track every generation without submitting duplicates. Accepted jobs stay here until they finish.</p><div class="grid"><div class="notice"><b>'+active+'</b><br>active jobs</div><div class="notice"><b>'+neneJobs.filter(j=>String(j.status).toUpperCase()==='COMPLETED').length+'</b><br>completed</div><div class="notice"><b>'+neneJobs.filter(j=>String(j.status).toUpperCase()==='FAILED').length+'</b><br>failed</div></div><div class="section-title">Jobs</div><div class="list">'+(neneJobs.length?neneJobs.map(j=>{const st=String(j.status).toUpperCase();const action=!['COMPLETED','FAILED','CANCELLED'].includes(st)?'<button class="btn secondary" style="width:auto;padding:8px 11px;margin-top:8px" onclick="resumeNeneJob('+JSON.stringify(j.id)+')">↻ Resume / Check</button>':'';return '<div class="creation"><div class="thumb">'+(st==='COMPLETED'?'✅':st==='FAILED'?'⚠️':'⏳')+'</div><div style="flex:1"><b>'+String(j.prompt||'Generation').slice(0,90)+'</b><div><span class="badge">'+j.type+'</span> <span class="badge">'+j.provider+'</span> <span class="badge">'+st+'</span></div><small>'+new Date(j.updatedAt||j.createdAt).toLocaleString()+'</small>'+(j.error?'<div class="notice" style="margin-top:8px">'+j.error+'</div>':'')+(j.videoUrl?'<video controls playsinline style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+j.videoUrl+'"></video>':'')+action+'</div></div>';}).join(''):'<div class="notice">No generations yet.</div>')+'</div><button class="btn secondary" style="margin-top:12px" onclick="renderCreations()">← My Creations</button></main>';
+}
+function recoverPendingJob(){
+ try{
+  const p=JSON.parse(localStorage.getItem('nene_pending_job')||'null');
+  if(!p||!p.jobId)return;
+  const existing=neneJobs.find(j=>j.id===p.jobId);
+  if(existing){if(!['COMPLETED','FAILED','CANCELLED'].includes(String(existing.status||'').toUpperCase()))updateNeneJob(existing.id,{status:'PROCESSING'});return;}
+  recordNeneJob({id:p.jobId,status:'PROCESSING',type:p.type==='image'?'Image → Video':'Text → Video',mode:p.mode,provider:p.provider,prompt:p.prompt});
+ }catch(_){}
+}
 
 const costs={text:10,image:10,ad:15,social:10,story:20};
 const screen=document.getElementById('screen');
@@ -842,7 +960,7 @@ window.generate = async function generate(type) {
     if (!jobId) throw new Error('The backend did not return a generation job ID.');
     const activeProvider = String(response?.provider || provider || 'auto').toLowerCase();
     const mode = type === 'image' ? 'image-to-video' : 'text-to-video';
-    recordNeneJob({id:jobId,status:'QUEUED',type:type==='image'?'Image → Video':'Text → Video',mode,provider:activeProvider,prompt,duration,resolution});
+    recordNeneJob({id:jobId,status:'QUEUED',type:type==='image'?'Image → Video':'Text → Video',mode,provider:activeProvider,prompt,duration,resolution,creditCharged:neneCreditsCharged});
     try {
       localStorage.setItem('nene_pending_job', JSON.stringify({
         jobId, mode, type, prompt, provider: activeProvider, createdAt: new Date().toISOString()
@@ -900,6 +1018,7 @@ window.generate = async function generate(type) {
 
     if (typeof creations !== 'undefined') {
       creations.unshift({
+        jobId,
         name: neneCreationName(prompt, label),
         type: label,
         prompt,
@@ -1153,6 +1272,8 @@ function renderProfile(){
 document.querySelectorAll('.nav').forEach(n=>n.addEventListener('click',()=>{const k=n.dataset.nav;if(k==='home')recoverPendingJob();
 renderHome();if(k==='creations')renderCreations();if(k==='profile')renderProfile();if(k==='create')renderCreateHub()}));
 renderHome();
+recoverPendingJob();
+resumeActiveNeneJobs();
 </script>
 
 <!-- NENE AI v2 product-completeness layer -->
