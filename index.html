@@ -589,12 +589,48 @@ async function generateStoryScenes(){
       projects.unshift({id:plan.id,title:plan.title,characters:plan.characters,scenes:sceneResults,status:'scenes-generated',createdAt:new Date().toISOString()});
       localStorage.setItem('nene_story_projects_v1',JSON.stringify(projects.slice(0,50)));
     }catch(_){}
+    let assembledStory=null;
+    try{
+      if(button) button.textContent='🧩 Assembling final Story…';
+      const assembleResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/story/assemble',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          title:plan.title,
+          scene_urls:sceneResults.sort((a,b)=>Number(a.scene)-Number(b.scene)).map(r=>r.videoUrl)
+        })
+      });
+      if(!assembleResponse.ok){
+        const text=await assembleResponse.text();
+        throw new Error(text||'Story assembly failed.');
+      }
+      assembledStory=await assembleResponse.json();
+      if(assembledStory?.video_url && typeof creations!=='undefined'){
+        creations.unshift({
+          name:plan.title+' — Final Story',
+          type:'Story Video',
+          prompt:plan.storyPrompt||plan.title,
+          videoUrl:assembledStory.video_url,
+          provider:'NENE AI Assembly',
+          duration:sceneResults.reduce((sum,r)=>sum+Number(r.duration||0),0),
+          resolution:'1280x720 assembled',
+          icon:'📖',
+          createdAt:new Date().toISOString()
+        });
+        if(typeof saveState==='function')saveState();
+      }
+    }catch(assemblyError){
+      console.warn('Story assembly unavailable:',assemblyError);
+    }
     const main=document.querySelector('main');
     if(main){
       const cards=sceneResults.map(r=>'<div class="creation"><div class="thumb">🎬</div><div style="flex:1"><b>Scene '+r.scene+': '+r.title+'</b><small>'+r.characters.join(' + ')+'</small><video controls playsinline preload="metadata" style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+r.videoUrl+'"></video><div style="margin-top:6px"><a href="'+r.videoUrl+'" target="_blank" rel="noopener" style="color:var(--gold2);font-size:12px">Open scene video</a></div></div></div>').join('');
-      main.insertAdjacentHTML('beforeend','<div class="section-title">Generated Story Scenes</div><div class="list">'+cards+'</div><div class="notice" style="margin-top:10px">✓ '+sceneResults.length+' scene(s) generated and saved. The scenes are individual assets for now; the next assembly step will join them into one finished Story video.</div>');
+      const finalCard=assembledStory?.video_url
+        ? '<div class="section-title">Final Story</div><div class="creation"><div class="thumb">📖</div><div style="flex:1"><b>'+plan.title+'</b><small>All '+sceneResults.length+' scenes assembled into one video.</small><video controls playsinline preload="metadata" style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+assembledStory.video_url+'"></video><div style="margin-top:6px"><a href="'+assembledStory.video_url+'" target="_blank" rel="noopener" style="color:var(--gold2);font-size:12px">Open final Story video</a></div></div></div>'
+        : '<div class="notice" style="margin-top:10px">✓ '+sceneResults.length+' scene(s) generated and saved. Final assembly was not completed, but the individual scenes remain available.</div>';
+      main.insertAdjacentHTML('beforeend','<div class="section-title">Generated Story Scenes</div><div class="list">'+cards+'</div>'+finalCard);
     }
-    toast('Story scenes generated and saved');
+    toast(assembledStory?.video_url?'Story generated and assembled':'Story scenes generated and saved');
   }catch(err){
     alert('Story generation stopped: '+(err?.message||String(err))+'\nCompleted scenes remain saved in My Creations.');
   }finally{
