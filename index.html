@@ -481,7 +481,11 @@ async function generateStoryScenes(){
     duration = [3,5,10,15,30].includes(duration) ? duration : 3;
   }
   const button=document.getElementById('neneGenerateStoryScenesBtn');
-  const sceneResults=[];
+  let sceneResults=[];
+  try{
+    const savedScenes=JSON.parse(localStorage.getItem('nene_story_scene_results_v1')||'[]');
+    sceneResults=savedScenes.filter(x=>x.storyId===plan.id && x.videoUrl).sort((a,b)=>Number(a.scene)-Number(b.scene));
+  }catch(_){ sceneResults=[]; }
   window.neneStoryGenerating=true;
   if(button){button.disabled=true;button.textContent='⏳ Generating Story Scenes…';}
   try{
