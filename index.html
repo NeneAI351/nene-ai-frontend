@@ -195,6 +195,13 @@ function saveState(){
  try{localStorage.setItem(NENE_STATE_KEY,JSON.stringify({credits,creations:creations.slice(0,100)}));}catch(_){}
  saveProjects();
 }
+const JOBS_KEY='nene_ai_jobs_v1';
+let neneJobs=[];try{neneJobs=JSON.parse(localStorage.getItem(JOBS_KEY)||'[]');if(!Array.isArray(neneJobs))neneJobs=[];}catch(_){neneJobs=[];}
+function saveJobs(){try{localStorage.setItem(JOBS_KEY,JSON.stringify(neneJobs.slice(0,100)));}catch(_){}}
+function recordNeneJob(data){const job={id:data.id,status:data.status||'QUEUED',type:data.type||'Video',mode:data.mode||'text-to-video',provider:data.provider||'auto',prompt:data.prompt||'',createdAt:data.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),videoUrl:data.videoUrl||null,error:data.error||null,duration:data.duration,resolution:data.resolution};const idx=neneJobs.findIndex(x=>x.id===job.id);if(idx>=0)neneJobs[idx]={...neneJobs[idx],...job};else neneJobs.unshift(job);saveJobs();}
+function updateNeneJob(id,patch){const j=neneJobs.find(x=>x.id===id);if(!j)return;Object.assign(j,patch,{updatedAt:new Date().toISOString()});saveJobs();}
+function renderJobCenter(){setNav('creations');const active=neneJobs.filter(j=>!['COMPLETED','FAILED','CANCELLED'].includes(String(j.status).toUpperCase())).length;screen.innerHTML='<main><div class="eyebrow">Production control</div><h1>Generation Center</h1><p class="subtitle">Track every generation without submitting duplicates. Accepted jobs stay here until they finish.</p><div class="grid"><div class="notice"><b>'+active+'</b><br>active jobs</div><div class="notice"><b>'+neneJobs.filter(j=>String(j.status).toUpperCase()==='COMPLETED').length+'</b><br>completed</div><div class="notice"><b>'+neneJobs.filter(j=>String(j.status).toUpperCase()==='FAILED').length+'</b><br>failed</div></div><div class="section-title">Jobs</div><div class="list">'+(neneJobs.length?neneJobs.map(j=>'<div class="creation"><div class="thumb">'+(String(j.status).toUpperCase()==='COMPLETED'?'✅':String(j.status).toUpperCase()==='FAILED'?'⚠️':'⏳')+'</div><div style="flex:1"><b>'+String(j.prompt||'Generation').slice(0,90)+'</b><div><span class="badge">'+j.type+'</span> <span class="badge">'+j.provider+'</span> <span class="badge">'+String(j.status).toUpperCase()+'</span></div><small>'+new Date(j.updatedAt||j.createdAt).toLocaleString()+'</small>'+(j.error?'<div class="notice" style="margin-top:8px">'+j.error+'</div>':'')+(j.videoUrl?'<video controls playsinline style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+j.videoUrl+'"></video>':'')+'</div></div>').join(''):'<div class="notice">No generations yet.</div>')+'</div><button class="btn secondary" style="margin-top:12px" onclick="renderCreations()">← My Creations</button></main>';}
+function recoverPendingJob(){try{const p=JSON.parse(localStorage.getItem('nene_pending_job')||'null');if(!p||!p.jobId)return;const existing=neneJobs.find(j=>j.id===p.jobId);if(existing)return;recordNeneJob({id:p.jobId,status:'PROCESSING',type:p.type==='image'?'Image → Video':'Text → Video',mode:p.mode,provider:p.provider,prompt:p.prompt});}catch(_){} }
 
 const costs={text:10,image:10,ad:15,social:10,story:20};
 const screen=document.getElementById('screen');
@@ -835,6 +842,7 @@ window.generate = async function generate(type) {
     if (!jobId) throw new Error('The backend did not return a generation job ID.');
     const activeProvider = String(response?.provider || provider || 'auto').toLowerCase();
     const mode = type === 'image' ? 'image-to-video' : 'text-to-video';
+    recordNeneJob({id:jobId,status:'QUEUED',type:type==='image'?'Image → Video':'Text → Video',mode,provider:activeProvider,prompt,duration,resolution});
     try {
       localStorage.setItem('nene_pending_job', JSON.stringify({
         jobId, mode, type, prompt, provider: activeProvider, createdAt: new Date().toISOString()
@@ -870,6 +878,7 @@ window.generate = async function generate(type) {
       final?.url;
     if (!videoUrl) throw new Error('Generation finished, but no video URL was returned.');
     try { localStorage.removeItem('nene_pending_job'); } catch (_) {}
+    updateNeneJob(jobId,{status:'COMPLETED',videoUrl});
 
     const container =
       document.getElementById('neneGenerationResult') ||
@@ -913,6 +922,7 @@ window.generate = async function generate(type) {
       }
     } catch (_) {}
     const pendingStillActive = err && err.code === 'NENE_JOB_PENDING';
+    if (typeof jobId !== 'undefined' && jobId) updateNeneJob(jobId,{status:pendingStillActive?'PROCESSING':'FAILED',error:pendingStillActive?null:(err?.message||String(err))});
     // Refund only when NENE AI actually charged this generation attempt.
     // Provider-side rejections (for example insufficient Magic Hour credits)
     // must never consume the user's NENE AI credits.
@@ -1089,7 +1099,7 @@ function renderProfile(){
   <div class="section-title">Workspace</div>
   <div class="list">
    <button class="btn" onclick="renderCreateHub()">＋ Create</button>
-   <button class="btn" onclick="openFeature('characters')">🎭 Characters</button>
+   <button class="btn" onclick="openFeature('characters')">🎭 Characters</button><button class="card" onclick="renderJobCenter()"><div class="icon">⚙️</div><b>Generation Center</b><small>Track queued, processing and completed jobs.</small></button>
    <button class="btn" onclick="openFeature('brand')">🏷️ Brand Kit</button>
    <button class="btn" onclick="openFeature('privacy')">🔐 Privacy Center</button>
    <button class="btn" onclick="openFeature('account')">👤 Account & Security</button>
