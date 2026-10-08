@@ -153,10 +153,17 @@ const projects=[
  {name:"NENE AI Launch Campaign",type:"AI Advertisement",status:"Draft",icon:"📢"},
  {name:"My Story Series",type:"Story Project",status:"In progress",icon:"📖"}
 ];
+const CHARACTER_STATE_KEY='nene_ai_characters_v1';
+let savedCharacters=[];
+try{savedCharacters=JSON.parse(localStorage.getItem(CHARACTER_STATE_KEY)||'[]');if(!Array.isArray(savedCharacters))savedCharacters=[];}catch(_){savedCharacters=[];}
 const characters=[
- {name:"NENE Creator",desc:"Primary AI persona",icon:"👩🏾‍💻"},
- {name:"Product Hero",desc:"Reusable product character",icon:"✨"}
+ {name:"NENE Creator",desc:"Primary AI persona",icon:"👩🏾‍💻",builtin:true},
+ {name:"Product Hero",desc:"Reusable product character",icon:"✨",builtin:true},
+ ...savedCharacters
 ];
+function saveCharacters(){
+  try{localStorage.setItem(CHARACTER_STATE_KEY,JSON.stringify(characters.filter(c=>!c.builtin).slice(0,50)));}catch(_){}
+}
 const brandKit={name:"NENE AI",colors:"Black · Gold · Cream",font:"Premium Serif + Clean Sans"};
 const settings={aiDisclosure:true,saveHistory:true,personalization:true,analytics:false};
 let currentFeature="";
@@ -272,7 +279,7 @@ function openFeature(type){
  const d=data[type]||data.director;
  let extra="";
  if(type==="director") extra=`<div class="block"><div class="label">Production goal</div><div class="chips">${chips(["Viral social video","Business ad","Story film","YouTube video","Product launch","Educational video"])}</div></div><div class="block"><div class="label">AI planning</div><div class="notice">NENE AI will eventually choose the best generation model per scene, build a storyboard, maintain character/brand consistency and return editable results.</div></div>`;
- if(type==="characters") extra=`<div class="block"><div class="label">Character name</div><input class="field" placeholder="e.g. Amara"></div><div class="block"><div class="label">Identity</div><div class="chips">${chips(["Realistic","Animated","3D","Cinematic","Fashion","Fantasy"])}</div></div><div class="block"><button class="btn" onclick="toast('Reference-image workflow ready for the real app')">＋ Add reference images</button></div><div class="notice">Character Lock is a core NENE AI feature: the same character should remain recognizable across scenes, outfits and locations.</div>`;
+ if(type==="characters") extra=`<div class="block"><div class="label">Character name</div><input class="field" id="characterName" placeholder="e.g. Amara"></div><div class="block"><div class="label">Appearance / identity description</div><textarea id="characterAppearance" placeholder="Age range, hairstyle, skin tone, facial features, body build, signature details..."></textarea></div><div class="block"><div class="label">Personality</div><textarea id="characterPersonality" placeholder="Confident, gentle, ambitious, funny..."></textarea></div><div class="block"><div class="label">Wardrobe / signature look</div><textarea id="characterWardrobe" placeholder="Describe the consistent clothing style, colors and accessories..."></textarea></div><div class="block"><div class="label">Identity style</div><div class="chips">${chips(["Realistic","Cinematic","Fashion","Animated","3D","Fantasy"])}</div></div><div class="block"><div class="label">Reference image</div><div class="upload preview" id="characterPreview">＋ Tap to add a character reference<input id="characterRef" type="file" accept="image/*" onchange="previewCharacterReference(event)"></div></div><div class="notice">🔒 <b>Character Lock:</b> this profile becomes the identity anchor for future Story → Video scenes. NENE AI will carry the same appearance description and reference into each scene.</div>`;
  if(type==="voice") extra=`<div class="block"><div class="label">Voice</div><div class="chips">${chips(["Warm","Confident","Calm","Energetic","Deep","Friendly"])}</div></div><div class="block"><div class="label">Language</div><select><option>English</option><option>French</option><option>Spanish</option><option>Portuguese</option><option>Arabic</option><option>Igbo</option><option>Yoruba</option></select></div><div class="notice">Voice cloning should require explicit consent and identity safeguards.</div>`;
  if(type==="audio") extra=`<div class="block"><div class="label">Music mood</div><div class="chips">${chips(["Cinematic","Afrobeats","Inspirational","Luxury","Emotional","Energetic","Minimal"])}</div></div><div class="block"><div class="label">Sound effects</div><div class="chips">${chips(["Whoosh","Impact","Ambient","Nature","UI","None"])}</div></div>`;
  if(type==="captions") extra=`<div class="block"><div class="label">Caption style</div><div class="chips">${chips(["Clean","Bold","Karaoke","Typewriter","Minimal","Creator"])}</div></div><div class="block"><div class="label">Output</div><div class="chips">${chips(["Burn into video","SRT file","Both"])}</div></div>`;
@@ -300,7 +307,21 @@ function toggleRow(label,key){
  return `<div class="toggle"><span>${label}</span><button class="switch ${settings[key]?'on':''}" onclick="settings['${key}']=!settings['${key}'];this.classList.toggle('on');this.querySelector('i').style.marginLeft=settings['${key}']?'21px':'0'"><i></i></button></div>`;
 }
 function runFeature(type){
- if(type==="director" || type==="script" || type==="editor" || type==="characters"){
+ if(type==="characters"){
+   const name=document.getElementById('characterName')?.value.trim();
+   const appearance=document.getElementById('characterAppearance')?.value.trim();
+   const personality=document.getElementById('characterPersonality')?.value.trim();
+   const wardrobe=document.getElementById('characterWardrobe')?.value.trim();
+   const ref=window.neneCharacterReferenceData||null;
+   if(!name){alert('Please give your character a name.');return;}
+   if(!appearance){alert('Please describe the character appearance.');return;}
+   const character={id:'char_'+Date.now(),name,desc:appearance.slice(0,90),appearance,personality,wardrobe,referenceImage:ref,icon:'🎭',createdAt:new Date().toISOString()};
+   characters.push(character);saveCharacters();
+   toast('Character profile saved with Character Lock');
+   setTimeout(()=>openFeature('characters'),350);
+   return;
+ }
+ if(type==="director" || type==="script" || type==="editor"){
    toast("Prototype workflow saved");
    projects.unshift({name:"New NENE AI "+(type==="director"?"Production":"Project"),type:type, status:"Draft",icon:"✨"});
  } else toast("Prototype workflow saved");
@@ -309,6 +330,18 @@ function runFeature(type){
 
 function chips(arr){
   return (arr||[]).map((x,i)=>`<button type="button" class="chip ${i===0?'active':''}" onclick="this.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));this.classList.add('active');return false;">${x}</button>`).join('');
+}
+
+window.neneCharacterReferenceData=null;
+function previewCharacterReference(e){
+  const file=e?.target?.files?.[0];
+  if(!file)return;
+  if(file.size>10*1024*1024){alert('Please choose a character reference under 10 MB.');return;}
+  neneReadImageData(file).then(data=>{
+    window.neneCharacterReferenceData=data;
+    const p=document.getElementById('characterPreview');
+    if(p)p.innerHTML=`<img src="${data}" style="width:100%;height:100%;object-fit:cover;border-radius:14px"><small style="position:absolute;left:10px;bottom:10px;background:#111c;padding:5px 8px;border-radius:8px;color:#f4c95d">Reference locked</small>`;
+  }).catch(err=>alert(err.message||'Could not read the reference image.'));
 }
 
 function openTool(type){
@@ -321,7 +354,7 @@ function openTool(type){
  if(type==="image") extra+=`<div class="block"><div class="label">Describe the motion</div><textarea id="prompt" placeholder="Example: Make the subject smile, move naturally, let the hair move in the breeze, cinematic camera movement..."></textarea></div>`;
  if(type==="ad") extra=`<div class="block"><div class="label">What are you selling?</div><input class="field" id="product" placeholder="e.g. Luxury skincare brand"></div><div class="block"><div class="label">Ad template</div><div class="chips">${chips(["Product Launch","UGC Style","Luxury","Testimonial","Problem → Solution","Promo Offer"])}</div></div><div class="block"><div class="label">Ad brief</div><textarea id="prompt" placeholder="Describe your audience, offer, message and call to action..."></textarea></div>`;
  if(type==="social") extra=`<div class="block"><div class="label">Content idea</div><textarea id="prompt" placeholder="Example: Create a 30-second motivational Reel about small steps and big dreams..."></textarea></div><div class="block"><div class="label">Platform</div><div class="chips">${chips(["TikTok","Instagram Reels","YouTube Shorts","Facebook","LinkedIn","X"])}</div></div><div class="block"><div class="label">Template</div><div class="chips">${chips(["Hook + Value","Storytime","Listicle","Talking Head","Product Showcase","Trend"])}</div></div>`;
- if(type==="story") extra=`<div class="block"><div class="label">Story idea</div><textarea id="prompt" placeholder="Tell NENE AI the story, characters, setting, conflict and ending..."></textarea></div><div class="block"><div class="label">Main character</div><input class="field" id="storyCharacter" placeholder="Name + appearance + personality"></div><div class="block"><div class="label">Number of scenes</div><select id="storyScenes"><option value="3">3 scenes</option><option value="5" selected>5 scenes</option><option value="8">8 scenes</option><option value="10">10 scenes</option></select></div><div class="notice">🎭 <b>Character Lock:</b> NENE AI will keep the main character's identity consistent across the planned scenes. Generation will be connected after the scene planner is saved.</div>`;
+ if(type==="story") extra=`<div class="block"><div class="label">Story idea</div><textarea id="prompt" placeholder="Tell NENE AI the story, setting, conflict, important moments and ending..."></textarea></div><div class="block"><div class="label">Character anchor</div><select id="storyCharacterSelect"><option value="">Create/select a character profile</option>${characters.map((c,i)=>`<option value="${i}">${c.name}</option>`).join('')}</select><small style="display:block;color:var(--muted);margin-top:7px">Choose a saved Character Studio profile so every planned scene uses the same identity anchor.</small></div><div class="block"><div class="label">Additional character direction</div><textarea id="storyCharacter" placeholder="Optional: what this character is doing or wearing in this story..."></textarea></div><div class="block"><div class="label">Number of scenes</div><select id="storyScenes"><option value="3">3 scenes</option><option value="5" selected>5 scenes</option><option value="8">8 scenes</option><option value="10">10 scenes</option></select></div><div class="notice">🎭 <b>Character Lock:</b> NENE AI will carry the selected character's identity anchor into every planned scene. Scene generation will reuse the same identity instructions and reference.</div>`;
  let options = type==="story" ? `<div class="block"><div class="label">Genre</div><div class="chips">${chips(["Life Journey","Drama","Comedy","Love Story","Fantasy","Thriller"])}</div></div><div class="block"><div class="label">Character Consistency</div><button class="btn" id="lockBtn" onclick="toggleLock()">🔒 Character Lock: ON</button></div>` :
  type==="ad" ? `<div class="block"><div class="label">Ad style</div><div class="chips">${chips(["Realistic","Cinematic","Luxury","Modern","Minimalist"])}</div></div>` :
  type==="social" ? `<div class="block"><div class="label">Platform</div><div class="chips">${chips(["TikTok","Instagram Reels","YouTube Shorts","Facebook"])}</div></div><div class="block"><div class="label">Add-ons</div><div class="chips">${chips(["Captions","AI Voice","Music"])}</div></div>` :
@@ -341,9 +374,13 @@ return;
 window.neneSelectedImages=[]; window.neneSelectedImageDataUri=null; window.neneSelectedImageDataUriPromise=null; window.currentNeneToolType=null; function previewImages(e){const input=e&&e.target;const files=input&&input.files?[...input.files]:[];if(!files.length)return;const file=files[0];window.neneSelectedImages=files;window.neneSelectedImageDataUri=null;window.neneSelectedImageDataUriPromise=neneReadImageData(file).then(data=>{window.neneSelectedImageDataUri=data;return data;});const p=document.getElementById('uploadPreview');if(!p)return;const objectUrl=URL.createObjectURL(file);p.innerHTML=`<img src="${objectUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:14px"><button type="button" id="neneChangeImage" style="position:absolute;right:8px;top:8px;border:1px solid #85641f;border-radius:10px;padding:7px 10px;background:#111;color:#f4c95d;font-weight:700;z-index:2">Change</button>`;p.style.position='relative';p.appendChild(input);input.style.display='none';const c=document.getElementById('neneChangeImage');if(c)c.onclick=()=>{window.neneSelectedImages=[];window.neneSelectedImageDataUri=null;window.neneSelectedImageDataUriPromise=null;input.value='';input.click();};}
 function buildStoryPlan(){
   const prompt=document.getElementById('prompt')?.value.trim();
-  const character=document.getElementById('storyCharacter')?.value.trim();
+  const characterDirection=document.getElementById('storyCharacter')?.value.trim();
   const scenes=Number(document.getElementById('storyScenes')?.value||5);
+  const select=document.getElementById('storyCharacterSelect');
+  const selectedIndex=select && select.value!=='' ? Number(select.value) : -1;
+  const character=selectedIndex>=0 ? characters[selectedIndex] : null;
   if(!prompt){ alert('Please describe your story first.'); return; }
+  if(!character){ alert('Please select a saved Character Studio profile first. Character Lock needs an identity anchor.'); return; }
   const genre=(document.querySelector('.chips .chip.active')?.textContent||'Life Journey').trim();
   const templates=[
     ['Opening','Establish the world, introduce the main character and create a visual hook.'],
@@ -352,25 +389,26 @@ function buildStoryPlan(){
     ['Turning point','Create the strongest visual or emotional change in the story.'],
     ['Resolution','Deliver the outcome, emotional payoff and a memorable final image.']
   ];
+  const identityAnchor=[character.appearance,character.personality,character.wardrobe].filter(Boolean).join(' | ');
   const scenePlans=[];
   for(let i=0;i<scenes;i++){
     const t=templates[Math.min(i,templates.length-1)];
-    scenePlans.push({number:i+1,title:i<templates.length?t[0]:'Scene '+(i+1),brief:t[1]});
+    scenePlans.push({number:i+1,title:i<templates.length?t[0]:'Scene '+(i+1),brief:t[1],characterLock:true,identityAnchor});
   }
-  const plan={id:'story_'+Date.now(),title:(prompt.split(/\s+/).slice(0,7).join(' ')||'NENE AI Story'),genre,character,scenes:scenePlans,characterLock:true,createdAt:new Date().toISOString()};
+  const plan={id:'story_'+Date.now(),title:(prompt.split(/\s+/).slice(0,7).join(' ')||'NENE AI Story'),genre,character:{id:character.id,name:character.name,appearance:character.appearance,personality:character.personality,wardrobe:character.wardrobe,referenceImage:character.referenceImage||null},characterDirection,scenes:scenePlans,characterLock:true,createdAt:new Date().toISOString()};
   try{
     const plans=JSON.parse(localStorage.getItem('nene_story_plans_v1')||'[]');
     plans.unshift(plan);
     localStorage.setItem('nene_story_plans_v1',JSON.stringify(plans.slice(0,50)));
   }catch(_){}
   const button=document.getElementById('neneGenerateBtn');
-  if(button){button.disabled=true;button.innerHTML='✓ Story plan saved';}
+  if(button){button.disabled=true;button.innerHTML='✓ Story plan saved with Character Lock';}
   const main=document.querySelector('main');
   if(main){
-    const cards=scenePlans.map(function(sc){return '<div class="creation"><div class="thumb">🎬</div><div><b>Scene '+sc.number+': '+sc.title+'</b><small>'+sc.brief+'</small></div></div>';}).join('');
-    main.insertAdjacentHTML('beforeend','<div class="block" style="margin-top:16px"><div class="label">Your scene plan</div><div class="list">'+cards+'</div><div class="notice" style="margin-top:10px">🎭 Character Lock is ON. This plan is saved locally and is ready for the multi-scene generation engine.</div></div>');
+    const cards=scenePlans.map(function(sc){return '<div class="creation"><div class="thumb">🎬</div><div><b>Scene '+sc.number+': '+sc.title+'</b><small>'+sc.brief+'</small><small style="display:block;color:#d8b55b">🔒 '+character.name+' identity locked</small></div></div>';}).join('');
+    main.insertAdjacentHTML('beforeend','<div class="block" style="margin-top:16px"><div class="label">Your scene plan</div><div class="list">'+cards+'</div><div class="notice" style="margin-top:10px">🎭 Character Lock is ON. '+character.name+' is the identity anchor for every scene. The saved plan is ready for the multi-scene generation engine.</div></div>');
   }
-  toast('Story plan saved');
+  toast('Story plan saved with Character Lock');
 }
 function toggleLock(){const b=document.getElementById('lockBtn');b.textContent=b.textContent.includes('ON')?'🔓 Character Lock: OFF':'🔒 Character Lock: ON'}
 async function neneReadImageData(file){
