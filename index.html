@@ -462,7 +462,9 @@ window.generate = async function generate(type) {
     const payload = {
       type: type === 'image' ? 'image-to-video' : 'text-to-video',
       prompt,
-      model: provider === 'magic-hour' ? 'ltx-2.5' : 'ltx-2-5-fast',
+      // Auto may fall back to Magic Hour, so use a model ID that both the
+      // router and Magic Hour can normalize safely.
+      model: provider === 'magic-hour' || provider === 'auto' ? 'ltx-2.5' : 'ltx-2-5-fast',
       resolution,
       duration,
       provider
