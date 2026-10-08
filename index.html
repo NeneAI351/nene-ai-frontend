@@ -472,14 +472,15 @@ window.generate = async function generate(type) {
     const response = await window.NENEBackend.generate(payload);
     const jobId = response && (response.job_id || response.id || response.jobId);
     if (!jobId) throw new Error('The backend did not return a generation job ID.');
+    const activeProvider = String(response?.provider || provider || 'auto').toLowerCase();
     const mode = type === 'image' ? 'image-to-video' : 'text-to-video';
     try {
       localStorage.setItem('nene_pending_job', JSON.stringify({
-        jobId, mode, type, prompt, provider, createdAt: new Date().toISOString()
+        jobId, mode, type, prompt, provider: activeProvider, createdAt: new Date().toISOString()
       }));
     } catch (_) {}
     const final = await window.NENEBackend.waitForJob(
-      jobId, mode, provider,
+      jobId, mode, activeProvider,
       function(job){
         const s = String(job?.status || '').toUpperCase();
         if (button) {
@@ -550,7 +551,20 @@ window.generate = async function generate(type) {
       if (typeof credits !== 'undefined') credits = Math.min(1000, credits + cost);
       if (typeof updateCredits === 'function') updateCredits();
     }
-    alert((pendingStillActive ? 'Video is still processing: ' : 'Video generation failed: ') + (err?.message || err));
+    let userMessage = err?.message || String(err);
+    try {
+      const parsed = JSON.parse(userMessage);
+      const detail = parsed?.detail;
+      if (Array.isArray(detail) && detail[0]?.error) {
+        const providerError = detail[0].error;
+        if (providerError.code === 'card_required') {
+          userMessage = 'Pixazo requires a payment card for this API account before it can use its Free Tier. You will not be charged for Free Tier usage according to Pixazo, but NENE AI will not ask you to add a card. Choose Magic Hour for a no-card test, or add the card in Pixazo if you want to use Pixazo.';
+        } else {
+          userMessage = providerError.message || userMessage;
+        }
+      }
+    } catch (_) {}
+    alert((pendingStillActive ? 'Video is still processing: ' : 'Video generation failed: ') + userMessage);
   } finally {
     if (button) {
       button.disabled = false;
