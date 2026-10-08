@@ -1,4 +1,4 @@
-const CACHE = 'nene-ai-shell-v2';
+const CACHE = 'nene-ai-shell-v3';
 
 const SHELL = [
   './',
