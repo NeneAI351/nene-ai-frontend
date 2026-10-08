@@ -421,7 +421,10 @@ window.generate = async function generate(type) {
   }
 
   if (type !== 'text' && type !== 'image') {
-    if (typeof credits !== 'undefined') credits -= cost;
+    if (typeof credits !== 'undefined') {
+      credits -= cost;
+      neneCreditsCharged = true;
+    }
     if (typeof updateCredits === 'function') updateCredits();
     alert('This workflow is still in prototype mode. Text → Video and Image → Video are the first real engines connected.');
     return;
@@ -449,6 +452,7 @@ window.generate = async function generate(type) {
 
   let imageUri = null;
 
+  let neneCreditsCharged = false;
   const button = document.getElementById('neneGenerateBtn');
   if (!button) {
     throw new Error('NENE AI could not find the Generate button. Please reopen this creation screen.');
@@ -585,8 +589,12 @@ window.generate = async function generate(type) {
       }
     } catch (_) {}
     const pendingStillActive = err && err.code === 'NENE_JOB_PENDING';
-    if (!pendingStillActive) {
+    // Refund only when NENE AI actually charged this generation attempt.
+    // Provider-side rejections (for example insufficient Magic Hour credits)
+    // must never consume the user's NENE AI credits.
+    if (!pendingStillActive && neneCreditsCharged) {
       if (typeof credits !== 'undefined') credits = Math.min(1000, credits + cost);
+      neneCreditsCharged = false;
       if (typeof updateCredits === 'function') updateCredits();
     }
     let userMessage = err?.message || String(err);
@@ -598,7 +606,7 @@ window.generate = async function generate(type) {
         if (providerError.code === 'card_required') {
           userMessage = 'Pixazo requires a payment card for this API account before it can use its Free Tier. NENE AI will not ask you to add a card. Choose Magic Hour for a no-card test, or add the card in Pixazo if you want to use Pixazo.';
         } else if (providerError.code === 'insufficient_credits') {
-          userMessage = 'The selected provider does not have enough provider credits for this generation. These are provider credits, not your NENE AI credits. No second provider will be charged automatically.';
+          userMessage = 'Magic Hour does not have enough provider credits for this generation. These are Magic Hour credits, not NENE AI credits. NENE AI has refunded this failed attempt, and no second provider will be charged automatically.';
         } else {
           userMessage = providerError.message || userMessage;
         }
