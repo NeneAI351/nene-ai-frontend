@@ -317,7 +317,7 @@ function openTool(type){
  const icons={text:"🎬",image:"🖼️",ad:"📢",social:"📱",story:"📖"};
  let extra="";
  if(type==="image") extra=`<div class="block"><div class="label">Upload images (up to 10)</div><div class="upload preview" id="uploadPreview">＋ Tap to upload images<input id="fileInput" type="file" accept="image/*" multiple onchange="previewImages(event)"></div></div>`;
- if(type==="text") extra=`<div class="block"><div class="label">Your prompt</div><textarea id="prompt" placeholder="Example: A cinematic woman walking through Lagos at sunset, golden light, smooth camera movement..."></textarea></div>`;
+ if(type==="text") extra=`<div class="block"><div class="label">Your prompt</div><textarea id="prompt" placeholder="Describe the scene, subject, action and mood. NENE AI will turn it into a production-ready video prompt."></textarea><button type="button" class="btn" style="margin-top:8px" onclick="enhanceNenePrompt()">✨ Enhance my prompt</button><small style="display:block;color:var(--muted);margin-top:7px">Prompt Assist adds cinematic detail while keeping your original idea.</small></div>`;
  if(type==="image") extra+=`<div class="block"><div class="label">Describe the motion</div><textarea id="prompt" placeholder="Example: Make the subject smile, move naturally, let the hair move in the breeze, cinematic camera movement..."></textarea></div>`;
  if(type==="ad") extra=`<div class="block"><div class="label">What are you selling?</div><input class="field" id="product" placeholder="e.g. Luxury skincare brand"></div><div class="block"><div class="label">Ad template</div><div class="chips">${chips(["Product Launch","UGC Style","Luxury","Testimonial","Problem → Solution","Promo Offer"])}</div></div><div class="block"><div class="label">Ad brief</div><textarea id="prompt" placeholder="Describe your audience, offer, message and call to action..."></textarea></div>`;
  if(type==="social") extra=`<div class="block"><div class="label">Content idea</div><textarea id="prompt" placeholder="Example: Create a 30-second motivational Reel about small steps and big dreams..."></textarea></div><div class="block"><div class="label">Platform</div><div class="chips">${chips(["TikTok","Instagram Reels","YouTube Shorts","Facebook","LinkedIn","X"])}</div></div><div class="block"><div class="label">Template</div><div class="chips">${chips(["Hook + Value","Storytime","Listicle","Talking Head","Product Showcase","Trend"])}</div></div>`;
@@ -325,6 +325,7 @@ function openTool(type){
  let options = type==="story" ? `<div class="block"><div class="label">Genre</div><div class="chips">${chips(["Life Journey","Drama","Comedy","Love Story","Fantasy","Thriller"])}</div></div><div class="block"><div class="label">Character Consistency</div><button class="btn" id="lockBtn" onclick="toggleLock()">🔒 Character Lock: ON</button></div>` :
  type==="ad" ? `<div class="block"><div class="label">Ad style</div><div class="chips">${chips(["Realistic","Cinematic","Luxury","Modern","Minimalist"])}</div></div>` :
  type==="social" ? `<div class="block"><div class="label">Platform</div><div class="chips">${chips(["TikTok","Instagram Reels","YouTube Shorts","Facebook"])}</div></div><div class="block"><div class="label">Add-ons</div><div class="chips">${chips(["Captions","AI Voice","Music"])}</div></div>` :
+ type==="text" ? `<div class="block"><div class="label">Production controls</div><div class="row"><select id="neneStyle"><option>Cinematic</option><option>Photorealistic</option><option>Luxury commercial</option><option>Documentary</option><option>Editorial</option><option>Dynamic</option></select><select id="neneShot"><option>Medium shot</option><option>Close-up</option><option>Wide establishing shot</option><option>Aerial shot</option><option>Tracking shot</option></select></div><div class="row" style="margin-top:8px"><select id="neneCamera"><option>Smooth cinematic camera</option><option>Slow dolly-in</option><option>Gentle tracking shot</option><option>Slow orbit</option><option>Static locked camera</option><option>Handheld documentary camera</option></select><select id="neneLighting"><option>Natural cinematic lighting</option><option>Golden-hour lighting</option><option>Luxury studio lighting</option><option>Dramatic high-contrast lighting</option><option>Soft diffused lighting</option><option>Neon night lighting</option></select></div><div class="block"><div class="label">Motion</div><select id="neneMotion" class="field"><option>Natural, realistic movement</option><option>Slow, elegant movement</option><option>Energetic dynamic movement</option><option>Subtle movement with stable framing</option><option>Fast commercial-style movement</option></select></div></div>` :
  `<div class="block"><div class="label">Visual style</div><div class="chips">${chips(["Cinematic","Realistic","Animated","3D","Vintage","Dynamic"])}</div></div>`;
  screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider" onchange="syncVideoProviderOptions()"><option value="auto">Auto (Best available)</option><option value="pixazo">Pixazo</option><option value="magic-hour">Magic Hour (free may watermark)</option><option value="ltx">LTX (provider plan)</option></select></div><div class="notice" id="neneProviderNotice">Real video generation is enabled when your secure NENE AI backend is connected. NENE AI does not add a watermark to your generated media. Provider branding, if any, is controlled by the provider and its plan.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">✨ Generate ${titles[type].replace(" → Video","")} Video · ${costs[type]} credits</button></div></main>`;
  const genBtn=document.getElementById('neneGenerateBtn');
@@ -383,12 +384,34 @@ async function neneReadImageData(file){
   }
 }
 
+function enhanceNenePrompt(){
+  const el=document.getElementById('prompt');
+  if(!el) return;
+  const base=el.value.trim();
+  if(!base){ alert('Please describe your idea first.'); return; }
+  const assist=' Cinematic production quality, photorealistic detail, natural human motion, realistic textures, coherent lighting, smooth camera movement, believable depth of field, polished professional composition, consistent subject appearance, no flicker or visual distortion.';
+  if(!base.includes('Cinematic production quality')) el.value=base+assist;
+}
+function neneCreationName(prompt,label){
+  const words=String(prompt||'').replace(/[^a-zA-Z0-9À-ÿ\s-]/g,' ').trim().split(/\s+/).filter(Boolean).slice(0,7);
+  const short=words.join(' ');
+  return (short ? short : label)+' · '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
 window.generate = async function generate(type) {
   const promptEl = document.getElementById('nenePrompt') || document.getElementById('prompt') || document.querySelector('textarea');
-  const prompt = promptEl ? promptEl.value.trim() : '';
+  let prompt = promptEl ? promptEl.value.trim() : '';
   if (!prompt) {
     alert(type === 'image' ? 'Please describe the motion you want first.' : 'Please enter a prompt first.');
     return;
+  }
+  if(type === 'text'){
+    const style=document.getElementById('neneStyle')?.value || 'Cinematic';
+    const shot=document.getElementById('neneShot')?.value || 'Medium shot';
+    const camera=document.getElementById('neneCamera')?.value || 'Smooth cinematic camera';
+    const lighting=document.getElementById('neneLighting')?.value || 'Natural cinematic lighting';
+    const motion=document.getElementById('neneMotion')?.value || 'Natural, realistic movement';
+    prompt += ` Style: ${style}. Shot: ${shot}. Camera: ${camera}. Lighting: ${lighting}. Motion: ${motion}. Maintain realistic anatomy, coherent objects and consistent visual details throughout the shot.`;
   }
 
   const cost = type === 'text' ? 10 : (type === 'ad' ? 15 : (type === 'story' ? 20 : 10));
@@ -540,7 +563,7 @@ window.generate = async function generate(type) {
 
     if (typeof creations !== 'undefined') {
       creations.unshift({
-        name: label + ' · ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+        name: neneCreationName(prompt, label),
         type: label,
         prompt,
         videoUrl,
