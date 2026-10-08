@@ -95,9 +95,11 @@ window.NENEBackend={
    try{const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/health');return {connected:r.ok,data:await r.json()};}
    catch(e){return {connected:false};}
  },
- generate:async function(payload){
+ generate:async function(payload,idempotencyKey){
    if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
-   const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+   const headers={'Content-Type':'application/json'};
+   if(idempotencyKey)headers['Idempotency-Key']=idempotencyKey;
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/generate',{method:'POST',headers,body:JSON.stringify(payload)});
    if(!r.ok)throw new Error(await r.text()||'Generation request failed');
    return await r.json();
  },
@@ -956,7 +958,11 @@ window.generate = async function generate(type) {
     };
     if (imageUri) payload.image_uri = imageUri;
 
-    const response = await window.NENEBackend.generate(payload);
+    const idempotencyKey = (window.crypto && typeof window.crypto.randomUUID === 'function')
+      ? window.crypto.randomUUID()
+      : 'nene_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+    try { localStorage.setItem('nene_generation_idempotency', idempotencyKey); } catch (_) {}
+    const response = await window.NENEBackend.generate(payload, idempotencyKey);
     const jobId = response && (response.job_id || response.id || response.jobId);
     if (!jobId) throw new Error('The backend did not return a generation job ID.');
     const activeProvider = String(response?.provider || provider || 'auto').toLowerCase();
@@ -964,7 +970,7 @@ window.generate = async function generate(type) {
     recordNeneJob({id:jobId,status:'QUEUED',type:type==='image'?'Image → Video':'Text → Video',mode,provider:activeProvider,prompt,duration,resolution,cost,creditCharged:neneCreditsCharged});
     try {
       localStorage.setItem('nene_pending_job', JSON.stringify({
-        jobId, mode, type, prompt, provider: activeProvider, createdAt: new Date().toISOString()
+        jobId, mode, type, prompt, provider: activeProvider, idempotencyKey, createdAt: new Date().toISOString()
       }));
     } catch (_) {}
     const final = await window.NENEBackend.waitForJob(
@@ -996,7 +1002,10 @@ window.generate = async function generate(type) {
       final?.result?.url ||
       final?.url;
     if (!videoUrl) throw new Error('Generation finished, but no video URL was returned.');
-    try { localStorage.removeItem('nene_pending_job'); } catch (_) {}
+    try {
+      localStorage.removeItem('nene_pending_job');
+      localStorage.removeItem('nene_generation_idempotency');
+    } catch (_) {}
     updateNeneJob(jobId,{status:'COMPLETED',videoUrl});
 
     const container =
