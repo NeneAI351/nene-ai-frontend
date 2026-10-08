@@ -423,6 +423,7 @@ function buildStoryPlan(){
   const plan={
     id:'story_'+Date.now(),
     title:(prompt.split(/\s+/).slice(0,7).join(' ')||'NENE AI Story'),
+    storyPrompt:prompt,
     genre,
     characterDirection,
     characters:selectedCharacters.map(c=>({
@@ -496,7 +497,7 @@ async function generateStoryScenes(){
       }).join('\n');
       const storyPrompt=[
         'NENE AI STORY SCENE '+scene.number+' OF '+plan.scenes.length+'.',
-        'Overall story: '+plan.title+'.',
+        'Overall story: '+(plan.storyPrompt||plan.title)+'.',
         plan.characterDirection ? 'Story character direction: '+plan.characterDirection+'.' : '',
         'Scene purpose: '+scene.title+'. '+scene.brief,
         'Create a cinematic, coherent, photorealistic production-quality shot.',
@@ -1263,7 +1264,7 @@ async function neneTestBackend(){var d=document.getElementById('neneBackendDot')
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=4', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=5', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
