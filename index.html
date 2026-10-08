@@ -101,19 +101,21 @@ window.NENEBackend={
    if(!r.ok)throw new Error(await r.text()||'Generation request failed');
    return await r.json();
  },
- job:async function(jobId,mode){
+ job:async function(jobId,mode,provider){
    if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
-   const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/jobs/'+encodeURIComponent(jobId)+'?mode='+(mode||'text-to-video'));
+   let url=window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/jobs/'+encodeURIComponent(jobId)+'?mode='+(mode||'text-to-video');
+   if(provider)url+='&provider='+encodeURIComponent(provider);
+   const r=await fetch(url);
    if(!r.ok)throw new Error(await r.text()||'Job status request failed');
    return await r.json();
  },
- waitForJob:async function(jobId,mode,onUpdate,maxWaitMs=900000,intervalMs=7000){
+ waitForJob:async function(jobId,mode,provider,onUpdate,maxWaitMs=900000,intervalMs=7000){
    const started=Date.now();
    for(;;){
-     const data=await this.job(jobId,mode);
+     const data=await this.job(jobId,mode,provider);
      if(typeof onUpdate==='function')onUpdate(data);
      const status=String(data?.status||'').toLowerCase();
-     if(['completed','failed','error','cancelled','canceled'].includes(status))return data;
+     if(['complete','completed','failed','error','cancelled','canceled'].includes(status))return data;
      if(Date.now()-started>=maxWaitMs){
        const e = new Error('Video generation is still processing. The job has been saved; please wait before starting another generation.');
         e.code = 'NENE_JOB_PENDING';
@@ -316,7 +318,7 @@ function openTool(type){
  type==="ad" ? `<div class="block"><div class="label">Ad style</div><div class="chips">${chips(["Realistic","Cinematic","Luxury","Modern","Minimalist"])}</div></div>` :
  type==="social" ? `<div class="block"><div class="label">Platform</div><div class="chips">${chips(["TikTok","Instagram Reels","YouTube Shorts","Facebook"])}</div></div><div class="block"><div class="label">Add-ons</div><div class="chips">${chips(["Captions","AI Voice","Music"])}</div></div>` :
  `<div class="block"><div class="label">Visual style</div><div class="chips">${chips(["Cinematic","Realistic","Animated","3D","Vintage","Dynamic"])}</div></div>`;
- screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="notice">Real LTX generation is enabled when your secure NENE AI backend is connected. Image → Video uses your uploaded image as the first frame. Free exports will carry NENE AI branding; paid credits can later unlock watermark-free HD/4K exports.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">✨ Generate ${titles[type].replace(" → Video","")} Video · ${costs[type]} credits</button></div></main>`;
+ screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider"><option value="auto">Auto (Best available)</option><option value="pixazo">Pixazo</option><option value="magic-hour">Magic Hour</option><option value="ltx">LTX</option></select></div><div class="notice">Real LTX generation is enabled when your secure NENE AI backend is connected. Image → Video uses your uploaded image as the first frame. Free exports will carry NENE AI branding; paid credits can later unlock watermark-free HD/4K exports.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">✨ Generate ${titles[type].replace(" → Video","")} Video · ${costs[type]} credits</button></div></main>`;
  const genBtn=document.getElementById('neneGenerateBtn');
 window.currentNeneToolType=type;
 if(genBtn){
@@ -448,12 +450,15 @@ window.generate = async function generate(type) {
     if (typeof credits !== 'undefined') credits -= cost;
     if (typeof updateCredits === 'function') updateCredits();
     if (button) button.innerHTML = '⏳ Sending to NENE AI…';
+    const providerEl = document.getElementById('neneProvider');
+    const provider = providerEl ? providerEl.value : 'auto';
     const payload = {
       type: type === 'image' ? 'image-to-video' : 'text-to-video',
       prompt,
-      model: 'ltx-2-5-fast',
+      model: provider === 'magic-hour' ? 'ltx-2.5' : 'ltx-2-5-fast',
       resolution,
-      duration
+      duration,
+      provider
     };
     if (imageUri) payload.image_uri = imageUri;
 
@@ -463,11 +468,11 @@ window.generate = async function generate(type) {
     const mode = type === 'image' ? 'image-to-video' : 'text-to-video';
     try {
       localStorage.setItem('nene_pending_job', JSON.stringify({
-        jobId, mode, type, prompt, createdAt: new Date().toISOString()
+        jobId, mode, type, prompt, provider, createdAt: new Date().toISOString()
       }));
     } catch (_) {}
     const final = await window.NENEBackend.waitForJob(
-      jobId, mode,
+      jobId, mode, provider,
       function(job){
         const s = String(job?.status || '').toUpperCase();
         if (button) {
