@@ -214,6 +214,7 @@ function recordNeneJob(data){
   error:data.error||null,
   duration:data.duration,
   resolution:data.resolution,
+  cost:Number.isFinite(Number(data.cost)) ? Number(data.cost) : Number(existing&&existing.cost)||10,
   creditCharged:data.creditCharged===true ? true : !!(existing&&existing.creditCharged),
   creditRefunded:data.creditRefunded===true ? true : !!(existing&&existing.creditRefunded)
  };
@@ -292,14 +293,14 @@ async function resumeNeneJob(id){
    updateNeneJob(id,{status:'FAILED',error:err?.message||String(err)});
    neneClearPendingForJob(id);
    if(fresh&&fresh.creditCharged&&!fresh.creditRefunded){
-    if(typeof credits!=='undefined')credits=Math.min(1000,credits+10);
+    if(typeof credits!=='undefined')credits=Math.min(1000,credits+(Number.isFinite(Number(fresh.cost))?Number(fresh.cost):10));
     updateNeneJob(id,{creditRefunded:true});
     if(typeof updateCredits==='function')updateCredits();
    }
   }
  }finally{
   neneActivePolls.delete(id);
-  if(typeof renderJobCenter==='function')renderJobCenter();
+  if(typeof renderJobCenter==='function'&&document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderJobCenter();
  }
 }
 function resumeActiveNeneJobs(){
@@ -960,7 +961,7 @@ window.generate = async function generate(type) {
     if (!jobId) throw new Error('The backend did not return a generation job ID.');
     const activeProvider = String(response?.provider || provider || 'auto').toLowerCase();
     const mode = type === 'image' ? 'image-to-video' : 'text-to-video';
-    recordNeneJob({id:jobId,status:'QUEUED',type:type==='image'?'Image → Video':'Text → Video',mode,provider:activeProvider,prompt,duration,resolution,creditCharged:neneCreditsCharged});
+    recordNeneJob({id:jobId,status:'QUEUED',type:type==='image'?'Image → Video':'Text → Video',mode,provider:activeProvider,prompt,duration,resolution,cost,creditCharged:neneCreditsCharged});
     try {
       localStorage.setItem('nene_pending_job', JSON.stringify({
         jobId, mode, type, prompt, provider: activeProvider, createdAt: new Date().toISOString()
