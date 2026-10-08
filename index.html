@@ -161,10 +161,18 @@ const brandKit={name:"NENE AI",colors:"Black · Gold · Cream",font:"Premium Ser
 const settings={aiDisclosure:true,saveHistory:true,personalization:true,analytics:false};
 let currentFeature="";
 
-let credits=1000, creations=[
+const NENE_STATE_KEY='nene_ai_state_v1';
+let neneSavedState={};
+try{neneSavedState=JSON.parse(localStorage.getItem(NENE_STATE_KEY)||'{}')||{};}catch(_){neneSavedState={};}
+let credits=Number.isFinite(Number(neneSavedState.credits)) ? Number(neneSavedState.credits) : 1000;
+let creations=Array.isArray(neneSavedState.creations) && neneSavedState.creations.length ? neneSavedState.creations : [
  {name:"Welcome Demo",type:"Text → Video",icon:"🎬"},
  {name:"Brand Story",type:"AI Advertisement",icon:"📢"}
 ];
+function saveState(){
+ try{localStorage.setItem(NENE_STATE_KEY,JSON.stringify({credits,creations:creations.slice(0,100)}));}catch(_){}
+}
+
 const costs={text:10,image:10,ad:15,social:10,story:20};
 const screen=document.getElementById('screen');
 
@@ -532,13 +540,18 @@ window.generate = async function generate(type) {
 
     if (typeof creations !== 'undefined') {
       creations.unshift({
-        name: 'My NENE AI Creation',
+        name: label + ' · ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
         type: label,
         prompt,
         videoUrl,
+        provider: activeProvider,
+        duration,
+        resolution,
+        icon: type === 'image' ? '🖼️' : '🎬',
         createdAt: new Date().toISOString()
       });
       if (typeof saveState === 'function') saveState();
+      setTimeout(()=>{ if(typeof renderCreations==='function') renderCreations(); },50);
     }
   } catch (err) {
     try {
@@ -612,7 +625,7 @@ function syncVideoProviderOptions(){
     }
   }
 }
-function updateCredits(){document.getElementById('credits').textContent=credits.toLocaleString()}
+function updateCredits(){document.getElementById('credits').textContent=credits.toLocaleString();saveState()}
 function showModal(x){document.getElementById('modalbox').innerHTML=x;document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
 function saveCreation(){toast("Saved to My Creations");closeModal();renderCreations()}
@@ -628,7 +641,15 @@ function renderCreations(){
  <div class="section-title">Projects</div>
  <div class="list">${projects.map(p=>`<div class="creation"><div class="thumb">${p.icon}</div><div style="flex:1"><b>${p.name}</b><div><span class="badge">${p.type}</span> <span class="badge">${p.status}</span></div><small>Project workspace</small></div><button class="btn" style="width:auto;padding:8px 11px" onclick="openFeature('editor')">Edit</button></div>`).join('')}</div>
  <div class="section-title">Creations</div>
- <div class="list">${creations.map(c=>`<div class="creation"><div class="thumb">${c.icon}</div><div style="flex:1"><b>${c.name}</b><div><span class="badge">${c.type}</span></div><small>Saved creation</small></div><button class="btn" style="width:auto;padding:8px 11px" onclick="toast('Preview opened')">▶</button></div>`).join('')}</div>
+ <div class="list">${creations.map(c=>`<div class="creation" style="align-items:flex-start">
+   <div class="thumb">${c.icon||'🎬'}</div>
+   <div style="flex:1;min-width:0">
+    <b>${c.name||'NENE AI Creation'}</b>
+    <div><span class="badge">${c.type||'Video'}</span>${c.provider ? ` <span class="badge">${c.provider}</span>` : ''}</div>
+    <small>${c.createdAt ? new Date(c.createdAt).toLocaleString() : 'Saved creation'}</small>
+    ${c.videoUrl ? `<video controls playsinline preload="metadata" style="width:100%;margin-top:9px;border-radius:12px;background:#000" src="${c.videoUrl}"></video><div style="margin-top:7px"><a href="${c.videoUrl}" target="_blank" rel="noopener" style="color:var(--gold2);font-size:12px">Open video</a></div>` : ''}
+   </div>
+  </div>`).join('')}</div>
  </main>`;
 }
 
