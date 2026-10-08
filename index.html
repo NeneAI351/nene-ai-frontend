@@ -866,11 +866,9 @@ window.generate = async function generate(type) {
     prompt += ` Style: ${style}. Camera: ${camera}. Lighting: ${lighting}. Motion: ${motion}. Preserve the exact subject identity, face, hair, clothing, colors, body proportions and important visual details from the source image. Do not change the person or turn them into a different person. Keep motion natural and temporally consistent.`;
   }
 
-  const cost = type === 'text' ? 10 : (type === 'ad' ? 15 : (type === 'story' ? 20 : 10));
-  if (typeof credits !== 'undefined' && credits < cost) {
-    alert('Not enough credits.');
-    return;
-  }
+  // Commercial pricing is calculated by NENE's backend from the selected provider,
+  // model, resolution and duration. Never trust a browser-side fixed generation price.
+  let cost = 0;
 
   if (type !== 'text' && type !== 'image') {
     if (typeof credits !== 'undefined') {
@@ -934,8 +932,6 @@ window.generate = async function generate(type) {
       if (!imageUri) throw new Error('Backend did not return a public image URL.');
     }
 
-    if (typeof credits !== 'undefined') credits -= cost;
-    if (typeof updateCredits === 'function') updateCredits();
     if (button) button.innerHTML = '⏳ Sending to NENE AI…';
     const providerEl = document.getElementById('neneProvider');
     const provider = providerEl ? providerEl.value : 'auto';
@@ -946,6 +942,40 @@ window.generate = async function generate(type) {
       else if(resolution === '1280x720') resolution = '720p';
       else if(resolution === '3840x2160') resolution = '1080p';
     }
+    // Ask the backend for the current provider cost and NENE margin quote.
+    // Auto reserves against the first configured provider in the backend's routing
+    // order; if Auto later falls back, the backend can safely settle the actual cost.
+    let quoteProvider = provider;
+    let quoteModel = provider === 'magic-hour' ? 'ltx-2.5' : 'ltx-2-5-fast';
+    if(provider === 'auto'){
+      const infoResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/provider-info', {cache:'no-store'});
+      if(!infoResp.ok) throw new Error('NENE AI pricing could not verify the available provider.');
+      const info = await infoResp.json();
+      quoteProvider = (info.selection_order || ['pixazo','magic-hour','ltx']).find(p => info.providers?.[p]?.configured);
+      if(!quoteProvider) throw new Error('NENE AI has no configured video provider available.');
+      quoteModel = quoteProvider === 'magic-hour' ? 'ltx-2.5' : 'ltx-2-5-fast';
+    } else if(provider === 'pixazo'){
+      // The connected Pixazo endpoint is LTX Video 2.5; its current public rate
+      // is $0.45 for a 5-second 1280×704 clip, i.e. $0.09/sec after free balance.
+      quoteModel = 'ltx-2-5-lite';
+    }
+
+    const quoteResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/pricing/quote', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      cache:'no-store',
+      body:JSON.stringify({provider:quoteProvider, model:quoteModel, resolution, duration})
+    });
+    if(!quoteResp.ok) throw new Error('NENE AI pricing is temporarily unavailable. Please try again in a moment.');
+    const quote = await quoteResp.json();
+    cost = Number(quote.recommended_credits);
+    if(!Number.isFinite(cost) || cost < 0) throw new Error('NENE AI returned an invalid generation price.');
+    if (typeof credits !== 'undefined' && credits < cost) {
+      alert('Not enough NENE credits. This generation requires ' + cost + ' credits.');
+      return;
+    }
+    if (typeof credits !== 'undefined') credits -= cost;
+    if (typeof updateCredits === 'function') updateCredits();
     const payload = {
       type: type === 'image' ? 'image-to-video' : 'text-to-video',
       prompt,
