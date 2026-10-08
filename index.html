@@ -560,7 +560,9 @@ window.generate = async function generate(type) {
       if (Array.isArray(detail) && detail[0]?.error) {
         const providerError = detail[0].error;
         if (providerError.code === 'card_required') {
-          userMessage = 'Pixazo requires a payment card for this API account before it can use its Free Tier. You will not be charged for Free Tier usage according to Pixazo, but NENE AI will not ask you to add a card. Choose Magic Hour for a no-card test, or add the card in Pixazo if you want to use Pixazo.';
+          userMessage = 'Pixazo requires a payment card for this API account before it can use its Free Tier. NENE AI will not ask you to add a card. Choose Magic Hour for a no-card test, or add the card in Pixazo if you want to use Pixazo.';
+        } else if (providerError.code === 'insufficient_credits') {
+          userMessage = 'The selected provider does not have enough provider credits for this generation. These are provider credits, not your NENE AI credits. No second provider will be charged automatically.';
         } else {
           userMessage = providerError.message || userMessage;
         }
@@ -585,6 +587,12 @@ function syncVideoProviderOptions(){
   const provider=providerEl.value;
   const current=resolutionEl.value;
   if(provider==='magic-hour'){
+    const durationEl=document.getElementById('neneDuration');
+    if(durationEl){
+      const d=durationEl.value;
+      durationEl.innerHTML='<option value="3">3 seconds (Free)</option><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option>';
+      durationEl.value=['3','5','10','15','30'].includes(d) ? d : '3';
+    }
     resolutionEl.innerHTML='<option value="480p">480p (Free)</option><option value="720p">720p (Paid)</option><option value="1080p">1080p (Paid)</option>';
     if(current==='1920x1080') resolutionEl.value='1080p';
     if(current==='1280x720') resolutionEl.value='720p';
@@ -600,7 +608,7 @@ function syncVideoProviderOptions(){
     if(noticeEl){
       if(provider==='pixazo') noticeEl.innerHTML='✅ <b>Pixazo:</b> NENE AI does not add a watermark. This is our preferred provider for the current clean-output test; provider terms and plan limits still apply.';
       else if(provider==='ltx') noticeEl.innerHTML='ℹ️ <b>LTX:</b> NENE AI does not add a watermark. Any provider branding depends on the LTX service/account being used.';
-      else noticeEl.innerHTML='✨ <b>Auto:</b> NENE AI will use the best configured provider. When Pixazo is configured, Auto currently prefers Pixazo so we do not unnecessarily use Magic Hour’s free-tier watermark path.';
+      else noticeEl.innerHTML='✨ <b>Auto:</b> NENE AI tries the best configured provider. If Pixazo rejects this account because a card is required, Auto can safely fall back to Magic Hour at its free-compatible 480p/3-second setting. Provider credits and watermark rules still apply.';
     }
   }
 }
