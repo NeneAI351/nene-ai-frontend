@@ -497,6 +497,7 @@ window.generate = async function generate(type) {
     }
     const videoUrl =
       final?.video_url ||
+      final?._nene_video_url ||
       final?.result?.video_url ||
       final?.output?.video_url ||
       final?.output?.media_url?.[0] ||
