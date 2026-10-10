@@ -167,6 +167,12 @@
         setMessage("Use a password with at least 12 characters.", true);
         return;
       }
+      if ((mode === "signup" || mode === "update") &&
+          (!/[a-z]/.test(password) || !/[A-Z]/.test(password) ||
+           !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password))) {
+        setMessage("Use uppercase and lowercase letters, a number, and a symbol.", true);
+        return;
+      }
       if (mode === "signin" && !password) {
         setMessage("Enter your password.", true);
         return;
