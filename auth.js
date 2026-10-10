@@ -88,6 +88,17 @@
   };
 
   window.neneOpenAuth = function (mode) {
+    if (!mode && currentAuthUser) {
+      showModal(
+        '<div class="eyebrow">NENE AI account</div><h2>Your account</h2>' +
+        '<p class="subtitle">Signed in as <span id="neneAuthModalEmail"></span></p>' +
+        '<div class="notice">Your identity is verified by the configured authentication provider. Account data and credits still require server-side authorization; browser storage is not proof of payment.</div>' +
+        '<div class="list" style="margin-top:12px"><button class="btn" onclick="neneSignOut()">Sign out</button><button class="btn gold" onclick="closeModal()">Close</button></div>'
+      );
+      const email = document.getElementById("neneAuthModalEmail");
+      if (email) email.textContent = currentAuthUser.email || "NENE AI user";
+      return;
+    }
     mode = mode || "signin";
     if (!configured()) {
       showModal(
@@ -218,6 +229,7 @@
       const { error } = await auth.auth.signOut();
       if (error) throw error;
       updateAuthUi(null);
+      closeModal();
       if (typeof toast === "function") toast("You have signed out.");
     } catch (_error) {
       if (typeof toast === "function") toast("Sign-out failed. Please try again.");
