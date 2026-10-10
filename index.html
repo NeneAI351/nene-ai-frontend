@@ -404,6 +404,20 @@ function renderCreateHub(){
 }
 
 function openFeature(type){
+ if(type==="account" && typeof window.neneOpenAuth==="function"){
+  showModal(
+   '<div class="eyebrow">Account security</div><h2>Account &amp; Security</h2>'+
+   '<p class="subtitle">Manage your NENE AI sign-in, account access and password recovery.</p>'+
+   '<div class="list" style="margin-top:12px">'+
+   '<button class="btn gold" onclick="neneOpenAuth()">🔐 Sign-in &amp; sessions</button>'+
+   '<button class="btn" onclick="neneOpenAuth(\'signup\')">Create account</button>'+
+   '<button class="btn" onclick="neneOpenAuth(\'reset\')">🔑 Account recovery</button>'+
+   '<button class="btn" onclick="showModal(\'<h2>Account deletion is not enabled yet</h2><p class=&quot;subtitle&quot;>For your safety, deletion will only be enabled when NENE AI has a verified server-side account-deletion process. No account has been deleted.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>\')">Delete account</button>'+
+   '<button class="btn" onclick="closeModal()">Cancel</button>'+
+   '</div>'
+  );
+  return;
+ }
  currentFeature=type;
  setNav('create');
  const data={
