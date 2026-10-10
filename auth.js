@@ -136,6 +136,7 @@
       '<div class="eyebrow">NENE AI account</div>' +
       '<h2>' + title + '</h2>' +
       '<p class="subtitle">Use your email to securely access your account across supported devices.</p>' +
+      (mode === "signup" ? '<div class="notice" style="margin:12px 0">A NENE AI account is required to use creation tools and save work. Confirm your email address before signing in.</div>' : '') +
       '<form id="neneAuthForm" novalidate>' +
       emailField +
       passwordField +
@@ -245,6 +246,62 @@
       if (typeof toast === "function") toast("Sign-out failed. Please try again.");
     }
   };
+
+
+  // Mandatory-account access gate. The homepage and account/help screens remain
+  // viewable, but creation workflows and personal libraries require a verified session.
+  // Only allowlisted screens that are actually implemented as informational
+  // screens remain public. Unknown feature keys must fail closed (openFeature's
+  // fallback is a creative workflow, not a public help page).
+  const PUBLIC_FEATURES = new Set(["account", "privacy", "safety"]);
+
+  window.neneRequireAccount = async function (reason) {
+    let user = null;
+    try {
+      user = await currentUser();
+    } catch (_error) {
+      updateAuthUi(null);
+    }
+    if (user) return true;
+    window.neneOpenAuth("signup");
+    window.setTimeout(() => {
+      setMessage(
+        reason || "Create a NENE AI account or sign in to continue. Email confirmation is required.",
+        false
+      );
+    }, 0);
+    return false;
+  };
+
+  function protectAction(name, isPublic) {
+    const original = window[name];
+    if (typeof original !== "function" || original.__neneAccountProtected) return;
+    const guarded = async function (...args) {
+      if (isPublic && isPublic(args)) return original.apply(this, args);
+      const allowed = await window.neneRequireAccount();
+      if (!allowed) return;
+      return original.apply(this, args);
+    };
+    guarded.__neneAccountProtected = true;
+    guarded.__neneOriginal = original;
+    window[name] = guarded;
+  }
+
+  // Keep account management and safety/help screens accessible to signed-out users.
+  protectAction("openFeature", args => PUBLIC_FEATURES.has(String(args[0] || "").toLowerCase()));
+  // Creating, generating, and viewing a personal workspace require account access.
+  [
+    "renderCreateHub",
+    "renderCreations",
+    "createProject",
+    "confirmCreateProject",
+    "renderProjects",
+    "openProject",
+    "runFeature",
+    "generate",
+    "generateStoryScenes",
+    "renderJobCenter"
+  ].forEach(name => protectAction(name));
 
   document.addEventListener("DOMContentLoaded", async function () {
     try {
