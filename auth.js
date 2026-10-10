@@ -246,7 +246,7 @@
     const screen = document.getElementById("screen");
     if (screen && window.MutationObserver) {
       const observer = new MutationObserver(() => updateAuthUi(currentAuthUser));
-      observer.observe(screen, { childList: true, subtree: true });
+      observer.observe(screen, { childList: true, subtree: false });
     }
   });
 })();
