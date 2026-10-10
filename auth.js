@@ -250,11 +250,10 @@
 
   // Mandatory-account access gate. The homepage and account/help screens remain
   // viewable, but creation workflows and personal libraries require a verified session.
-  const PUBLIC_FEATURES = new Set([
-    "account", "privacy", "safety", "rights", "disclosure", "feedback",
-    "rate", "report", "suggest", "support", "help", "legal", "terms",
-    "global", "business"
-  ]);
+  // Only allowlisted screens that are actually implemented as informational
+  // screens remain public. Unknown feature keys must fail closed (openFeature's
+  // fallback is a creative workflow, not a public help page).
+  const PUBLIC_FEATURES = new Set(["account", "privacy", "safety"]);
 
   window.neneRequireAccount = async function (reason) {
     let user = null;
