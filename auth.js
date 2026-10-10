@@ -130,7 +130,7 @@
       (mode === "update" ? "New password" : "Password") +
       '</div><input class="field" id="neneAuthPassword" type="password" autocomplete="' +
       (mode === "signup" || mode === "update" ? "new-password" : "current-password") +
-      '" minlength="8" required></div>';
+      '" minlength="12" required></div>';
 
     showModal(
       '<div class="eyebrow">NENE AI account</div>' +
@@ -163,8 +163,12 @@
         setMessage("Enter a valid email address.", true);
         return;
       }
-      if (mode !== "reset" && password.length < 8) {
-        setMessage("Use a password with at least 8 characters.", true);
+      if ((mode === "signup" || mode === "update") && password.length < 12) {
+        setMessage("Use a password with at least 12 characters.", true);
+        return;
+      }
+      if (mode === "signin" && !password) {
+        setMessage("Enter your password.", true);
         return;
       }
       submitButton.disabled = true;
