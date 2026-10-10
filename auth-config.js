@@ -1,14 +1,11 @@
 /*
  * NENE AI public authentication configuration.
  *
- * Fill these two fields only with the public Supabase project URL and publishable
- * key from the NENE AI Supabase project. The publishable/anon key is designed to
- * be public; NEVER put a service_role key, database password, or secret here.
- *
- * Authentication remains disabled while either value is empty.
+ * These are public client values for the NENE AI staging Supabase project.
+ * NEVER put a service_role key, database password, or secret here.
  */
 window.NENE_AUTH_CONFIG = Object.freeze({
-  supabaseUrl: "",
-  supabaseAnonKey: "",
+  supabaseUrl: "https://agchmegopyktwofcupny.supabase.co",
+  supabaseAnonKey: "sb_publishable_sKEK0zwZKHEm-v6-mEn9Hw_v_YCnGa0",
   redirectTo: window.location.origin + window.location.pathname
 });
