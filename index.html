@@ -20,6 +20,7 @@ header{position:sticky;top:0;z-index:10;padding:14px 16px 12px;border-bottom:1px
 .logo{font-family:Georgia,serif;font-size:25px;letter-spacing:1px;font-weight:700;color:var(--gold2)} .tag{font-size:9px;color:var(--gold);margin-top:1px}
 .avatar{margin-left:auto;width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--gold)}
 .credits{font-size:11px;border:1px solid #72571d;border-radius:22px;padding:7px 10px;color:var(--gold2);background:#0d0b07}.credits b{font-size:14px}
+.auth-header-btn{border:1px solid #72571d;border-radius:999px;padding:8px 10px;background:#17130c;color:var(--gold2);font-size:11px;font-weight:700;white-space:nowrap}
 main{padding:18px 16px 92px}.eyebrow{color:var(--gold);font-size:11px;letter-spacing:1.8px;text-transform:uppercase}
 h1{font-family:Georgia,serif;font-size:33px;margin:5px 0 8px}.subtitle{color:var(--muted);line-height:1.5;font-size:14px}
 .hero{padding:20px;border:1px solid #594418;border-radius:24px;background:linear-gradient(135deg,#17120a,#0e0d0b);box-shadow:0 0 35px rgba(244,201,93,.08);margin-bottom:18px}
@@ -90,6 +91,7 @@ window.NENE_BACKEND_URL=localStorage.getItem('nene_backend_url')||'';
 window.NENEBackend={
  setUrl:function(url){window.NENE_BACKEND_URL=(url||'').trim(); if(window.NENE_BACKEND_URL)localStorage.setItem('nene_backend_url',window.NENE_BACKEND_URL);},
  getUrl:function(){return window.NENE_BACKEND_URL;},
+ authHeaders:async function(headers){const output=Object.assign({},headers||{});if(window.neneAuthGetAccessToken){const token=await window.neneAuthGetAccessToken();if(token)output.Authorization='Bearer '+token;}return output;},
  health:async function(){
    if(!window.NENE_BACKEND_URL)return {connected:false};
    try{const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/health');return {connected:r.ok,data:await r.json()};}
@@ -97,8 +99,9 @@ window.NENEBackend={
  },
  generate:async function(payload,idempotencyKey){
    if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
-   const headers={'Content-Type':'application/json'};
+   let headers={'Content-Type':'application/json'};
    if(idempotencyKey)headers['Idempotency-Key']=idempotencyKey;
+   headers=await this.authHeaders(headers);
    const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/generate',{method:'POST',headers,body:JSON.stringify(payload)});
    if(!r.ok)throw new Error(await r.text()||'Generation request failed');
    return await r.json();
@@ -107,7 +110,7 @@ window.NENEBackend={
    if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
    let url=window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/jobs/'+encodeURIComponent(jobId)+'?mode='+(mode||'text-to-video');
    if(provider)url+='&provider='+encodeURIComponent(provider);
-   const r=await fetch(url);
+   const r=await fetch(url,{headers:await this.authHeaders()});
    if(!r.ok)throw new Error(await r.text()||'Job status request failed');
    return await r.json();
  },
@@ -135,7 +138,8 @@ window.NENEBackend={
 <header>
   <div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div>
   <div class="credits">Free Credits<br><b id="credits">1,000</b></div>
-  <img id="avatar" class="avatar" alt="NENE AI profile">
+  <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
+  <img id="avatar" class="avatar" alt="NENE AI profile" title="NENE AI profile">
 </header>
 <div id="screen"></div>
 <div class="bottom">
@@ -400,6 +404,20 @@ function renderCreateHub(){
 }
 
 function openFeature(type){
+ if(type==="account" && typeof window.neneOpenAuth==="function"){
+  showModal(
+   '<div class="eyebrow">Account security</div><h2>Account &amp; Security</h2>'+
+   '<p class="subtitle">Manage your NENE AI sign-in, account access and password recovery.</p>'+
+   '<div class="list" style="margin-top:12px">'+
+   '<button class="btn gold" onclick="neneOpenAuth()">🔐 Sign-in &amp; sessions</button>'+
+   '<button class="btn" onclick="neneOpenAuth(\'signup\')">Create account</button>'+
+   '<button class="btn" onclick="neneOpenAuth(\'reset\')">🔑 Account recovery</button>'+
+   '<button class="btn" onclick="showModal(\'<h2>Account deletion is not enabled yet</h2><p class=&quot;subtitle&quot;>For your safety, deletion will only be enabled when NENE AI has a verified server-side account-deletion process. No account has been deleted.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>\')">Delete account</button>'+
+   '<button class="btn" onclick="closeModal()">Cancel</button>'+
+   '</div>'
+  );
+  return;
+ }
  currentFeature=type;
  setNav('create');
  const data={
@@ -660,7 +678,7 @@ async function generateStoryScenes(){
       if(primaryCharacter?.referenceImage){
         try{
           const upload=await fetch(backendUrl.replace(/\/$/,'')+'/api/image-upload',{
-            method:'POST',headers:{'Content-Type':'application/json'},
+            method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
             body:JSON.stringify({data_uri:primaryCharacter.referenceImage})
           });
           if(upload.ok){
@@ -739,7 +757,7 @@ async function generateStoryScenes(){
       if(button) button.textContent='🧩 Assembling final Story…';
       const assembleResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/story/assemble',{
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
         body:JSON.stringify({
           title:plan.title,
           scene_urls:sceneResults.sort((a,b)=>Number(a.scene)-Number(b.scene)).map(r=>r.videoUrl)
@@ -925,7 +943,7 @@ window.generate = async function generate(type) {
       // to JPEG in neneReadImageData before sending it to the backend.
       const dataUri = window.neneSelectedImageDataUri || (window.neneSelectedImageDataUriPromise ? await window.neneSelectedImageDataUriPromise : await neneReadImageData(file));
       if (button) button.innerHTML = '☁️ Uploading image…';
-      const uploadResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/image-upload', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data_uri:dataUri})});
+      const uploadResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/image-upload', {method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({data_uri:dataUri})});
       if (!uploadResp.ok) throw new Error(await uploadResp.text() || 'Image upload failed.');
       const uploadData = await uploadResp.json();
       imageUri = uploadData.image_url;
@@ -1258,6 +1276,14 @@ function renderProfile(){
    <div class="row"><div class="notice"><b>${credits}</b><br>credits left</div><div class="notice"><b>${creations.length}</b><br>creations</div></div>
   </div>
 
+  <div class="section-title">Secure account</div>
+  <div class="notice" id="neneAuthSummary">Secure sign-in is being prepared. Account creation is unavailable until NENE AI authentication is configured.</div>
+  <div class="notice" style="margin-top:8px"><b>Account</b><br><span id="neneAuthAccountName">Not signed in</span></div>
+  <div class="list" style="margin-top:10px">
+   <button class="btn gold" onclick="neneOpenAuth()">Sign in / Create account</button>
+   <button class="btn" onclick="neneSignOut()">Sign out</button>
+  </div>
+
   <div class="section-title">Workspace</div>
   <div class="list">
    <button class="btn" onclick="renderCreateHub()">＋ Create</button>
@@ -1480,9 +1506,12 @@ async function neneTestBackend(){var d=document.getElementById('neneBackendDot')
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=10', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=12', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
+<script src="./auth-config.js"></script>
+<script src="./auth.js"></script>
 </body>
 </html>
