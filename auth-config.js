@@ -2,6 +2,7 @@
  * NENE AI public authentication configuration.
  *
  * These are public client values for the NENE AI staging Supabase project.
+ * Use the project root URL (without /rest/v1); the SDK builds Auth endpoints itself.
  * NEVER put a service_role key, database password, or secret here.
  */
 window.NENE_AUTH_CONFIG = Object.freeze({
