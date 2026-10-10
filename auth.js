@@ -5,6 +5,7 @@
   const config = window.NENE_AUTH_CONFIG || {};
   let client = null;
   let authSubscription = null;
+  let currentAuthUser = null;
 
   function configured() {
     return typeof config.supabaseUrl === "string" &&
@@ -28,8 +29,11 @@
       }
     });
     if (!authSubscription) {
-      const result = client.auth.onAuthStateChange((_event, session) => {
+      const result = client.auth.onAuthStateChange((event, session) => {
         updateAuthUi(session?.user || null);
+        if (event === "PASSWORD_RECOVERY") {
+          window.setTimeout(() => window.neneOpenAuth("update"), 0);
+        }
       });
       authSubscription = result?.data?.subscription || null;
     }
@@ -44,6 +48,7 @@
   }
 
   function updateAuthUi(user) {
+    currentAuthUser = user || null;
     const button = document.getElementById("neneAuthHeaderButton");
     if (button) button.textContent = user ? "Account" : "Sign in";
     const summary = document.getElementById("neneAuthSummary");
@@ -102,12 +107,16 @@
     }
 
     const title = mode === "signup" ? "Create your account" :
-      mode === "reset" ? "Reset your password" : "Welcome back";
+      mode === "reset" ? "Reset your password" :
+      mode === "update" ? "Choose a new password" : "Welcome back";
     const submit = mode === "signup" ? "Create account" :
-      mode === "reset" ? "Send reset link" : "Sign in";
+      mode === "reset" ? "Send reset link" :
+      mode === "update" ? "Update password" : "Sign in";
     const passwordField = mode === "reset" ? "" :
-      '<div class="block"><div class="label" for="neneAuthPassword">Password</div><input class="field" id="neneAuthPassword" type="password" autocomplete="' +
-      (mode === "signup" ? "new-password" : "current-password") +
+      '<div class="block"><div class="label" for="neneAuthPassword">' +
+      (mode === "update" ? "New password" : "Password") +
+      '</div><input class="field" id="neneAuthPassword" type="password" autocomplete="' +
+      (mode === "signup" || mode === "update" ? "new-password" : "current-password") +
       '" minlength="8" required></div>';
 
     showModal(
@@ -169,6 +178,8 @@
             setMessage("If an account exists for that email, a password-reset message will be sent.", false);
             return;
           }
+        } else if (mode === "update") {
+          result = await auth.auth.updateUser({ password });
         } else {
           result = await auth.auth.signInWithPassword({ email, password });
         }
@@ -217,6 +228,11 @@
       else updateAuthUi(null);
     } catch (_error) {
       updateAuthUi(null);
+    }
+    const screen = document.getElementById("screen");
+    if (screen && window.MutationObserver) {
+      const observer = new MutationObserver(() => updateAuthUi(currentAuthUser));
+      observer.observe(screen, { childList: true, subtree: true });
     }
   });
 })();
