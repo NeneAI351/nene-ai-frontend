@@ -1,6 +1,6 @@
 # NENE AI frontend authentication setup
 
-The sign-in UI is prepared but intentionally inactive until the real NENE AI identity project is configured. Empty credentials are deliberate; this repository must not contain private credentials.
+The sign-in UI is configured with the staging project's public browser values on the draft branch. This does not mean live sign-in has been tested or that the draft branch is deployed. The repository must never contain private credentials.
 
 ## Configure the identity provider
 
@@ -8,7 +8,7 @@ The sign-in UI is prepared but intentionally inactive until the real NENE AI ide
 2. Configure an asymmetric JWT signing key supported by the backend verifier (RS256 or ES256), and confirm the project's JWKS endpoint is available.
 3. Configure the production website URL and exact redirect allowlist for the deployed NENE AI frontend.
 4. Configure email verification and password recovery. Use a custom transactional email provider before a public launch, and set CAPTCHA/rate limits based on expected traffic.
-5. Copy the project's public Project URL and public publishable/anon key into `auth-config.js`. Those two values are public browser configuration, not secrets.
+5. The staging Project URL and public publishable key are now set in `auth-config.js` on this draft branch. The URL must be the project root (without `/rest/v1`). These two values are public browser configuration, not secrets.
 6. Never copy a database password, service_role key, or other privileged secret into this repository or frontend.
 7. Configure the backend environment using the exact issuer and JWKS URL from the same project, plus the private PostgreSQL connection string, TLS Redis URL, rate-limit HMAC secret, exact CORS origin, and approved media-host allowlist.
 8. Test sign-up, email confirmation, sign-in, sign-out, password recovery, expired sessions, and backend 401/403/503 behavior in a staging environment before production.
