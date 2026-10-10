@@ -929,7 +929,7 @@ window.generate = async function generate(type) {
       // to JPEG in neneReadImageData before sending it to the backend.
       const dataUri = window.neneSelectedImageDataUri || (window.neneSelectedImageDataUriPromise ? await window.neneSelectedImageDataUriPromise : await neneReadImageData(file));
       if (button) button.innerHTML = '☁️ Uploading image…';
-      const uploadResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/image-upload', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data_uri:dataUri})});
+      const uploadResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/image-upload', {method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({data_uri:dataUri})});
       if (!uploadResp.ok) throw new Error(await uploadResp.text() || 'Image upload failed.');
       const uploadData = await uploadResp.json();
       imageUri = uploadData.image_url;
