@@ -112,6 +112,8 @@
     const submit = mode === "signup" ? "Create account" :
       mode === "reset" ? "Send reset link" :
       mode === "update" ? "Update password" : "Sign in";
+    const emailField = mode === "update" ? "" :
+      '<div class="block"><div class="label" for="neneAuthEmail">Email address</div><input class="field" id="neneAuthEmail" type="email" autocomplete="email" maxlength="254" required></div>';
     const passwordField = mode === "reset" ? "" :
       '<div class="block"><div class="label" for="neneAuthPassword">' +
       (mode === "update" ? "New password" : "Password") +
@@ -124,7 +126,7 @@
       '<h2>' + title + '</h2>' +
       '<p class="subtitle">Use your email to securely access your account across supported devices.</p>' +
       '<form id="neneAuthForm" novalidate>' +
-      '<div class="block"><div class="label" for="neneAuthEmail">Email address</div><input class="field" id="neneAuthEmail" type="email" autocomplete="email" maxlength="254" required></div>' +
+      emailField +
       passwordField +
       '<button class="btn gold" id="neneAuthSubmit" type="submit">' + submit + '</button>' +
       '</form>' +
@@ -146,7 +148,7 @@
       const passwordNode = document.getElementById("neneAuthPassword");
       const email = (emailNode?.value || "").trim().toLowerCase();
       const password = passwordNode?.value || "";
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (mode !== "update" && (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
         setMessage("Enter a valid email address.", true);
         return;
       }
