@@ -97,6 +97,39 @@ window.NENEBackend={
    try{const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/health');return {connected:r.ok,data:await r.json()};}
    catch(e){return {connected:false};}
  },
+ createGeneration:async function(payload,idempotencyKey){
+   if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
+   const headers=await this.authHeaders({'Content-Type':'application/json','Idempotency-Key':idempotencyKey});
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\\/$/,'')+'/api/generations',{method:'POST',headers,body:JSON.stringify(payload)});
+   const body=await r.json().catch(()=>({detail:'Generation request failed.'}));
+   if(!r.ok){const message=body?.detail||body?.message||'Generation request failed.';const e=new Error(typeof message==='string'?message:JSON.stringify(message));e.status=r.status;e.response=body;throw e;}
+   return body;
+ },
+ generation:async function(generationId){
+   if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\\/$/,'')+'/api/generations/'+encodeURIComponent(generationId),{headers:await this.authHeaders(),cache:'no-store'});
+   const body=await r.json().catch(()=>({detail:'Generation status request failed.'}));
+   if(!r.ok){const message=body?.detail||'Generation status request failed.';throw new Error(typeof message==='string'?message:JSON.stringify(message));}
+   return body.generation;
+ },
+ generationMediaUrl:async function(generationId){
+   if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\\/$/,'')+'/api/generations/'+encodeURIComponent(generationId)+'/media-url',{headers:await this.authHeaders(),cache:'no-store'});
+   const body=await r.json().catch(()=>({detail:'Video delivery is not available yet.'}));
+   if(!r.ok){const message=body?.detail||'Video delivery is not available yet.';throw new Error(typeof message==='string'?message:JSON.stringify(message));}
+   return body;
+ },
+ waitForGeneration:async function(generationId,onUpdate,maxWaitMs=900000,intervalMs=5000){
+   const started=Date.now();
+   for(;;){
+     const generation=await this.generation(generationId);
+     if(typeof onUpdate==='function')onUpdate(generation);
+     const status=String(generation?.status||'').toLowerCase();
+     if(['succeeded','failed'].includes(status))return generation;
+     if(Date.now()-started>=maxWaitMs){const e=new Error('Generation is still processing. It has been saved; use Resume / Check to continue tracking it.');e.code='NENE_GENERATION_PENDING';throw e;}
+     await new Promise(resolve=>setTimeout(resolve,intervalMs));
+   }
+ },
  generate:async function(payload,idempotencyKey){
    if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
    let headers={'Content-Type':'application/json'};
@@ -523,7 +556,7 @@ function openTool(type){
  type==="image" ? `<div class="block"><div class="label">Motion controls</div><div class="row"><select id="neneImageMotion"><option>Natural, realistic movement</option><option>Slow, elegant movement</option><option>Gentle camera movement</option><option>Dynamic commercial movement</option><option>Subtle movement with stable framing</option></select><select id="neneImageCamera"><option>Smooth cinematic camera</option><option>Slow dolly-in</option><option>Gentle tracking shot</option><option>Slow orbit</option><option>Static locked camera</option></select></div><div class="row" style="margin-top:8px"><select id="neneImageStyle"><option>Photorealistic</option><option>Cinematic</option><option>Luxury commercial</option><option>Editorial</option><option>Documentary</option></select><select id="neneImageLighting"><option>Natural cinematic lighting</option><option>Golden-hour lighting</option><option>Soft diffused lighting</option><option>Luxury studio lighting</option><option>Dramatic high-contrast lighting</option></select></div><div class="notice" style="margin-top:10px">🔒 Identity protection: NENE AI will instruct the video model to preserve the source subject's face, clothing and overall appearance while adding motion.</div></div>` :
  type==="text" ? `<div class="block"><div class="label">Production controls</div><div class="row"><select id="neneStyle"><option>Cinematic</option><option>Photorealistic</option><option>Luxury commercial</option><option>Documentary</option><option>Editorial</option><option>Dynamic</option></select><select id="neneShot"><option>Medium shot</option><option>Close-up</option><option>Wide establishing shot</option><option>Aerial shot</option><option>Tracking shot</option></select></div><div class="row" style="margin-top:8px"><select id="neneCamera"><option>Smooth cinematic camera</option><option>Slow dolly-in</option><option>Gentle tracking shot</option><option>Slow orbit</option><option>Static locked camera</option><option>Handheld documentary camera</option></select><select id="neneLighting"><option>Natural cinematic lighting</option><option>Golden-hour lighting</option><option>Luxury studio lighting</option><option>Dramatic high-contrast lighting</option><option>Soft diffused lighting</option><option>Neon night lighting</option></select></div><div class="block"><div class="label">Motion</div><select id="neneMotion" class="field"><option>Natural, realistic movement</option><option>Slow, elegant movement</option><option>Energetic dynamic movement</option><option>Subtle movement with stable framing</option><option>Fast commercial-style movement</option></select></div></div>` :
  `<div class="block"><div class="label">Visual style</div><div class="chips">${chips(["Cinematic","Realistic","Animated","3D","Vintage","Dynamic"])}</div></div>`;
- screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider" onchange="syncVideoProviderOptions()"><option value="auto">Auto (Best available)</option><option value="pixazo">Pixazo</option><option value="magic-hour">Magic Hour (free may watermark)</option><option value="ltx">LTX (provider plan)</option></select></div><div class="notice" id="neneProviderNotice">Real video generation is enabled when your secure NENE AI backend is connected. NENE AI does not add a watermark to your generated media. Provider branding, if any, is controlled by the provider and its plan.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">${type==="story" ? "✨ Build Story Plan" : "✨ Generate "+titles[type]+" · "+costs[type]+" credits"}</button></div></main>`;
+ screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="6">6 seconds</option><option value="8">8 seconds</option><option value="10" selected>10 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider"><option value="ltx" selected>LTX (durable queue)</option></select></div><div class="notice" id="neneProviderNotice">Durable video generation uses NENE AI’s server-priced LTX queue. Credits are reserved by the backend; progress and private video delivery use your NENE generation ID.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">${type==="story" ? "✨ Build Story Plan" : "✨ Generate "+titles[type]+" · "+costs[type]+" credits"}</button></div></main>`;
  const genBtn=document.getElementById('neneGenerateBtn');
 window.currentNeneToolType=type;
 if(type==="story"){document.querySelectorAll('.storyCharacterCheck').forEach(el=>el.addEventListener('change',storyCharacterSelectionChanged));renderStoryCharacterAssignments();}
@@ -863,274 +896,127 @@ function neneCreationName(prompt,label){
 }
 
 window.generate = async function generate(type) {
-  const promptEl = document.getElementById('nenePrompt') || document.getElementById('prompt') || document.querySelector('textarea');
-  let prompt = promptEl ? promptEl.value.trim() : '';
-  if (!prompt) {
-    alert(type === 'image' ? 'Please describe the motion you want first.' : 'Please enter a prompt first.');
+  if (!['text','image'].includes(type)) {
+    alert('This workflow is still in prototype mode. Durable Text → Video and Image → Video are the first connected workflows.');
     return;
   }
-  if(type === 'text'){
-    const style=document.getElementById('neneStyle')?.value || 'Cinematic';
-    const shot=document.getElementById('neneShot')?.value || 'Medium shot';
-    const camera=document.getElementById('neneCamera')?.value || 'Smooth cinematic camera';
-    const lighting=document.getElementById('neneLighting')?.value || 'Natural cinematic lighting';
-    const motion=document.getElementById('neneMotion')?.value || 'Natural, realistic movement';
-    prompt += ` Style: ${style}. Shot: ${shot}. Camera: ${camera}. Lighting: ${lighting}. Motion: ${motion}. Maintain realistic anatomy, coherent objects and consistent visual details throughout the shot.`;
-  } else if(type === 'image'){
-    const motion=document.getElementById('neneImageMotion')?.value || 'Natural, realistic movement';
-    const camera=document.getElementById('neneImageCamera')?.value || 'Smooth cinematic camera';
-    const style=document.getElementById('neneImageStyle')?.value || 'Photorealistic';
-    const lighting=document.getElementById('neneImageLighting')?.value || 'Natural cinematic lighting';
-    prompt += ` Style: ${style}. Camera: ${camera}. Lighting: ${lighting}. Motion: ${motion}. Preserve the exact subject identity, face, hair, clothing, colors, body proportions and important visual details from the source image. Do not change the person or turn them into a different person. Keep motion natural and temporally consistent.`;
+  const promptEl=document.getElementById('nenePrompt')||document.getElementById('prompt')||document.querySelector('textarea');
+  let prompt=promptEl?promptEl.value.trim():'';
+  if(!prompt){alert(type==='image'?'Please describe the motion you want first.':'Please enter a prompt first.');return;}
+  if(type==='text'){
+    prompt += ` Style: ${document.getElementById('neneStyle')?.value||'Cinematic'}. Shot: ${document.getElementById('neneShot')?.value||'Medium shot'}. Camera: ${document.getElementById('neneCamera')?.value||'Smooth cinematic camera'}. Lighting: ${document.getElementById('neneLighting')?.value||'Natural cinematic lighting'}. Motion: ${document.getElementById('neneMotion')?.value||'Natural, realistic movement'}. Maintain realistic anatomy, coherent objects and consistent visual details throughout the shot.`;
+  }else{
+    prompt += ` Style: ${document.getElementById('neneImageStyle')?.value||'Photorealistic'}. Camera: ${document.getElementById('neneImageCamera')?.value||'Smooth cinematic camera'}. Lighting: ${document.getElementById('neneImageLighting')?.value||'Natural cinematic lighting'}. Motion: ${document.getElementById('neneImageMotion')?.value||'Natural, realistic movement'}. Preserve the exact subject identity, face, hair, clothing, colors, body proportions and important visual details from the source image. Do not change the person or turn them into a different person. Keep motion natural and temporally consistent.`;
   }
-
-  // Commercial pricing is calculated by NENE's backend from the selected provider,
-  // model, resolution and duration. Never trust a browser-side fixed generation price.
-  let cost = 0;
-
-  if (type !== 'text' && type !== 'image') {
-    if (typeof credits !== 'undefined') {
-      credits -= cost;
-      neneCreditsCharged = true;
-    }
-    if (typeof updateCredits === 'function') updateCredits();
-    alert('This workflow is still in prototype mode. Text → Video and Image → Video are the first real engines connected.');
+  const backendUrl=window.NENEBackend?.getUrl?.()||'';
+  if(!backendUrl){alert('Connect the NENE AI backend first.');return;}
+  const providerEl=document.getElementById('neneProvider');
+  if(providerEl && providerEl.value!=='ltx'){
+    alert('The durable generation queue currently supports LTX only. Choose LTX before generating; other providers are not silently substituted.');
     return;
   }
-
-  const backendUrl = window.NENEBackend && window.NENEBackend.getUrl
-    ? window.NENEBackend.getUrl()
-    : '';
-  if (!backendUrl) {
-    alert('Connect the NENE AI backend first.');
-    return;
+  const durationEl=document.getElementById('neneDuration');
+  const requestedDuration=Number(durationEl?.value||10);
+  const duration=[6,8,10].includes(requestedDuration)?requestedDuration:(requestedDuration<=6?6:requestedDuration<=8?8:10);
+  const resolutionEl=document.getElementById('neneResolution');
+  const resolutionRaw=String(resolutionEl?.value||'1920x1080').toLowerCase();
+  const resolution=resolutionRaw.includes('3840')||resolutionRaw.includes('2160')||resolutionRaw.includes('4k')?'4k':resolutionRaw.includes('1280')||resolutionRaw.includes('720')?'720p':resolutionRaw.includes('1440')?'1440p':'1080p';
+  const button=document.getElementById('neneGenerateBtn');
+  if(!button)throw new Error('NENE AI could not find the Generate button. Please reopen this creation screen.');
+  const oldText=button.innerHTML;
+  button.disabled=true;
+  let generationId=null;
+  let accepted=false;
+  try{
+    let imageUrl=null;
+    if(type==='image'){
+      const input=document.getElementById('fileInput');
+      const file=(window.neneSelectedImages&&window.neneSelectedImages[0])||(input&&input.files&&input.files[0]);
+      if(!file)throw new Error('Please upload an image first.');
+      if(file.size>15*1024*1024)throw new Error('Please choose an image under 15 MB.');
+      const dataUri=window.neneSelectedImageDataUri||(window.neneSelectedImageDataUriPromise?await window.neneSelectedImageDataUriPromise:await neneReadImageData(file));
+      button.innerHTML='☁️ Uploading image…';
+      const uploadResp=await fetch(backendUrl.replace(/\\/$/, '')+'/api/image-upload',{method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({data_uri:dataUri})});
+      const uploadData=await uploadResp.json().catch(()=>({detail:'Image upload failed.'}));
+      if(!uploadResp.ok)throw new Error(uploadData?.detail||'Image upload failed.');
+      imageUrl=uploadData.image_url;
+      if(!imageUrl)throw new Error('Backend did not return a source image URL.');
+    }
+    const payload={type:type==='image'?'image-to-video':'text-to-video',prompt,provider:'ltx',model:'ltx-2-5-fast',resolution,duration};
+    if(imageUrl)payload.image_url=imageUrl;
+    // Reuse a pending idempotency key only for the exact same request. Persist it
+    // before POST so a network timeout can safely be retried without duplicate work.
+    const fingerprint=JSON.stringify(payload);
+    let idem=null;
+    try{idem=JSON.parse(localStorage.getItem('nene_generation_idempotency_v2')||'null');}catch(_){}
+    if(!idem||idem.fingerprint!==fingerprint||!idem.key){
+      const key=(window.crypto&&typeof window.crypto.randomUUID==='function')?window.crypto.randomUUID():'nene_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);
+      idem={key,fingerprint};
+      try{localStorage.setItem('nene_generation_idempotency_v2',JSON.stringify(idem));}catch(_){}
+    }
+    button.innerHTML='⏳ Checking server price…';
+    const quoteResp=await fetch(backendUrl.replace(/\\/$/,'')+'/api/pricing/quote',{method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),cache:'no-store',body:JSON.stringify({provider:'ltx',model:'ltx-2-5-fast',resolution,duration})});
+    const quoteBody=await quoteResp.json().catch(()=>({detail:'Pricing is temporarily unavailable.'}));
+    if(!quoteResp.ok)throw new Error(quoteBody?.detail||'NENE AI pricing is temporarily unavailable.');
+    const previewCredits=Number(quoteBody.recommended_credits);
+    if(!Number.isFinite(previewCredits)||previewCredits<1)throw new Error('NENE AI returned an invalid generation price.');
+    if(!window.confirm('Estimated cost: '+previewCredits+' NENE credits for '+duration+' seconds at '+resolution+'. The backend will recalculate the final price and reserve credits before queueing. Continue?'))return;
+    button.innerHTML='⏳ Reserving credits & queueing…';
+    const response=await window.NENEBackend.createGeneration(payload,idem.key);
+    generationId=response?.generation_id;
+    if(!generationId)throw new Error('The backend accepted no recognizable NENE generation ID. Keep this request key and retry only the same request.');
+    accepted=true;
+    const quote=response.quote||quoteBody;
+    const reserved=Number(response.credits_reserved??quote.recommended_credits);
+    const job={id:generationId,status:String(response.status||'queued').toUpperCase(),type:type==='image'?'Image → Video':'Text → Video',mode:payload.type,provider:'ltx',prompt,duration,resolution,cost:Number(quote.recommended_credits)||reserved,creditsReserved:reserved,durable:true,creditCharged:false};
+    recordNeneJob(job);
+    try{localStorage.setItem('nene_pending_job',JSON.stringify({jobId:generationId,generationId,durable:true,mode:payload.type,type,prompt,provider:'ltx',createdAt:new Date().toISOString()}));}catch(_){}
+    try{localStorage.removeItem('nene_generation_idempotency_v2');localStorage.removeItem('nene_generation_idempotency');}catch(_){}
+    button.innerHTML='⏳ Queued — waiting for progress…';
+    const final=await window.NENEBackend.waitForGeneration(generationId,function(g){
+      const status=String(g?.status||'queued').toLowerCase();
+      updateNeneJob(generationId,{status:status==='succeeded'?'COMPLETED':status==='failed'?'FAILED':status.toUpperCase(),creditsReserved:Number(g?.credits_reserved)||reserved,creditCharged:status==='succeeded'});
+      button.innerHTML=status==='queued'?'⏳ Queued…':status==='succeeded'?'✓ Complete':status==='failed'?'⚠️ Failed':'🎬 '+status.replace(/_/g,' ')+'…';
+    },900000,5000);
+    if(String(final.status).toLowerCase()==='failed'){
+      updateNeneJob(generationId,{status:'FAILED',error:final.error||'Generation failed; reserved credits should be released by the backend.'});
+      neneClearPendingForJob(generationId);
+      throw new Error(final.error||'Generation failed. The backend will release the reserved credits if the provider failure is confirmed.');
+    }
+    const media=await window.NENEBackend.generationMediaUrl(generationId);
+    if(media?.url){
+      window.neneMediaUrlCache=window.neneMediaUrlCache||{};
+      window.neneMediaUrlCache[generationId]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};
+    }
+    updateNeneJob(generationId,{status:'COMPLETED',error:null,creditCharged:true});
+    neneClearPendingForJob(generationId);
+    const fresh=neneJobs.find(j=>j.id===generationId);
+    if(fresh)neneSaveCreationFromJob(fresh,null);
+    const container=document.getElementById('neneGenerationResult')||document.querySelector('.result, .generation-result, [data-result]');
+    const label=type==='image'?'Image → Video':'Text → Video';
+    if(container){
+      container.replaceChildren();
+      const card=document.createElement('div');card.style.cssText='margin-top:18px;padding:16px;border:1px solid rgba(212,175,55,.45);border-radius:16px;background:rgba(255,255,255,.04)';
+      const heading=document.createElement('h3');heading.textContent='🎬 '+label+' ready';card.appendChild(heading);
+      if(media?.url){const video=document.createElement('video');video.controls=true;video.playsInline=true;video.style.cssText='width:100%;max-width:900px;border-radius:12px';video.src=media.url;card.appendChild(video);}
+      container.appendChild(card);container.style.display='';
+    }
+    toast('Generation completed and saved to NENE AI.');
+  }catch(err){
+    if(err?.code==='NENE_GENERATION_PENDING'){
+      if(generationId)updateNeneJob(generationId,{status:'PROCESSING',error:null});
+      toast('Generation is still processing. Use Generation Center to resume checking.');
+    }else{
+      if(generationId){updateNeneJob(generationId,{status:'FAILED',error:err?.message||String(err)});if(accepted)neneClearPendingForJob(generationId);}
+      const message=err?.message||String(err);
+      alert(message);
+    }
+  }finally{
+    button.disabled=false;
+    button.innerHTML=oldText||'✨ Generate Video';
+    if(typeof updateCredits==='function')updateCredits();
   }
-
-  const durationEl = document.getElementById('neneDuration');
-  const resolutionEl = document.getElementById('neneResolution');
-  const requestedDuration = Number(durationEl ? durationEl.value : 10);
-  let resolution = resolutionEl ? resolutionEl.value : '1920x1080';
-
-  // LTX-2.5 Fast supports 6/8/10 seconds at 4K and 6–20 seconds at 720p/1080p.
-  let duration = requestedDuration;
-  if (resolution === '3840x2160') duration = requestedDuration <= 6 ? 6 : 10;
-  else if (requestedDuration === 5) duration = 6;
-  else if (requestedDuration === 15) duration = 16;
-  else if (requestedDuration >= 30) duration = 20;
-
-  let imageUri = null;
-
-  let neneCreditsCharged = false;
-  const button = document.getElementById('neneGenerateBtn');
-  if (!button) {
-    throw new Error('NENE AI could not find the Generate button. Please reopen this creation screen.');
-  }
-  const oldText = button.innerHTML;
-  if (button) {
-    button.disabled = true;
-    button.innerHTML = type === 'image' ? '⏳ Uploading image…' : '⏳ Generating…';
-  }
-
-  try {
-    if (type === 'image') {
-      const input = document.getElementById('fileInput');
-      const file = (window.neneSelectedImages && window.neneSelectedImages[0]) || (input && input.files && input.files[0]);
-      if (!file) throw new Error('Please upload an image first.');
-      if (file.size > 15 * 1024 * 1024) {
-        throw new Error('Please choose an image under 15 MB.');
-      }
-      // Do not reject phone/gallery formats here. We normalize the selected image
-      // to JPEG in neneReadImageData before sending it to the backend.
-      const dataUri = window.neneSelectedImageDataUri || (window.neneSelectedImageDataUriPromise ? await window.neneSelectedImageDataUriPromise : await neneReadImageData(file));
-      if (button) button.innerHTML = '☁️ Uploading image…';
-      const uploadResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/image-upload', {method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({data_uri:dataUri})});
-      if (!uploadResp.ok) throw new Error(await uploadResp.text() || 'Image upload failed.');
-      const uploadData = await uploadResp.json();
-      imageUri = uploadData.image_url;
-      if (!imageUri) throw new Error('Backend did not return a public image URL.');
-    }
-
-    if (button) button.innerHTML = '⏳ Sending to NENE AI…';
-    const providerEl = document.getElementById('neneProvider');
-    const provider = providerEl ? providerEl.value : 'auto';
-    syncVideoProviderOptions();
-    const effectiveResolutionEl = document.getElementById('neneResolution');
-    if(provider === 'magic-hour'){
-      if(resolution === '1920x1080') resolution = '1080p';
-      else if(resolution === '1280x720') resolution = '720p';
-      else if(resolution === '3840x2160') resolution = '1080p';
-    }
-    // Ask the backend for the current provider cost and NENE margin quote.
-    // Auto reserves against the first configured provider in the backend's routing
-    // order; if Auto later falls back, the backend can safely settle the actual cost.
-    let quoteProvider = provider;
-    let quoteModel = provider === 'magic-hour' ? 'ltx-2.5' : 'ltx-2-5-fast';
-    if(provider === 'auto'){
-      const infoResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/provider-info', {cache:'no-store'});
-      if(!infoResp.ok) throw new Error('NENE AI pricing could not verify the available provider.');
-      const info = await infoResp.json();
-      quoteProvider = (info.selection_order || ['pixazo','magic-hour','ltx']).find(p => info.providers?.[p]?.configured);
-      if(!quoteProvider) throw new Error('NENE AI has no configured video provider available.');
-      quoteModel = quoteProvider === 'magic-hour' ? 'ltx-2.5' : 'ltx-2-5-fast';
-    } else if(provider === 'pixazo'){
-      // The connected Pixazo endpoint is LTX Video 2.5; its current public rate
-      // is $0.45 for a 5-second 1280×704 clip, i.e. $0.09/sec after free balance.
-      quoteModel = 'ltx-2-5-lite';
-    }
-
-    const quoteResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/pricing/quote', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      cache:'no-store',
-      body:JSON.stringify({provider:quoteProvider, model:quoteModel, resolution, duration})
-    });
-    if(!quoteResp.ok) throw new Error('NENE AI pricing is temporarily unavailable. Please try again in a moment.');
-    const quote = await quoteResp.json();
-    cost = Number(quote.recommended_credits);
-    if(!Number.isFinite(cost) || cost < 0) throw new Error('NENE AI returned an invalid generation price.');
-    if (typeof credits !== 'undefined' && credits < cost) {
-      alert('Not enough NENE credits. This generation requires ' + cost + ' credits.');
-      return;
-    }
-    if (typeof credits !== 'undefined') credits -= cost;
-    if (typeof updateCredits === 'function') updateCredits();
-    const payload = {
-      type: type === 'image' ? 'image-to-video' : 'text-to-video',
-      prompt,
-      // Auto may fall back to Magic Hour, so use a model ID that both the
-      // router and Magic Hour can normalize safely.
-      model: provider === 'magic-hour' || provider === 'auto' ? 'ltx-2.5' : 'ltx-2-5-fast',
-      resolution,
-      duration,
-      provider
-    };
-    if (imageUri) payload.image_uri = imageUri;
-
-    const idempotencyKey = (window.crypto && typeof window.crypto.randomUUID === 'function')
-      ? window.crypto.randomUUID()
-      : 'nene_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
-    try { localStorage.setItem('nene_generation_idempotency', idempotencyKey); } catch (_) {}
-    const response = await window.NENEBackend.generate(payload, idempotencyKey);
-    const jobId = response && (response.job_id || response.id || response.jobId);
-    if (!jobId) throw new Error('The backend did not return a generation job ID.');
-    const activeProvider = String(response?.provider || provider || 'auto').toLowerCase();
-    const mode = type === 'image' ? 'image-to-video' : 'text-to-video';
-    recordNeneJob({id:jobId,status:'QUEUED',type:type==='image'?'Image → Video':'Text → Video',mode,provider:activeProvider,prompt,duration,resolution,cost,creditCharged:neneCreditsCharged});
-    try {
-      localStorage.setItem('nene_pending_job', JSON.stringify({
-        jobId, mode, type, prompt, provider: activeProvider, idempotencyKey, createdAt: new Date().toISOString()
-      }));
-    } catch (_) {}
-    const final = await window.NENEBackend.waitForJob(
-      jobId, mode, activeProvider,
-      function(job){
-        const s = String(job?.status || '').toUpperCase();
-        if (button) {
-          if (s === 'QUEUED') button.innerHTML = '⏳ Queued…';
-          else if (s === 'PROCESSING') button.innerHTML = '🎬 Generating…';
-          else if (s) button.innerHTML = '⏳ ' + s + '…';
-        }
-      },
-      900000, 7000
-    );
-    const finalStatus = String(final?.status || '').toLowerCase();
-    if (['failed','error','cancelled','canceled'].includes(finalStatus)) {
-      const detail = final?.error?.message || final?.error || final?.message || 'Video generation failed.';
-      throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
-    }
-    const videoUrl =
-      final?.video_url ||
-      final?._nene_video_url ||
-      final?.result?.video_url ||
-      final?.output?.video_url ||
-      final?.output?.media_url?.[0] ||
-      final?.result?.media_url?.[0] ||
-      final?.downloads?.[0]?.url ||
-      final?.result?.downloads?.[0]?.url ||
-      final?.result?.url ||
-      final?.url;
-    if (!videoUrl) throw new Error('Generation finished, but no video URL was returned.');
-    try {
-      localStorage.removeItem('nene_pending_job');
-      localStorage.removeItem('nene_generation_idempotency');
-    } catch (_) {}
-    updateNeneJob(jobId,{status:'COMPLETED',videoUrl});
-
-    const container =
-      document.getElementById('neneGenerationResult') ||
-      document.querySelector('.result, .generation-result, [data-result]');
-    const label = type === 'image' ? 'Image → Video' : 'Text → Video';
-    const html = `
-      <div style="margin-top:18px;padding:16px;border:1px solid rgba(212,175,55,.45);border-radius:16px;background:rgba(255,255,255,.04)">
-        <h3 style="margin:0 0 10px">🎬 ${label} ready</h3>
-        <video controls playsinline style="width:100%;max-width:900px;border-radius:12px" src="${videoUrl}"></video>
-        <p style="margin:10px 0 0"><a href="${videoUrl}" target="_blank" rel="noopener">Open video</a></p>
-      </div>`;
-    if (container) {
-      container.innerHTML = html;
-      container.style.display = '';
-    } else {
-      const section = document.querySelector('main') || document.body;
-      section.insertAdjacentHTML('beforeend', html);
-    }
-
-    if (typeof creations !== 'undefined') {
-      creations.unshift({
-        jobId,
-        name: neneCreationName(prompt, label),
-        type: label,
-        prompt,
-        videoUrl,
-        provider: activeProvider,
-        duration,
-        resolution,
-        icon: type === 'image' ? '🖼️' : '🎬',
-        createdAt: new Date().toISOString()
-      });
-      if (typeof saveState === 'function') saveState();
-      setTimeout(()=>{ if(typeof renderCreations==='function') renderCreations(); },50);
-    }
-  } catch (err) {
-    try {
-      const pending = JSON.parse(localStorage.getItem('nene_pending_job') || 'null');
-      if (pending && pending.jobId) {
-        const msg = String(err?.message || err);
-        if (/failed|error|cancelled|canceled/i.test(msg)) localStorage.removeItem('nene_pending_job');
-      }
-    } catch (_) {}
-    const pendingStillActive = err && err.code === 'NENE_JOB_PENDING';
-    if (typeof jobId !== 'undefined' && jobId) updateNeneJob(jobId,{status:pendingStillActive?'PROCESSING':'FAILED',error:pendingStillActive?null:(err?.message||String(err))});
-    // Refund only when NENE AI actually charged this generation attempt.
-    // Provider-side rejections (for example insufficient Magic Hour credits)
-    // must never consume the user's NENE AI credits.
-    if (!pendingStillActive && neneCreditsCharged) {
-      if (typeof credits !== 'undefined') credits = Math.min(1000, credits + cost);
-      neneCreditsCharged = false;
-      if (typeof updateCredits === 'function') updateCredits();
-    }
-    let userMessage = err?.message || String(err);
-    try {
-      const parsed = JSON.parse(userMessage);
-      const detail = parsed?.detail;
-      if (Array.isArray(detail) && detail[0]?.error) {
-        const providerError = detail[0].error;
-        if (providerError.code === 'card_required') {
-          userMessage = 'Pixazo requires a payment card for this API account before it can use its Free Tier. NENE AI will not ask you to add a card. Choose Magic Hour for a no-card test, or add the card in Pixazo if you want to use Pixazo.';
-        } else if (providerError.code === 'insufficient_credits') {
-          userMessage = 'Magic Hour does not have enough provider credits for this generation. These are Magic Hour credits, not NENE AI credits. NENE AI has refunded this failed attempt, and no second provider will be charged automatically.';
-        } else {
-          userMessage = providerError.message || userMessage;
-        }
-      }
-    } catch (_) {}
-    alert((pendingStillActive ? 'Video is still processing: ' : 'Video generation failed: ') + userMessage);
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.innerHTML = oldText || '✨ Generate Video';
-    }
-  }
-}
+};
 
 function typeLabel(t){return {text:"Text → Video",image:"Image → Video",ad:"AI Advertisement",social:"Social Content",story:"Story → Video"}[t]}
 function typeIcon(t){return {text:"🎬",image:"🖼️",ad:"📢",social:"📱",story:"📖"}[t]}
