@@ -331,7 +331,7 @@ function resumeActiveNeneJobs(){
  if(!window.NENEBackend.getUrl())return;
  neneJobs.filter(j=>!['COMPLETED','FAILED','CANCELLED'].includes(String(j.status||'').toUpperCase())).slice(0,5).forEach(j=>resumeNeneJob(j.id));
 }
-function neneEscapeHtml(value){return String(value??'').replace(/[&<>\"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[ch];});}
+function neneEscapeHtml(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}
 function renderJobCenter(){
  setNav('creations');
  const active=neneJobs.filter(j=>!['COMPLETED','FAILED','CANCELLED'].includes(String(j.status).toUpperCase())).length;
