@@ -255,7 +255,9 @@ function recordNeneJob(data){
   resolution:data.resolution,
   cost:Number.isFinite(Number(data.cost)) ? Number(data.cost) : Number(existing&&existing.cost)||10,
   creditCharged:data.creditCharged===true ? true : !!(existing&&existing.creditCharged),
-  creditRefunded:data.creditRefunded===true ? true : !!(existing&&existing.creditRefunded)
+  creditRefunded:data.creditRefunded===true ? true : !!(existing&&existing.creditRefunded),
+  durable:data.durable===true ? true : !!(existing&&existing.durable),
+  creditsReserved:Number.isFinite(Number(data.creditsReserved)) ? Number(data.creditsReserved) : Number(existing&&existing.creditsReserved)||0
  };
  if(existing) neneJobs[neneJobs.indexOf(existing)]={...existing,...job};
  else neneJobs.unshift(job);
@@ -275,15 +277,16 @@ function neneClearPendingForJob(id){
 }
 function neneSaveCreationFromJob(job,videoUrl){
  if(typeof creations==='undefined')return;
- const already=creations.some(c=>c.jobId===job.id||c.videoUrl===videoUrl);
+ const already=creations.some(c=>c.jobId===job.id||(!!videoUrl&&c.videoUrl===videoUrl));
  if(already)return;
  const label=job.type||'Text → Video';
  creations.unshift({
   jobId:job.id,
+  generationId:job.durable?job.id:undefined,
   name:neneCreationName(job.prompt||'Generation',label),
   type:label,
   prompt:job.prompt||'',
-  videoUrl,
+  videoUrl:job.durable?null:videoUrl,
   provider:job.provider||'auto',
   duration:job.duration,
   resolution:job.resolution,
@@ -292,55 +295,37 @@ function neneSaveCreationFromJob(job,videoUrl){
  });
  if(typeof saveState==='function')saveState();
 }
-async function resumeNeneJob(id){
- if(neneActivePolls.has(id))return;
+async function refreshNeneMedia(id){
  const job=neneJobs.find(j=>j.id===id);
- if(!job)return;
- const status=String(job.status||'').toUpperCase();
- if(['COMPLETED','FAILED','CANCELLED'].includes(status))return;
- if(!window.NENEBackend.getUrl()){toast('Connect the NENE AI backend before resuming this job.');return;}
+ if(!job||!job.durable||String(job.status||'').toUpperCase()!=='COMPLETED')return;
+ window.neneMediaUrlCache=window.neneMediaUrlCache||{};
+ const cached=window.neneMediaUrlCache[id];if(cached&&cached.expiresAt>Date.now()+10000)return;
+ window.neneMediaUrlLoading=window.neneMediaUrlLoading||new Set();if(window.neneMediaUrlLoading.has(id))return;
+ window.neneMediaUrlLoading.add(id);
+ try{const media=await window.NENEBackend.generationMediaUrl(id);if(media?.url)window.neneMediaUrlCache[id]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};}
+ catch(err){console.warn('NENE media URL refresh deferred:',err?.message||String(err));}
+ finally{window.neneMediaUrlLoading.delete(id);if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderJobCenter();}
+}
+async function resumeDurableNeneJob(id){
+ if(neneActivePolls.has(id))return;const job=neneJobs.find(j=>j.id===id);if(!job||!job.durable)return;
+ const status=String(job.status||'').toUpperCase();if(status==='COMPLETED'){await refreshNeneMedia(id);return;}if(status==='FAILED')return;
+ if(!window.NENEBackend.getUrl()){toast('Connect the NENE AI backend before checking this generation.');return;}
  neneActivePolls.add(id);
- updateNeneJob(id,{status:'PROCESSING',error:null});
  try{
-  localStorage.setItem('nene_pending_job',JSON.stringify({
-   jobId:id,mode:job.mode,type:job.type==='Image → Video'?'image':'text',prompt:job.prompt||'',provider:job.provider,createdAt:job.createdAt
-  }));
- }catch(_){}
- try{
-  const final=await window.NENEBackend.waitForJob(id,job.mode,job.provider,function(update){
-   const s=String(update?.status||'').toUpperCase();
-   updateNeneJob(id,{status:s||'PROCESSING'});
-  },900000,7000);
-  const finalStatus=String(final?.status||'').toLowerCase();
-  if(['failed','error','cancelled','canceled'].includes(finalStatus)){
-   const detail=final?.error?.message||final?.error||final?.message||'Generation failed.';
-   throw new Error(typeof detail==='string'?detail:JSON.stringify(detail));
-  }
-  const videoUrl=neneExtractVideoUrl(final);
-  if(!videoUrl)throw new Error('Generation finished, but no video URL was returned.');
-  updateNeneJob(id,{status:'COMPLETED',videoUrl,error:null});
-  neneClearPendingForJob(id);
-  const fresh=neneJobs.find(j=>j.id===id);
-  if(fresh)neneSaveCreationFromJob(fresh,videoUrl);
-  toast('Generation completed and was saved.');
- }catch(err){
-  const pendingStillActive=err&&err.code==='NENE_JOB_PENDING';
-  if(pendingStillActive){
-   updateNeneJob(id,{status:'PROCESSING',error:null});
-  }else{
-   const fresh=neneJobs.find(j=>j.id===id);
-   updateNeneJob(id,{status:'FAILED',error:err?.message||String(err)});
-   neneClearPendingForJob(id);
-   if(fresh&&fresh.creditCharged&&!fresh.creditRefunded){
-    if(typeof credits!=='undefined')credits=Math.min(1000,credits+(Number.isFinite(Number(fresh.cost))?Number(fresh.cost):10));
-    updateNeneJob(id,{creditRefunded:true});
-    if(typeof updateCredits==='function')updateCredits();
-   }
-  }
- }finally{
-  neneActivePolls.delete(id);
-  if(typeof renderJobCenter==='function'&&document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderJobCenter();
- }
+  const final=await window.NENEBackend.waitForGeneration(id,function(g){const s=String(g?.status||'queued').toLowerCase();updateNeneJob(id,{status:s==='succeeded'?'COMPLETED':s==='failed'?'FAILED':s.toUpperCase(),creditsReserved:Number(g?.credits_reserved)||job.creditsReserved||0,creditCharged:s==='succeeded'});},900000,5000);
+  if(String(final?.status||'').toLowerCase()==='failed'){updateNeneJob(id,{status:'FAILED',error:final.error||'Generation failed. Check the server-side credit ledger for the released reservation.'});neneClearPendingForJob(id);return;}
+  const media=await window.NENEBackend.generationMediaUrl(id);window.neneMediaUrlCache=window.neneMediaUrlCache||{};if(media?.url)window.neneMediaUrlCache[id]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};
+  updateNeneJob(id,{status:'COMPLETED',error:null,creditCharged:true});neneClearPendingForJob(id);const fresh=neneJobs.find(j=>j.id===id);if(fresh)neneSaveCreationFromJob(fresh,null);toast('Generation completed and saved.');
+ }catch(err){if(err?.code==='NENE_GENERATION_PENDING')updateNeneJob(id,{status:'PROCESSING',error:null});else updateNeneJob(id,{status:'PROCESSING',error:'Status check interrupted. Use Resume / Check to retry safely.'});}
+ finally{neneActivePolls.delete(id);if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderJobCenter();}
+}
+async function resumeNeneJob(id){
+ if(neneActivePolls.has(id))return;const job=neneJobs.find(j=>j.id===id);if(!job)return;if(job.durable){await resumeDurableNeneJob(id);return;}
+ const status=String(job.status||'').toUpperCase();if(['COMPLETED','FAILED','CANCELLED'].includes(status))return;
+ if(!window.NENEBackend.getUrl()){toast('Connect the NENE AI backend before resuming this job.');return;}neneActivePolls.add(id);updateNeneJob(id,{status:'PROCESSING',error:null});
+ try{const final=await window.NENEBackend.waitForJob(id,job.mode,job.provider,function(update){const s=String(update?.status||'').toUpperCase();updateNeneJob(id,{status:s||'PROCESSING'});},900000,7000);const finalStatus=String(final?.status||'').toLowerCase();if(['failed','error','cancelled','canceled'].includes(finalStatus))throw new Error(final?.error?.message||final?.error||'Generation failed.');const videoUrl=neneExtractVideoUrl(final);if(!videoUrl)throw new Error('Generation finished, but no video URL was returned.');updateNeneJob(id,{status:'COMPLETED',videoUrl,error:null});neneClearPendingForJob(id);const fresh=neneJobs.find(j=>j.id===id);if(fresh)neneSaveCreationFromJob(fresh,videoUrl);toast('Generation completed and was saved.');}
+ catch(err){if(err?.code==='NENE_JOB_PENDING')updateNeneJob(id,{status:'PROCESSING',error:null});else updateNeneJob(id,{status:'FAILED',error:err?.message||String(err)});}
+ finally{neneActivePolls.delete(id);if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderJobCenter();}
 }
 function resumeActiveNeneJobs(){
  if(!window.NENEBackend.getUrl())return;
