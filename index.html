@@ -936,26 +936,31 @@ window.generate = async function generate(type) {
   }
   try{
     let imageUrl=null;
+    let sourceImageId=null;
     if(type==='image'){
-      if(idem.imageUrl){imageUrl=idem.imageUrl;}
+      if(idem.sourceImageId){sourceImageId=idem.sourceImageId;}
+      else if(idem.imageUrl){imageUrl=idem.imageUrl;}
       else{
         const input=document.getElementById('fileInput');
         const file=(window.neneSelectedImages&&window.neneSelectedImages[0])||(input&&input.files&&input.files[0]);
         if(!file)throw new Error('Please upload an image first.');
         if(file.size>15*1024*1024)throw new Error('Please choose an image under 15 MB.');
         const dataUri=window.neneSelectedImageDataUri||(window.neneSelectedImageDataUriPromise?await window.neneSelectedImageDataUriPromise:await neneReadImageData(file));
-        button.innerHTML='☁️ Uploading image…';
+        button.innerHTML='🔒 Storing source image privately…';
         const uploadResp=await fetch(backendUrl.replace(/\/$/, '')+'/api/image-upload',{method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({data_uri:dataUri})});
         const uploadData=await uploadResp.json().catch(()=>({detail:'Image upload failed.'}));
         if(!uploadResp.ok)throw new Error(uploadData?.detail||'Image upload failed.');
-        imageUrl=uploadData.image_url;
-        if(!imageUrl)throw new Error('Backend did not return a source image URL.');
+        sourceImageId=uploadData.source_image_id||null;
+        imageUrl=uploadData.image_url||null;
+        if(!sourceImageId&&!imageUrl)throw new Error('Backend did not return a source image asset.');
+        idem.sourceImageId=sourceImageId;
         idem.imageUrl=imageUrl;
         try{localStorage.setItem('nene_generation_idempotency_v2',JSON.stringify(idem));}catch(_){}
       }
     }
     const payload={type:type==='image'?'image-to-video':'text-to-video',prompt,provider:'ltx',model:'ltx-2-5-fast',resolution,duration};
-    if(imageUrl)payload.image_url=imageUrl;
+    if(sourceImageId)payload.source_image_id=sourceImageId;
+    else if(imageUrl)payload.image_url=imageUrl;
     button.innerHTML='⏳ Checking server price…';
     const quoteResp=await fetch(backendUrl.replace(/\/$/,'')+'/api/pricing/quote',{method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),cache:'no-store',body:JSON.stringify({provider:'ltx',model:'ltx-2-5-fast',resolution,duration})});
     const quoteBody=await quoteResp.json().catch(()=>({detail:'Pricing is temporarily unavailable.'}));
