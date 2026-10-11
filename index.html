@@ -302,8 +302,8 @@ async function refreshNeneMedia(id){
  const cached=window.neneMediaUrlCache[id];if(cached&&cached.expiresAt>Date.now()+10000)return;
  window.neneMediaUrlLoading=window.neneMediaUrlLoading||new Set();if(window.neneMediaUrlLoading.has(id))return;
  window.neneMediaUrlLoading.add(id);
- try{const media=await window.NENEBackend.generationMediaUrl(id);if(media?.url)window.neneMediaUrlCache[id]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};}
- catch(err){console.warn('NENE media URL refresh deferred:',err?.message||String(err));}
+ try{const media=await window.NENEBackend.generationMediaUrl(id);if(media?.url){window.neneMediaUrlCache[id]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};window.neneMediaUrlRetryAfter[id]=0;}}
+ catch(err){window.neneMediaUrlRetryAfter=window.neneMediaUrlRetryAfter||{};window.neneMediaUrlRetryAfter[id]=Date.now()+30000;console.warn('NENE media URL refresh deferred:',err?.message||String(err));}
  finally{window.neneMediaUrlLoading.delete(id);if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderJobCenter();}
 }
 async function resumeDurableNeneJob(id){
@@ -314,8 +314,9 @@ async function resumeDurableNeneJob(id){
  try{
   const final=await window.NENEBackend.waitForGeneration(id,function(g){const s=String(g?.status||'queued').toLowerCase();updateNeneJob(id,{status:s==='succeeded'?'COMPLETED':s==='failed'?'FAILED':s.toUpperCase(),creditsReserved:Number(g?.credits_reserved)||job.creditsReserved||0,creditCharged:s==='succeeded'});},900000,5000);
   if(String(final?.status||'').toLowerCase()==='failed'){updateNeneJob(id,{status:'FAILED',error:final.error||'Generation failed. Check the server-side credit ledger for the released reservation.'});neneClearPendingForJob(id);return;}
-  const media=await window.NENEBackend.generationMediaUrl(id);window.neneMediaUrlCache=window.neneMediaUrlCache||{};if(media?.url)window.neneMediaUrlCache[id]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};
-  updateNeneJob(id,{status:'COMPLETED',error:null,creditCharged:true});neneClearPendingForJob(id);const fresh=neneJobs.find(j=>j.id===id);if(fresh)neneSaveCreationFromJob(fresh,null);toast('Generation completed and saved.');
+  updateNeneJob(id,{status:'COMPLETED',error:null,creditCharged:true});
+  try{const media=await window.NENEBackend.generationMediaUrl(id);window.neneMediaUrlCache=window.neneMediaUrlCache||{};if(media?.url)window.neneMediaUrlCache[id]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};}catch(_){updateNeneJob(id,{status:'COMPLETED',error:'Video is complete, but its secure download link is temporarily unavailable. Use Refresh video link shortly.'});}
+  neneClearPendingForJob(id);const fresh=neneJobs.find(j=>j.id===id);if(fresh)neneSaveCreationFromJob(fresh,null);toast('Generation completed and saved.');
  }catch(err){if(err?.code==='NENE_GENERATION_PENDING')updateNeneJob(id,{status:'PROCESSING',error:null});else updateNeneJob(id,{status:'PROCESSING',error:'Status check interrupted. Use Resume / Check to retry safely.'});}
  finally{neneActivePolls.delete(id);if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderJobCenter();}
 }
@@ -985,12 +986,9 @@ window.generate = async function generate(type) {
       neneClearPendingForJob(generationId);
       throw new Error(final.error||'Generation failed. The backend will release the reserved credits if the provider failure is confirmed.');
     }
-    const media=await window.NENEBackend.generationMediaUrl(generationId);
-    if(media?.url){
-      window.neneMediaUrlCache=window.neneMediaUrlCache||{};
-      window.neneMediaUrlCache[generationId]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};
-    }
     updateNeneJob(generationId,{status:'COMPLETED',error:null,creditCharged:true});
+    let media=null;
+    try{media=await window.NENEBackend.generationMediaUrl(generationId);if(media?.url){window.neneMediaUrlCache=window.neneMediaUrlCache||{};window.neneMediaUrlCache[generationId]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};}}catch(_){updateNeneJob(generationId,{status:'COMPLETED',error:'Video is complete, but its secure download link is temporarily unavailable. Use Refresh video link shortly.'});}
     neneClearPendingForJob(generationId);
     const fresh=neneJobs.find(j=>j.id===generationId);
     if(fresh)neneSaveCreationFromJob(fresh,null);
