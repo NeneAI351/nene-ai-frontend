@@ -944,7 +944,7 @@ window.generate = async function generate(type) {
         if(file.size>15*1024*1024)throw new Error('Please choose an image under 15 MB.');
         const dataUri=window.neneSelectedImageDataUri||(window.neneSelectedImageDataUriPromise?await window.neneSelectedImageDataUriPromise:await neneReadImageData(file));
         button.innerHTML='☁️ Uploading image…';
-        const uploadResp=await fetch(backendUrl.replace(/\\/$/, '')+'/api/image-upload',{method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({data_uri:dataUri})});
+        const uploadResp=await fetch(backendUrl.replace(/\/$/, '')+'/api/image-upload',{method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({data_uri:dataUri})});
         const uploadData=await uploadResp.json().catch(()=>({detail:'Image upload failed.'}));
         if(!uploadResp.ok)throw new Error(uploadData?.detail||'Image upload failed.');
         imageUrl=uploadData.image_url;
