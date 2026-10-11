@@ -331,10 +331,22 @@ function resumeActiveNeneJobs(){
  if(!window.NENEBackend.getUrl())return;
  neneJobs.filter(j=>!['COMPLETED','FAILED','CANCELLED'].includes(String(j.status||'').toUpperCase())).slice(0,5).forEach(j=>resumeNeneJob(j.id));
 }
+function neneEscapeHtml(value){return String(value??'').replace(/[&<>\"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[ch];});}
 function renderJobCenter(){
  setNav('creations');
  const active=neneJobs.filter(j=>!['COMPLETED','FAILED','CANCELLED'].includes(String(j.status).toUpperCase())).length;
- screen.innerHTML='<main><div class="eyebrow">Production control</div><h1>Generation Center</h1><p class="subtitle">Track every generation without submitting duplicates. Accepted jobs stay here until they finish.</p><div class="grid"><div class="notice"><b>'+active+'</b><br>active jobs</div><div class="notice"><b>'+neneJobs.filter(j=>String(j.status).toUpperCase()==='COMPLETED').length+'</b><br>completed</div><div class="notice"><b>'+neneJobs.filter(j=>String(j.status).toUpperCase()==='FAILED').length+'</b><br>failed</div></div><div class="section-title">Jobs</div><div class="list">'+(neneJobs.length?neneJobs.map(j=>{const st=String(j.status).toUpperCase();const action=!['COMPLETED','FAILED','CANCELLED'].includes(st)?'<button class="btn secondary" style="width:auto;padding:8px 11px;margin-top:8px" onclick="resumeNeneJob('+JSON.stringify(j.id)+')">↻ Resume / Check</button>':'';return '<div class="creation"><div class="thumb">'+(st==='COMPLETED'?'✅':st==='FAILED'?'⚠️':'⏳')+'</div><div style="flex:1"><b>'+String(j.prompt||'Generation').slice(0,90)+'</b><div><span class="badge">'+j.type+'</span> <span class="badge">'+j.provider+'</span> <span class="badge">'+st+'</span></div><small>'+new Date(j.updatedAt||j.createdAt).toLocaleString()+'</small>'+(j.error?'<div class="notice" style="margin-top:8px">'+j.error+'</div>':'')+(j.videoUrl?'<video controls playsinline style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+j.videoUrl+'"></video>':'')+action+'</div></div>';}).join(''):'<div class="notice">No generations yet.</div>')+'</div><button class="btn secondary" style="margin-top:12px" onclick="renderCreations()">← My Creations</button></main>';
+ const completed=neneJobs.filter(j=>String(j.status).toUpperCase()==='COMPLETED').length;
+ const failed=neneJobs.filter(j=>String(j.status).toUpperCase()==='FAILED').length;
+ const cards=neneJobs.map(j=>{
+  const st=String(j.status||'QUEUED').toUpperCase();
+  const action=!['COMPLETED','FAILED','CANCELLED'].includes(st)?'<button class="btn secondary" style="width:auto;padding:8px 11px;margin-top:8px" onclick="resumeNeneJob('+JSON.stringify(j.id)+')">↻ Resume / Check</button>':(j.durable&&st==='COMPLETED'?'<button class="btn secondary" style="width:auto;padding:8px 11px;margin-top:8px" onclick="refreshNeneMedia('+JSON.stringify(j.id)+')">↻ Refresh video link</button>':'');
+  const cache=window.neneMediaUrlCache&&window.neneMediaUrlCache[j.id];
+  const safeVideo=cache&&cache.expiresAt>Date.now()?'<video controls playsinline style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+neneEscapeHtml(cache.url)+'"></video>':(!j.durable&&j.videoUrl?'<video controls playsinline style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+neneEscapeHtml(j.videoUrl)+'"></video>':'');
+  return '<div class="creation"><div class="thumb">'+(st==='COMPLETED'?'✅':st==='FAILED'?'⚠️':'⏳')+'</div><div style="flex:1"><b>'+neneEscapeHtml(String(j.prompt||'Generation').slice(0,90))+'</b><div><span class="badge">'+neneEscapeHtml(j.type||'Video')+'</span> <span class="badge">'+neneEscapeHtml(j.provider||'')+'</span> <span class="badge">'+neneEscapeHtml(st)+'</span></div><small>'+neneEscapeHtml(new Date(j.updatedAt||j.createdAt).toLocaleString())+'</small>'+(Number(j.creditsReserved)>0?'<div class="badge">Credits reserved: '+neneEscapeHtml(j.creditsReserved)+'</div>':'')+(j.error?'<div class="notice" style="margin-top:8px">'+neneEscapeHtml(j.error)+'</div>':'')+safeVideo+action+'</div></div>';
+ }).join('');
+ screen.innerHTML='<main><div class="eyebrow">Production control</div><h1>Generation Center</h1><p class="subtitle">Track generations using NENE IDs. Refreshing or reopening this page never starts a duplicate generation.</p><div class="grid"><div class="notice"><b>'+active+'</b><br>active jobs</div><div class="notice"><b>'+completed+'</b><br>completed</div><div class="notice"><b>'+failed+'</b><br>failed</div></div><div class="section-title">Jobs</div><div class="list">'+(cards||'<div class="notice">No generations yet.</div>')+'</div><button class="btn secondary" style="margin-top:12px" onclick="renderCreations()">← My Creations</button></main>';
+ window.neneMediaUrlRetryAfter=window.neneMediaUrlRetryAfter||{};
+ neneJobs.filter(j=>j.durable&&String(j.status||'').toUpperCase()==='COMPLETED'&&!(window.neneMediaUrlCache&&window.neneMediaUrlCache[j.id])&&Date.now()>Number(window.neneMediaUrlRetryAfter[j.id]||0)).forEach(j=>refreshNeneMedia(j.id));
 }
 function recoverPendingJob(){
  try{
@@ -912,6 +924,7 @@ window.generate = async function generate(type) {
   button.disabled=true;
   let generationId=null;
   let accepted=false;
+  let terminalFailed=false;
   try{
     let imageUrl=null;
     if(type==='image'){
@@ -964,6 +977,7 @@ window.generate = async function generate(type) {
       button.innerHTML=status==='queued'?'⏳ Queued…':status==='succeeded'?'✓ Complete':status==='failed'?'⚠️ Failed':'🎬 '+status.replace(/_/g,' ')+'…';
     },900000,5000);
     if(String(final.status).toLowerCase()==='failed'){
+      terminalFailed=true;
       updateNeneJob(generationId,{status:'FAILED',error:final.error||'Generation failed; reserved credits should be released by the backend.'});
       neneClearPendingForJob(generationId);
       throw new Error(final.error||'Generation failed. The backend will release the reserved credits if the provider failure is confirmed.');
@@ -992,7 +1006,8 @@ window.generate = async function generate(type) {
       if(generationId)updateNeneJob(generationId,{status:'PROCESSING',error:null});
       toast('Generation is still processing. Use Generation Center to resume checking.');
     }else{
-      if(generationId){updateNeneJob(generationId,{status:'FAILED',error:err?.message||String(err)});if(accepted)neneClearPendingForJob(generationId);}
+      if(generationId&&accepted&&!terminalFailed){updateNeneJob(generationId,{status:'PROCESSING',error:'The generation was accepted, but checking its status or video delivery was interrupted. Use Resume / Check; do not submit another generation.'});}
+      else if(generationId&&terminalFailed){updateNeneJob(generationId,{status:'FAILED',error:err?.message||String(err)});neneClearPendingForJob(generationId);}
       const message=err?.message||String(err);
       alert(message);
     }
