@@ -304,7 +304,7 @@ async function refreshNeneMedia(id){
  window.neneMediaUrlLoading.add(id);
  try{const media=await window.NENEBackend.generationMediaUrl(id);if(media?.url){window.neneMediaUrlCache[id]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};window.neneMediaUrlRetryAfter[id]=0;}}
  catch(err){window.neneMediaUrlRetryAfter=window.neneMediaUrlRetryAfter||{};window.neneMediaUrlRetryAfter[id]=Date.now()+30000;console.warn('NENE media URL refresh deferred:',err?.message||String(err));}
- finally{window.neneMediaUrlLoading.delete(id);if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderCreations();else if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active')===false&&document.querySelector('.nav[data-nav="profile"]')?.classList.contains('active')===false){} }
+ finally{window.neneMediaUrlLoading.delete(id);if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active')){if(screen.innerHTML.includes('<h1>My Creations</h1>'))renderCreations();else renderJobCenter();}}
 }
 async function resumeDurableNeneJob(id){
  if(neneActivePolls.has(id))return;const job=neneJobs.find(j=>j.id===id);if(!job||!job.durable)return;
