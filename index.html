@@ -1114,7 +1114,9 @@ async function updateCredits(){
   const wallet=await window.NENEBackend.wallet(),balance=Number(wallet.available_credits);
   if(!Number.isFinite(balance)||balance<0)throw new Error('Invalid wallet balance.');
   credits=balance;document.querySelectorAll('#credits,[data-nene-wallet-balance]').forEach(n=>n.textContent=balance.toLocaleString());
-  document.querySelectorAll('[data-nene-wallet-status]').forEach(n=>n.textContent='Live account balance');return wallet;
+  document.querySelectorAll('[data-nene-wallet-status]').forEach(n=>n.textContent='Live account balance');
+  if(document.querySelector('.nav[data-nav="home"]')?.classList.contains('active'))renderHome();
+  return wallet;
  }catch(e){document.querySelectorAll('#credits,[data-nene-wallet-balance]').forEach(n=>n.textContent='—');document.querySelectorAll('[data-nene-wallet-status]').forEach(n=>n.textContent=e.message||'Wallet unavailable');return null;}
 }
 async function openCreditPurchase(){
