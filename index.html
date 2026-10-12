@@ -257,7 +257,7 @@ let currentFeature="";
 const NENE_STATE_KEY='nene_ai_state_v1';
 let neneSavedState={};
 try{neneSavedState=JSON.parse(localStorage.getItem(NENE_STATE_KEY)||'{}')||{};}catch(_){neneSavedState={};}
-let credits=Number.isFinite(Number(neneSavedState.credits)) ? Number(neneSavedState.credits) : 1000;
+let credits=0; // authoritative backend wallet only; cached browser credits are not trusted.
 let creations=Array.isArray(neneSavedState.creations) && neneSavedState.creations.length ? neneSavedState.creations : [
  {name:"Welcome Demo",type:"Text → Video",icon:"🎬"},
  {name:"Brand Story",type:"AI Advertisement",icon:"📢"}
@@ -1106,7 +1106,52 @@ function syncVideoProviderOptions(){
     }
   }
 }
-function updateCredits(){document.getElementById('credits').textContent=credits.toLocaleString();saveState()}
+async function updateCredits(){
+ try{
+  if(!window.NENEBackend?.getUrl())throw new Error('Connect the backend to load your real wallet.');
+  const token=window.neneAuthGetAccessToken?await window.neneAuthGetAccessToken():null;
+  if(!token)throw new Error('Sign in to view your wallet.');
+  const wallet=await window.NENEBackend.wallet(),balance=Number(wallet.available_credits);
+  if(!Number.isFinite(balance)||balance<0)throw new Error('Invalid wallet balance.');
+  credits=balance;document.querySelectorAll('#credits,[data-nene-wallet-balance]').forEach(n=>n.textContent=balance.toLocaleString());
+  document.querySelectorAll('[data-nene-wallet-status]').forEach(n=>n.textContent='Live account balance');return wallet;
+ }catch(e){document.querySelectorAll('#credits,[data-nene-wallet-balance]').forEach(n=>n.textContent='—');document.querySelectorAll('[data-nene-wallet-status]').forEach(n=>n.textContent=e.message||'Wallet unavailable');return null;}
+}
+async function openCreditPurchase(){
+ showModal('<div class="eyebrow">NENE AI wallet</div><h2>Buy credits</h2><p class="subtitle">Credits are added only after Paystack confirms payment.</p><div id="nenePurchaseBalance" class="notice">Loading wallet…</div><div id="nenePurchasePackages" class="list" style="margin-top:12px">Loading packages…</div><div id="nenePurchaseMessage" class="subtitle" role="status" style="margin-top:10px"></div><button class="btn" onclick="closeModal()">Close</button>');
+ const msg=document.getElementById('nenePurchaseMessage'),box=document.getElementById('nenePurchasePackages');
+ try{
+  const token=window.neneAuthGetAccessToken?await window.neneAuthGetAccessToken():null;if(!token)throw new Error('Sign in before buying credits.');
+  const [wallet,p]=await Promise.all([window.NENEBackend.wallet(),window.NENEBackend.paymentPackages()]);
+  document.getElementById('nenePurchaseBalance').textContent='Available: '+Number(wallet.available_credits).toLocaleString()+' credits';
+  box.replaceChildren();(p.packages||[]).forEach(pkg=>{const b=document.createElement('button');b.className='btn';b.textContent=pkg.name+' — ₦'+Number(pkg.amount_ngn).toLocaleString()+' · '+Number(pkg.credits).toLocaleString()+' credits';b.onclick=()=>startNeneCreditCheckout(pkg.id,b);box.appendChild(b);});
+  if(!box.children.length)throw new Error('No credit packages available.');
+  msg.textContent=p.mode==='test'?'TEST MODE — use Paystack test payment details only.':'Checkout is not confirmed as test mode; purchases are blocked for safety.';
+ }catch(e){box.replaceChildren();msg.textContent=e.message||'Wallet or packages unavailable.';}
+}
+async function startNeneCreditCheckout(packageId,button){
+ const msg=document.getElementById('nenePurchaseMessage'),old=button.textContent;
+ try{
+  const token=window.neneAuthGetAccessToken?await window.neneAuthGetAccessToken():null;if(!token)throw new Error('Sign in before checkout.');
+  const email=window.prompt('Email address for your Paystack receipt:','');if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))throw new Error('Enter a valid receipt email.');
+  button.disabled=true;button.textContent='Starting checkout…';
+  const checkout=await window.NENEBackend.createCreditCheckout(packageId,email.trim());
+  if(checkout.mode!=='test')throw new Error('Checkout is not in test mode. Redirect cancelled.');
+  sessionStorage.setItem('nene_pending_payment_reference',checkout.reference);
+  window.location.assign(checkout.authorization_url);
+ }catch(e){msg.textContent=e.message||'Checkout failed; no credits were added.';button.disabled=false;button.textContent=old;}
+}
+async function neneVerifyPaymentReturn(){
+ const params=new URLSearchParams(location.search),ref=params.get('reference')||params.get('trxref');
+ if(!ref||ref!==sessionStorage.getItem('nene_pending_payment_reference'))return;
+ const clean=new URL(location.href);clean.searchParams.delete('reference');clean.searchParams.delete('trxref');history.replaceState({},'',clean);
+ try{
+  const token=window.neneAuthGetAccessToken?await window.neneAuthGetAccessToken():null;if(!token)throw new Error('Sign in again before verifying this payment.');
+  const result=await window.NENEBackend.verifyCreditCheckout(ref);if(result.credited!==true)throw new Error('Payment is not confirmed. No credits are assumed added.');
+  sessionStorage.removeItem('nene_pending_payment_reference');await updateCredits();
+  showModal('<h2>Payment verified</h2><p class="subtitle">The backend confirmed payment and your wallet was refreshed.</p><div class="notice">Reference: '+neneEscapeHtml(ref)+'</div><button class="btn gold" onclick="closeModal()">Continue</button>');
+ }catch(e){showModal('<h2>Payment verification pending</h2><p class="subtitle">'+neneEscapeHtml(e.message||'Payment could not be verified.')+'</p><p class="subtitle">Do not pay again yet. Keep the same reference for a later check.</p><button class="btn gold" onclick="closeModal()">Close</button>');}
+}
 function showModal(x){document.getElementById('modalbox').innerHTML=x;document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
 function saveCreation(){toast("Saved to My Creations");closeModal();renderCreations()}
@@ -1233,7 +1278,7 @@ function renderProfile(){
   </div>
 
   <div class="section-title">Credits & Plans</div>
-  <button class="btn" onclick="showModal('<h2>Credits & Subscriptions</h2><p class=&quot;subtitle&quot;>Free prototype mode: payments are disabled. The real product can offer transparent credit packs and subscriptions, with clear generation costs before users spend credits.</p><div class=&quot;notice&quot;>Free: NENE AI watermark + limited credits<br>Paid: more credits + watermark-free HD<br>Higher tiers: advanced models, longer videos and 4K where supported.</div><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Got it</button>')">＋ Get more credits <span class="badge">Coming later</span></button>
+  <button class="btn" onclick="openCreditPurchase()">＋ Get more credits <span class="badge">Test checkout</span></button>
 
   <div class="section-title">Reviews & Feedback</div>
   <div class="list">
@@ -1280,6 +1325,8 @@ function renderProfile(){
 document.querySelectorAll('.nav').forEach(n=>n.addEventListener('click',()=>{const k=n.dataset.nav;if(k==='home')recoverPendingJob();
 renderHome();if(k==='creations')renderCreations();if(k==='profile')renderProfile();if(k==='create')renderCreateHub()}));
 renderHome();
+updateCredits();
+neneVerifyPaymentReturn();
 recoverPendingJob();
 resumeActiveNeneJobs();
 </script>
