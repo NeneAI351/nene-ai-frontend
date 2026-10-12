@@ -22,7 +22,8 @@
     }
     client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
       auth: {
-        storage: window.sessionStorage,
+        // Persist sign-in across closing/reopening the same browser. Supabase refreshes the saved session automatically.
+        storage: window.localStorage,
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true
