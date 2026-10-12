@@ -97,6 +97,71 @@ window.NENEBackend={
    try{const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/health');return {connected:r.ok,data:await r.json()};}
    catch(e){return {connected:false};}
  },
+ createGeneration:async function(payload,idempotencyKey){
+   if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
+   const headers=await this.authHeaders({'Content-Type':'application/json','Idempotency-Key':idempotencyKey});
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/generations',{method:'POST',headers,body:JSON.stringify(payload)});
+   const body=await r.json().catch(()=>({detail:'Generation request failed.'}));
+   if(!r.ok){const message=body?.detail||body?.message||'Generation request failed.';const e=new Error(typeof message==='string'?message:JSON.stringify(message));e.status=r.status;e.response=body;throw e;}
+   return body;
+ },
+ generation:async function(generationId){
+   if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/generations/'+encodeURIComponent(generationId),{headers:await this.authHeaders(),cache:'no-store'});
+   const body=await r.json().catch(()=>({detail:'Generation status request failed.'}));
+   if(!r.ok){const message=body?.detail||'Generation status request failed.';throw new Error(typeof message==='string'?message:JSON.stringify(message));}
+   return body.generation;
+ },
+ wallet:async function(){
+   if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/wallet',{headers:await this.authHeaders(),cache:'no-store'});
+   const body=await r.json().catch(()=>({detail:'Wallet request failed.'}));
+   if(!r.ok){const message=body?.detail||'Wallet request failed.';throw new Error(typeof message==='string'?message:JSON.stringify(message));}
+   if(!body.wallet)throw new Error('Wallet response did not contain a balance.');
+   return body.wallet;
+ },
+ paymentPackages:async function(){
+   if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/payments/packages',{cache:'no-store'});
+   const body=await r.json().catch(()=>({detail:'Credit packages are unavailable.'}));
+   if(!r.ok)throw new Error(body?.detail||'Credit packages are unavailable.');
+   return body;
+ },
+ createCreditCheckout:async function(packageId,email){
+   if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
+   const headers=await this.authHeaders({'Content-Type':'application/json'});
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/payments/checkout',{method:'POST',headers,body:JSON.stringify({package_id:packageId,email})});
+   const body=await r.json().catch(()=>({detail:'Checkout could not be started.'}));
+   if(!r.ok)throw new Error(body?.detail||'Checkout could not be started.');
+   if(!body.authorization_url)throw new Error('Payment provider did not return a checkout link.');
+   return body;
+ },
+ verifyCreditCheckout:async function(reference){
+   if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
+   const headers=await this.authHeaders({'Content-Type':'application/json'});
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/payments/verify',{method:'POST',headers,body:JSON.stringify({reference})});
+   const body=await r.json().catch(()=>({detail:'Payment verification failed.'}));
+   if(!r.ok)throw new Error(body?.detail||'Payment verification failed.');
+   return body;
+ },
+ generationMediaUrl:async function(generationId){
+   if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
+   const r=await fetch(window.NENE_BACKEND_URL.replace(/\/$/,'')+'/api/generations/'+encodeURIComponent(generationId)+'/media-url',{headers:await this.authHeaders(),cache:'no-store'});
+   const body=await r.json().catch(()=>({detail:'Video delivery is not available yet.'}));
+   if(!r.ok){const message=body?.detail||'Video delivery is not available yet.';throw new Error(typeof message==='string'?message:JSON.stringify(message));}
+   return body;
+ },
+ waitForGeneration:async function(generationId,onUpdate,maxWaitMs=900000,intervalMs=5000){
+   const started=Date.now();
+   for(;;){
+     const generation=await this.generation(generationId);
+     if(typeof onUpdate==='function')onUpdate(generation);
+     const status=String(generation?.status||'').toLowerCase();
+     if(['succeeded','failed'].includes(status))return generation;
+     if(Date.now()-started>=maxWaitMs){const e=new Error('Generation is still processing. It has been saved; use Resume / Check to continue tracking it.');e.code='NENE_GENERATION_PENDING';throw e;}
+     await new Promise(resolve=>setTimeout(resolve,intervalMs));
+   }
+ },
  generate:async function(payload,idempotencyKey){
    if(!window.NENE_BACKEND_URL)throw new Error('Backend is not connected yet');
    let headers={'Content-Type':'application/json'};
@@ -192,7 +257,7 @@ let currentFeature="";
 const NENE_STATE_KEY='nene_ai_state_v1';
 let neneSavedState={};
 try{neneSavedState=JSON.parse(localStorage.getItem(NENE_STATE_KEY)||'{}')||{};}catch(_){neneSavedState={};}
-let credits=Number.isFinite(Number(neneSavedState.credits)) ? Number(neneSavedState.credits) : 1000;
+let credits=0; // authoritative backend wallet only; cached browser credits are not trusted.
 let creations=Array.isArray(neneSavedState.creations) && neneSavedState.creations.length ? neneSavedState.creations : [
  {name:"Welcome Demo",type:"Text → Video",icon:"🎬"},
  {name:"Brand Story",type:"AI Advertisement",icon:"📢"}
@@ -222,7 +287,9 @@ function recordNeneJob(data){
   resolution:data.resolution,
   cost:Number.isFinite(Number(data.cost)) ? Number(data.cost) : Number(existing&&existing.cost)||10,
   creditCharged:data.creditCharged===true ? true : !!(existing&&existing.creditCharged),
-  creditRefunded:data.creditRefunded===true ? true : !!(existing&&existing.creditRefunded)
+  creditRefunded:data.creditRefunded===true ? true : !!(existing&&existing.creditRefunded),
+  durable:data.durable===true ? true : !!(existing&&existing.durable),
+  creditsReserved:Number.isFinite(Number(data.creditsReserved)) ? Number(data.creditsReserved) : Number(existing&&existing.creditsReserved)||0
  };
  if(existing) neneJobs[neneJobs.indexOf(existing)]={...existing,...job};
  else neneJobs.unshift(job);
@@ -242,15 +309,16 @@ function neneClearPendingForJob(id){
 }
 function neneSaveCreationFromJob(job,videoUrl){
  if(typeof creations==='undefined')return;
- const already=creations.some(c=>c.jobId===job.id||c.videoUrl===videoUrl);
+ const already=creations.some(c=>c.jobId===job.id||(!!videoUrl&&c.videoUrl===videoUrl));
  if(already)return;
  const label=job.type||'Text → Video';
  creations.unshift({
   jobId:job.id,
+  generationId:job.durable?job.id:undefined,
   name:neneCreationName(job.prompt||'Generation',label),
   type:label,
   prompt:job.prompt||'',
-  videoUrl,
+  videoUrl:job.durable?null:videoUrl,
   provider:job.provider||'auto',
   duration:job.duration,
   resolution:job.resolution,
@@ -259,64 +327,59 @@ function neneSaveCreationFromJob(job,videoUrl){
  });
  if(typeof saveState==='function')saveState();
 }
-async function resumeNeneJob(id){
- if(neneActivePolls.has(id))return;
+async function refreshNeneMedia(id){
  const job=neneJobs.find(j=>j.id===id);
- if(!job)return;
- const status=String(job.status||'').toUpperCase();
- if(['COMPLETED','FAILED','CANCELLED'].includes(status))return;
- if(!window.NENEBackend.getUrl()){toast('Connect the NENE AI backend before resuming this job.');return;}
+ if(!job||!job.durable||String(job.status||'').toUpperCase()!=='COMPLETED')return;
+ window.neneMediaUrlCache=window.neneMediaUrlCache||{};
+ const cached=window.neneMediaUrlCache[id];if(cached&&cached.expiresAt>Date.now()+10000)return;
+ window.neneMediaUrlLoading=window.neneMediaUrlLoading||new Set();if(window.neneMediaUrlLoading.has(id))return;
+ window.neneMediaUrlLoading.add(id);
+ try{const media=await window.NENEBackend.generationMediaUrl(id);if(media?.url){window.neneMediaUrlCache[id]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};window.neneMediaUrlRetryAfter[id]=0;}}
+ catch(err){window.neneMediaUrlRetryAfter=window.neneMediaUrlRetryAfter||{};window.neneMediaUrlRetryAfter[id]=Date.now()+30000;console.warn('NENE media URL refresh deferred:',err?.message||String(err));}
+ finally{window.neneMediaUrlLoading.delete(id);if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active')){if(screen.innerHTML.includes('<h1>My Creations</h1>'))renderCreations();else renderJobCenter();}}
+}
+async function resumeDurableNeneJob(id){
+ if(neneActivePolls.has(id))return;const job=neneJobs.find(j=>j.id===id);if(!job||!job.durable)return;
+ const status=String(job.status||'').toUpperCase();if(status==='COMPLETED'){await refreshNeneMedia(id);return;}if(status==='FAILED')return;
+ if(!window.NENEBackend.getUrl()){toast('Connect the NENE AI backend before checking this generation.');return;}
  neneActivePolls.add(id);
- updateNeneJob(id,{status:'PROCESSING',error:null});
  try{
-  localStorage.setItem('nene_pending_job',JSON.stringify({
-   jobId:id,mode:job.mode,type:job.type==='Image → Video'?'image':'text',prompt:job.prompt||'',provider:job.provider,createdAt:job.createdAt
-  }));
- }catch(_){}
- try{
-  const final=await window.NENEBackend.waitForJob(id,job.mode,job.provider,function(update){
-   const s=String(update?.status||'').toUpperCase();
-   updateNeneJob(id,{status:s||'PROCESSING'});
-  },900000,7000);
-  const finalStatus=String(final?.status||'').toLowerCase();
-  if(['failed','error','cancelled','canceled'].includes(finalStatus)){
-   const detail=final?.error?.message||final?.error||final?.message||'Generation failed.';
-   throw new Error(typeof detail==='string'?detail:JSON.stringify(detail));
-  }
-  const videoUrl=neneExtractVideoUrl(final);
-  if(!videoUrl)throw new Error('Generation finished, but no video URL was returned.');
-  updateNeneJob(id,{status:'COMPLETED',videoUrl,error:null});
-  neneClearPendingForJob(id);
-  const fresh=neneJobs.find(j=>j.id===id);
-  if(fresh)neneSaveCreationFromJob(fresh,videoUrl);
-  toast('Generation completed and was saved.');
- }catch(err){
-  const pendingStillActive=err&&err.code==='NENE_JOB_PENDING';
-  if(pendingStillActive){
-   updateNeneJob(id,{status:'PROCESSING',error:null});
-  }else{
-   const fresh=neneJobs.find(j=>j.id===id);
-   updateNeneJob(id,{status:'FAILED',error:err?.message||String(err)});
-   neneClearPendingForJob(id);
-   if(fresh&&fresh.creditCharged&&!fresh.creditRefunded){
-    if(typeof credits!=='undefined')credits=Math.min(1000,credits+(Number.isFinite(Number(fresh.cost))?Number(fresh.cost):10));
-    updateNeneJob(id,{creditRefunded:true});
-    if(typeof updateCredits==='function')updateCredits();
-   }
-  }
- }finally{
-  neneActivePolls.delete(id);
-  if(typeof renderJobCenter==='function'&&document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderJobCenter();
- }
+  const final=await window.NENEBackend.waitForGeneration(id,function(g){const s=String(g?.status||'queued').toLowerCase();updateNeneJob(id,{status:s==='succeeded'?'COMPLETED':s==='failed'?'FAILED':s.toUpperCase(),creditsReserved:Number(g?.credits_reserved)||job.creditsReserved||0,creditCharged:s==='succeeded'});},900000,5000);
+  if(String(final?.status||'').toLowerCase()==='failed'){updateNeneJob(id,{status:'FAILED',error:final.error||'Generation failed. Check the server-side credit ledger for the released reservation.'});neneClearPendingForJob(id);return;}
+  updateNeneJob(id,{status:'COMPLETED',error:null,creditCharged:true});
+  try{const media=await window.NENEBackend.generationMediaUrl(id);window.neneMediaUrlCache=window.neneMediaUrlCache||{};if(media?.url)window.neneMediaUrlCache[id]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};}catch(_){updateNeneJob(id,{status:'COMPLETED',error:'Video is complete, but its secure download link is temporarily unavailable. Use Refresh video link shortly.'});}
+  neneClearPendingForJob(id);const fresh=neneJobs.find(j=>j.id===id);if(fresh)neneSaveCreationFromJob(fresh,null);toast('Generation completed and saved.');
+ }catch(err){if(err?.code==='NENE_GENERATION_PENDING')updateNeneJob(id,{status:'PROCESSING',error:null});else updateNeneJob(id,{status:'PROCESSING',error:'Status check interrupted. Use Resume / Check to retry safely.'});}
+ finally{neneActivePolls.delete(id);if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderJobCenter();}
+}
+async function resumeNeneJob(id){
+ if(neneActivePolls.has(id))return;const job=neneJobs.find(j=>j.id===id);if(!job)return;if(job.durable){await resumeDurableNeneJob(id);return;}
+ const status=String(job.status||'').toUpperCase();if(['COMPLETED','FAILED','CANCELLED'].includes(status))return;
+ if(!window.NENEBackend.getUrl()){toast('Connect the NENE AI backend before resuming this job.');return;}neneActivePolls.add(id);updateNeneJob(id,{status:'PROCESSING',error:null});
+ try{const final=await window.NENEBackend.waitForJob(id,job.mode,job.provider,function(update){const s=String(update?.status||'').toUpperCase();updateNeneJob(id,{status:s||'PROCESSING'});},900000,7000);const finalStatus=String(final?.status||'').toLowerCase();if(['failed','error','cancelled','canceled'].includes(finalStatus))throw new Error(final?.error?.message||final?.error||'Generation failed.');const videoUrl=neneExtractVideoUrl(final);if(!videoUrl)throw new Error('Generation finished, but no video URL was returned.');updateNeneJob(id,{status:'COMPLETED',videoUrl,error:null});neneClearPendingForJob(id);const fresh=neneJobs.find(j=>j.id===id);if(fresh)neneSaveCreationFromJob(fresh,videoUrl);toast('Generation completed and was saved.');}
+ catch(err){if(err?.code==='NENE_JOB_PENDING')updateNeneJob(id,{status:'PROCESSING',error:null});else updateNeneJob(id,{status:'FAILED',error:err?.message||String(err)});}
+ finally{neneActivePolls.delete(id);if(document.querySelector('.nav[data-nav="creations"]')?.classList.contains('active'))renderJobCenter();}
 }
 function resumeActiveNeneJobs(){
  if(!window.NENEBackend.getUrl())return;
  neneJobs.filter(j=>!['COMPLETED','FAILED','CANCELLED'].includes(String(j.status||'').toUpperCase())).slice(0,5).forEach(j=>resumeNeneJob(j.id));
 }
+function neneEscapeHtml(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}
 function renderJobCenter(){
  setNav('creations');
  const active=neneJobs.filter(j=>!['COMPLETED','FAILED','CANCELLED'].includes(String(j.status).toUpperCase())).length;
- screen.innerHTML='<main><div class="eyebrow">Production control</div><h1>Generation Center</h1><p class="subtitle">Track every generation without submitting duplicates. Accepted jobs stay here until they finish.</p><div class="grid"><div class="notice"><b>'+active+'</b><br>active jobs</div><div class="notice"><b>'+neneJobs.filter(j=>String(j.status).toUpperCase()==='COMPLETED').length+'</b><br>completed</div><div class="notice"><b>'+neneJobs.filter(j=>String(j.status).toUpperCase()==='FAILED').length+'</b><br>failed</div></div><div class="section-title">Jobs</div><div class="list">'+(neneJobs.length?neneJobs.map(j=>{const st=String(j.status).toUpperCase();const action=!['COMPLETED','FAILED','CANCELLED'].includes(st)?'<button class="btn secondary" style="width:auto;padding:8px 11px;margin-top:8px" onclick="resumeNeneJob('+JSON.stringify(j.id)+')">↻ Resume / Check</button>':'';return '<div class="creation"><div class="thumb">'+(st==='COMPLETED'?'✅':st==='FAILED'?'⚠️':'⏳')+'</div><div style="flex:1"><b>'+String(j.prompt||'Generation').slice(0,90)+'</b><div><span class="badge">'+j.type+'</span> <span class="badge">'+j.provider+'</span> <span class="badge">'+st+'</span></div><small>'+new Date(j.updatedAt||j.createdAt).toLocaleString()+'</small>'+(j.error?'<div class="notice" style="margin-top:8px">'+j.error+'</div>':'')+(j.videoUrl?'<video controls playsinline style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+j.videoUrl+'"></video>':'')+action+'</div></div>';}).join(''):'<div class="notice">No generations yet.</div>')+'</div><button class="btn secondary" style="margin-top:12px" onclick="renderCreations()">← My Creations</button></main>';
+ const completed=neneJobs.filter(j=>String(j.status).toUpperCase()==='COMPLETED').length;
+ const failed=neneJobs.filter(j=>String(j.status).toUpperCase()==='FAILED').length;
+ const cards=neneJobs.map(j=>{
+  const st=String(j.status||'QUEUED').toUpperCase();
+  const action=!['COMPLETED','FAILED','CANCELLED'].includes(st)?'<button class="btn secondary" style="width:auto;padding:8px 11px;margin-top:8px" onclick="resumeNeneJob('+JSON.stringify(j.id)+')">↻ Resume / Check</button>':(j.durable&&st==='COMPLETED'?'<button class="btn secondary" style="width:auto;padding:8px 11px;margin-top:8px" onclick="refreshNeneMedia('+JSON.stringify(j.id)+')">↻ Refresh video link</button>':'');
+  const cache=window.neneMediaUrlCache&&window.neneMediaUrlCache[j.id];
+  const safeVideo=cache&&cache.expiresAt>Date.now()?'<video controls playsinline style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+neneEscapeHtml(cache.url)+'"></video>':(!j.durable&&j.videoUrl?'<video controls playsinline style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+neneEscapeHtml(j.videoUrl)+'"></video>':'');
+  return '<div class="creation"><div class="thumb">'+(st==='COMPLETED'?'✅':st==='FAILED'?'⚠️':'⏳')+'</div><div style="flex:1"><b>'+neneEscapeHtml(String(j.prompt||'Generation').slice(0,90))+'</b><div><span class="badge">'+neneEscapeHtml(j.type||'Video')+'</span> <span class="badge">'+neneEscapeHtml(j.provider||'')+'</span> <span class="badge">'+neneEscapeHtml(st)+'</span></div><small>'+neneEscapeHtml(new Date(j.updatedAt||j.createdAt).toLocaleString())+'</small>'+(Number(j.creditsReserved)>0?'<div class="badge">Credits reserved: '+neneEscapeHtml(j.creditsReserved)+'</div>':'')+(j.error?'<div class="notice" style="margin-top:8px">'+neneEscapeHtml(j.error)+'</div>':'')+safeVideo+action+'</div></div>';
+ }).join('');
+ screen.innerHTML='<main><div class="eyebrow">Production control</div><h1>Generation Center</h1><p class="subtitle">Track generations using NENE IDs. Refreshing or reopening this page never starts a duplicate generation.</p><div class="grid"><div class="notice"><b>'+active+'</b><br>active jobs</div><div class="notice"><b>'+completed+'</b><br>completed</div><div class="notice"><b>'+failed+'</b><br>failed</div></div><div class="section-title">Jobs</div><div class="list">'+(cards||'<div class="notice">No generations yet.</div>')+'</div><button class="btn secondary" style="margin-top:12px" onclick="renderCreations()">← My Creations</button></main>';
+ window.neneMediaUrlRetryAfter=window.neneMediaUrlRetryAfter||{};
+ neneJobs.filter(j=>j.durable&&String(j.status||'').toUpperCase()==='COMPLETED'&&!(window.neneMediaUrlCache&&window.neneMediaUrlCache[j.id])&&Date.now()>Number(window.neneMediaUrlRetryAfter[j.id]||0)).forEach(j=>refreshNeneMedia(j.id));
 }
 function recoverPendingJob(){
  try{
@@ -523,7 +586,7 @@ function openTool(type){
  type==="image" ? `<div class="block"><div class="label">Motion controls</div><div class="row"><select id="neneImageMotion"><option>Natural, realistic movement</option><option>Slow, elegant movement</option><option>Gentle camera movement</option><option>Dynamic commercial movement</option><option>Subtle movement with stable framing</option></select><select id="neneImageCamera"><option>Smooth cinematic camera</option><option>Slow dolly-in</option><option>Gentle tracking shot</option><option>Slow orbit</option><option>Static locked camera</option></select></div><div class="row" style="margin-top:8px"><select id="neneImageStyle"><option>Photorealistic</option><option>Cinematic</option><option>Luxury commercial</option><option>Editorial</option><option>Documentary</option></select><select id="neneImageLighting"><option>Natural cinematic lighting</option><option>Golden-hour lighting</option><option>Soft diffused lighting</option><option>Luxury studio lighting</option><option>Dramatic high-contrast lighting</option></select></div><div class="notice" style="margin-top:10px">🔒 Identity protection: NENE AI will instruct the video model to preserve the source subject's face, clothing and overall appearance while adding motion.</div></div>` :
  type==="text" ? `<div class="block"><div class="label">Production controls</div><div class="row"><select id="neneStyle"><option>Cinematic</option><option>Photorealistic</option><option>Luxury commercial</option><option>Documentary</option><option>Editorial</option><option>Dynamic</option></select><select id="neneShot"><option>Medium shot</option><option>Close-up</option><option>Wide establishing shot</option><option>Aerial shot</option><option>Tracking shot</option></select></div><div class="row" style="margin-top:8px"><select id="neneCamera"><option>Smooth cinematic camera</option><option>Slow dolly-in</option><option>Gentle tracking shot</option><option>Slow orbit</option><option>Static locked camera</option><option>Handheld documentary camera</option></select><select id="neneLighting"><option>Natural cinematic lighting</option><option>Golden-hour lighting</option><option>Luxury studio lighting</option><option>Dramatic high-contrast lighting</option><option>Soft diffused lighting</option><option>Neon night lighting</option></select></div><div class="block"><div class="label">Motion</div><select id="neneMotion" class="field"><option>Natural, realistic movement</option><option>Slow, elegant movement</option><option>Energetic dynamic movement</option><option>Subtle movement with stable framing</option><option>Fast commercial-style movement</option></select></div></div>` :
  `<div class="block"><div class="label">Visual style</div><div class="chips">${chips(["Cinematic","Realistic","Animated","3D","Vintage","Dynamic"])}</div></div>`;
- screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider" onchange="syncVideoProviderOptions()"><option value="auto">Auto (Best available)</option><option value="pixazo">Pixazo</option><option value="magic-hour">Magic Hour (free may watermark)</option><option value="ltx">LTX (provider plan)</option></select></div><div class="notice" id="neneProviderNotice">Real video generation is enabled when your secure NENE AI backend is connected. NENE AI does not add a watermark to your generated media. Provider branding, if any, is controlled by the provider and its plan.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">${type==="story" ? "✨ Build Story Plan" : "✨ Generate "+titles[type]+" · "+costs[type]+" credits"}</button></div></main>`;
+ screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="6">6 seconds</option><option value="8">8 seconds</option><option value="10" selected>10 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider"><option value="ltx" selected>LTX (durable queue)</option></select></div><div class="notice" id="neneProviderNotice">Durable video generation uses NENE AI’s server-priced LTX queue. Credits are reserved by the backend; progress and private video delivery use your NENE generation ID.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">${type==="story" ? "✨ Build Story Plan" : "✨ Generate "+titles[type]+" · "+costs[type]+" credits"}</button></div></main>`;
  const genBtn=document.getElementById('neneGenerateBtn');
 window.currentNeneToolType=type;
 if(type==="story"){document.querySelectorAll('.storyCharacterCheck').forEach(el=>el.addEventListener('change',storyCharacterSelectionChanged));renderStoryCharacterAssignments();}
@@ -863,274 +926,135 @@ function neneCreationName(prompt,label){
 }
 
 window.generate = async function generate(type) {
-  const promptEl = document.getElementById('nenePrompt') || document.getElementById('prompt') || document.querySelector('textarea');
-  let prompt = promptEl ? promptEl.value.trim() : '';
-  if (!prompt) {
-    alert(type === 'image' ? 'Please describe the motion you want first.' : 'Please enter a prompt first.');
+  if (!['text','image'].includes(type)) {
+    alert('This workflow is still in prototype mode. Durable Text → Video and Image → Video are the first connected workflows.');
     return;
   }
-  if(type === 'text'){
-    const style=document.getElementById('neneStyle')?.value || 'Cinematic';
-    const shot=document.getElementById('neneShot')?.value || 'Medium shot';
-    const camera=document.getElementById('neneCamera')?.value || 'Smooth cinematic camera';
-    const lighting=document.getElementById('neneLighting')?.value || 'Natural cinematic lighting';
-    const motion=document.getElementById('neneMotion')?.value || 'Natural, realistic movement';
-    prompt += ` Style: ${style}. Shot: ${shot}. Camera: ${camera}. Lighting: ${lighting}. Motion: ${motion}. Maintain realistic anatomy, coherent objects and consistent visual details throughout the shot.`;
-  } else if(type === 'image'){
-    const motion=document.getElementById('neneImageMotion')?.value || 'Natural, realistic movement';
-    const camera=document.getElementById('neneImageCamera')?.value || 'Smooth cinematic camera';
-    const style=document.getElementById('neneImageStyle')?.value || 'Photorealistic';
-    const lighting=document.getElementById('neneImageLighting')?.value || 'Natural cinematic lighting';
-    prompt += ` Style: ${style}. Camera: ${camera}. Lighting: ${lighting}. Motion: ${motion}. Preserve the exact subject identity, face, hair, clothing, colors, body proportions and important visual details from the source image. Do not change the person or turn them into a different person. Keep motion natural and temporally consistent.`;
+  const promptEl=document.getElementById('nenePrompt')||document.getElementById('prompt')||document.querySelector('textarea');
+  let prompt=promptEl?promptEl.value.trim():'';
+  if(!prompt){alert(type==='image'?'Please describe the motion you want first.':'Please enter a prompt first.');return;}
+  if(type==='text'){
+    prompt += ` Style: ${document.getElementById('neneStyle')?.value||'Cinematic'}. Shot: ${document.getElementById('neneShot')?.value||'Medium shot'}. Camera: ${document.getElementById('neneCamera')?.value||'Smooth cinematic camera'}. Lighting: ${document.getElementById('neneLighting')?.value||'Natural cinematic lighting'}. Motion: ${document.getElementById('neneMotion')?.value||'Natural, realistic movement'}. Maintain realistic anatomy, coherent objects and consistent visual details throughout the shot.`;
+  }else{
+    prompt += ` Style: ${document.getElementById('neneImageStyle')?.value||'Photorealistic'}. Camera: ${document.getElementById('neneImageCamera')?.value||'Smooth cinematic camera'}. Lighting: ${document.getElementById('neneImageLighting')?.value||'Natural cinematic lighting'}. Motion: ${document.getElementById('neneImageMotion')?.value||'Natural, realistic movement'}. Preserve the exact subject identity, face, hair, clothing, colors, body proportions and important visual details from the source image. Do not change the person or turn them into a different person. Keep motion natural and temporally consistent.`;
   }
-
-  // Commercial pricing is calculated by NENE's backend from the selected provider,
-  // model, resolution and duration. Never trust a browser-side fixed generation price.
-  let cost = 0;
-
-  if (type !== 'text' && type !== 'image') {
-    if (typeof credits !== 'undefined') {
-      credits -= cost;
-      neneCreditsCharged = true;
-    }
-    if (typeof updateCredits === 'function') updateCredits();
-    alert('This workflow is still in prototype mode. Text → Video and Image → Video are the first real engines connected.');
+  const backendUrl=window.NENEBackend?.getUrl?.()||'';
+  if(!backendUrl){alert('Connect the NENE AI backend first.');return;}
+  const providerEl=document.getElementById('neneProvider');
+  if(providerEl && providerEl.value!=='ltx'){
+    alert('The durable generation queue currently supports LTX only. Choose LTX before generating; other providers are not silently substituted.');
     return;
   }
-
-  const backendUrl = window.NENEBackend && window.NENEBackend.getUrl
-    ? window.NENEBackend.getUrl()
-    : '';
-  if (!backendUrl) {
-    alert('Connect the NENE AI backend first.');
-    return;
+  const durationEl=document.getElementById('neneDuration');
+  const requestedDuration=Number(durationEl?.value||10);
+  const duration=[6,8,10].includes(requestedDuration)?requestedDuration:(requestedDuration<=6?6:requestedDuration<=8?8:10);
+  const resolutionEl=document.getElementById('neneResolution');
+  const resolutionRaw=String(resolutionEl?.value||'1920x1080').toLowerCase();
+  const resolution=resolutionRaw.includes('3840')||resolutionRaw.includes('2160')||resolutionRaw.includes('4k')?'4k':resolutionRaw.includes('1280')||resolutionRaw.includes('720')?'720p':resolutionRaw.includes('1440')?'1440p':'1080p';
+  const button=document.getElementById('neneGenerateBtn');
+  if(!button)throw new Error('NENE AI could not find the Generate button. Please reopen this creation screen.');
+  const oldText=button.innerHTML;
+  button.disabled=true;
+  let generationId=null;
+  let accepted=false;
+  let terminalFailed=false;
+  const requestFingerprint=JSON.stringify({type:type==='image'?'image-to-video':'text-to-video',prompt,provider:'ltx',model:'ltx-2-5-fast',resolution,duration});
+  let idem=null;
+  try{idem=JSON.parse(localStorage.getItem('nene_generation_idempotency_v2')||'null');}catch(_){}
+  if(!idem||idem.fingerprint!==requestFingerprint||!idem.key){
+    const key=(window.crypto&&typeof window.crypto.randomUUID==='function')?window.crypto.randomUUID():'nene_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);
+    idem={key,fingerprint:requestFingerprint,imageUrl:null};
+    try{localStorage.setItem('nene_generation_idempotency_v2',JSON.stringify(idem));}catch(_){}
   }
-
-  const durationEl = document.getElementById('neneDuration');
-  const resolutionEl = document.getElementById('neneResolution');
-  const requestedDuration = Number(durationEl ? durationEl.value : 10);
-  let resolution = resolutionEl ? resolutionEl.value : '1920x1080';
-
-  // LTX-2.5 Fast supports 6/8/10 seconds at 4K and 6–20 seconds at 720p/1080p.
-  let duration = requestedDuration;
-  if (resolution === '3840x2160') duration = requestedDuration <= 6 ? 6 : 10;
-  else if (requestedDuration === 5) duration = 6;
-  else if (requestedDuration === 15) duration = 16;
-  else if (requestedDuration >= 30) duration = 20;
-
-  let imageUri = null;
-
-  let neneCreditsCharged = false;
-  const button = document.getElementById('neneGenerateBtn');
-  if (!button) {
-    throw new Error('NENE AI could not find the Generate button. Please reopen this creation screen.');
-  }
-  const oldText = button.innerHTML;
-  if (button) {
-    button.disabled = true;
-    button.innerHTML = type === 'image' ? '⏳ Uploading image…' : '⏳ Generating…';
-  }
-
-  try {
-    if (type === 'image') {
-      const input = document.getElementById('fileInput');
-      const file = (window.neneSelectedImages && window.neneSelectedImages[0]) || (input && input.files && input.files[0]);
-      if (!file) throw new Error('Please upload an image first.');
-      if (file.size > 15 * 1024 * 1024) {
-        throw new Error('Please choose an image under 15 MB.');
+  try{
+    let imageUrl=null;
+    let sourceImageId=null;
+    if(type==='image'){
+      if(idem.sourceImageId){sourceImageId=idem.sourceImageId;}
+      else if(idem.imageUrl){imageUrl=idem.imageUrl;}
+      else{
+        const input=document.getElementById('fileInput');
+        const file=(window.neneSelectedImages&&window.neneSelectedImages[0])||(input&&input.files&&input.files[0]);
+        if(!file)throw new Error('Please upload an image first.');
+        if(file.size>7*1024*1024)throw new Error('Please choose an image under 7 MB.');
+        const dataUri=window.neneSelectedImageDataUri||(window.neneSelectedImageDataUriPromise?await window.neneSelectedImageDataUriPromise:await neneReadImageData(file));
+        button.innerHTML='🔒 Storing source image privately…';
+        const uploadResp=await fetch(backendUrl.replace(/\/$/, '')+'/api/image-upload',{method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({data_uri:dataUri})});
+        const uploadData=await uploadResp.json().catch(()=>({detail:'Image upload failed.'}));
+        if(!uploadResp.ok)throw new Error(uploadData?.detail||'Image upload failed.');
+        sourceImageId=uploadData.source_image_id||null;
+        imageUrl=uploadData.image_url||null;
+        if(!sourceImageId&&!imageUrl)throw new Error('Backend did not return a source image asset.');
+        idem.sourceImageId=sourceImageId;
+        idem.imageUrl=imageUrl;
+        try{localStorage.setItem('nene_generation_idempotency_v2',JSON.stringify(idem));}catch(_){}
       }
-      // Do not reject phone/gallery formats here. We normalize the selected image
-      // to JPEG in neneReadImageData before sending it to the backend.
-      const dataUri = window.neneSelectedImageDataUri || (window.neneSelectedImageDataUriPromise ? await window.neneSelectedImageDataUriPromise : await neneReadImageData(file));
-      if (button) button.innerHTML = '☁️ Uploading image…';
-      const uploadResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/image-upload', {method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({data_uri:dataUri})});
-      if (!uploadResp.ok) throw new Error(await uploadResp.text() || 'Image upload failed.');
-      const uploadData = await uploadResp.json();
-      imageUri = uploadData.image_url;
-      if (!imageUri) throw new Error('Backend did not return a public image URL.');
     }
-
-    if (button) button.innerHTML = '⏳ Sending to NENE AI…';
-    const providerEl = document.getElementById('neneProvider');
-    const provider = providerEl ? providerEl.value : 'auto';
-    syncVideoProviderOptions();
-    const effectiveResolutionEl = document.getElementById('neneResolution');
-    if(provider === 'magic-hour'){
-      if(resolution === '1920x1080') resolution = '1080p';
-      else if(resolution === '1280x720') resolution = '720p';
-      else if(resolution === '3840x2160') resolution = '1080p';
+    const payload={type:type==='image'?'image-to-video':'text-to-video',prompt,provider:'ltx',model:'ltx-2-5-fast',resolution,duration};
+    if(sourceImageId)payload.source_image_id=sourceImageId;
+    else if(imageUrl)payload.image_url=imageUrl;
+    button.innerHTML='⏳ Checking server price…';
+    const quoteResp=await fetch(backendUrl.replace(/\/$/,'')+'/api/pricing/quote',{method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),cache:'no-store',body:JSON.stringify({provider:'ltx',model:'ltx-2-5-fast',resolution,duration})});
+    const quoteBody=await quoteResp.json().catch(()=>({detail:'Pricing is temporarily unavailable.'}));
+    if(!quoteResp.ok)throw new Error(quoteBody?.detail||'NENE AI pricing is temporarily unavailable.');
+    const previewCredits=Number(quoteBody.recommended_credits);
+    if(!Number.isFinite(previewCredits)||previewCredits<1)throw new Error('NENE AI returned an invalid generation price.');
+    if(!window.confirm('Estimated cost: '+previewCredits+' NENE credits for '+duration+' seconds at '+resolution+'. The backend will recalculate the final price and reserve credits before queueing. Continue?'))return;
+    button.innerHTML='⏳ Reserving credits & queueing…';
+    const response=await window.NENEBackend.createGeneration(payload,idem.key);
+    generationId=response?.generation_id;
+    if(!generationId)throw new Error('The backend accepted no recognizable NENE generation ID. Keep this request key and retry only the same request.');
+    accepted=true;
+    const quote=response.quote||quoteBody;
+    const reserved=Number(response.credits_reserved??quote.recommended_credits);
+    const job={id:generationId,status:String(response.status||'queued').toUpperCase(),type:type==='image'?'Image → Video':'Text → Video',mode:payload.type,provider:'ltx',prompt,duration,resolution,cost:Number(quote.recommended_credits)||reserved,creditsReserved:reserved,durable:true,creditCharged:false};
+    recordNeneJob(job);
+    try{localStorage.setItem('nene_pending_job',JSON.stringify({jobId:generationId,generationId,durable:true,mode:payload.type,type,prompt,provider:'ltx',createdAt:new Date().toISOString()}));}catch(_){}
+    try{localStorage.removeItem('nene_generation_idempotency_v2');localStorage.removeItem('nene_generation_idempotency');}catch(_){}
+    button.innerHTML='⏳ Queued — waiting for progress…';
+    const final=await window.NENEBackend.waitForGeneration(generationId,function(g){
+      const status=String(g?.status||'queued').toLowerCase();
+      updateNeneJob(generationId,{status:status==='succeeded'?'COMPLETED':status==='failed'?'FAILED':status.toUpperCase(),creditsReserved:Number(g?.credits_reserved)||reserved,creditCharged:status==='succeeded'});
+      button.innerHTML=status==='queued'?'⏳ Queued…':status==='succeeded'?'✓ Complete':status==='failed'?'⚠️ Failed':'🎬 '+status.replace(/_/g,' ')+'…';
+    },900000,5000);
+    if(String(final.status).toLowerCase()==='failed'){
+      terminalFailed=true;
+      updateNeneJob(generationId,{status:'FAILED',error:final.error||'Generation failed; reserved credits should be released by the backend.'});
+      neneClearPendingForJob(generationId);
+      throw new Error(final.error||'Generation failed. The backend will release the reserved credits if the provider failure is confirmed.');
     }
-    // Ask the backend for the current provider cost and NENE margin quote.
-    // Auto reserves against the first configured provider in the backend's routing
-    // order; if Auto later falls back, the backend can safely settle the actual cost.
-    let quoteProvider = provider;
-    let quoteModel = provider === 'magic-hour' ? 'ltx-2.5' : 'ltx-2-5-fast';
-    if(provider === 'auto'){
-      const infoResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/provider-info', {cache:'no-store'});
-      if(!infoResp.ok) throw new Error('NENE AI pricing could not verify the available provider.');
-      const info = await infoResp.json();
-      quoteProvider = (info.selection_order || ['pixazo','magic-hour','ltx']).find(p => info.providers?.[p]?.configured);
-      if(!quoteProvider) throw new Error('NENE AI has no configured video provider available.');
-      quoteModel = quoteProvider === 'magic-hour' ? 'ltx-2.5' : 'ltx-2-5-fast';
-    } else if(provider === 'pixazo'){
-      // The connected Pixazo endpoint is LTX Video 2.5; its current public rate
-      // is $0.45 for a 5-second 1280×704 clip, i.e. $0.09/sec after free balance.
-      quoteModel = 'ltx-2-5-lite';
+    updateNeneJob(generationId,{status:'COMPLETED',error:null,creditCharged:true});
+    let media=null;
+    try{media=await window.NENEBackend.generationMediaUrl(generationId);if(media?.url){window.neneMediaUrlCache=window.neneMediaUrlCache||{};window.neneMediaUrlCache[generationId]={url:media.url,expiresAt:Date.now()+Math.max(1,Number(media.expires_in)||300)*1000};}}catch(_){updateNeneJob(generationId,{status:'COMPLETED',error:'Video is complete, but its secure download link is temporarily unavailable. Use Refresh video link shortly.'});}
+    neneClearPendingForJob(generationId);
+    const fresh=neneJobs.find(j=>j.id===generationId);
+    if(fresh)neneSaveCreationFromJob(fresh,null);
+    const container=document.getElementById('neneGenerationResult')||document.querySelector('.result, .generation-result, [data-result]');
+    const label=type==='image'?'Image → Video':'Text → Video';
+    if(container){
+      container.replaceChildren();
+      const card=document.createElement('div');card.style.cssText='margin-top:18px;padding:16px;border:1px solid rgba(212,175,55,.45);border-radius:16px;background:rgba(255,255,255,.04)';
+      const heading=document.createElement('h3');heading.textContent='🎬 '+label+' ready';card.appendChild(heading);
+      if(media?.url){const video=document.createElement('video');video.controls=true;video.playsInline=true;video.style.cssText='width:100%;max-width:900px;border-radius:12px';video.src=media.url;card.appendChild(video);}
+      container.appendChild(card);container.style.display='';
     }
-
-    const quoteResp = await fetch(backendUrl.replace(/\/$/,'') + '/api/pricing/quote', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      cache:'no-store',
-      body:JSON.stringify({provider:quoteProvider, model:quoteModel, resolution, duration})
-    });
-    if(!quoteResp.ok) throw new Error('NENE AI pricing is temporarily unavailable. Please try again in a moment.');
-    const quote = await quoteResp.json();
-    cost = Number(quote.recommended_credits);
-    if(!Number.isFinite(cost) || cost < 0) throw new Error('NENE AI returned an invalid generation price.');
-    if (typeof credits !== 'undefined' && credits < cost) {
-      alert('Not enough NENE credits. This generation requires ' + cost + ' credits.');
-      return;
+    toast('Generation completed and saved to NENE AI.');
+  }catch(err){
+    if(err?.code==='NENE_GENERATION_PENDING'){
+      if(generationId)updateNeneJob(generationId,{status:'PROCESSING',error:null});
+      toast('Generation is still processing. Use Generation Center to resume checking.');
+    }else{
+      if(generationId&&accepted&&!terminalFailed){updateNeneJob(generationId,{status:'PROCESSING',error:'The generation was accepted, but checking its status or video delivery was interrupted. Use Resume / Check; do not submit another generation.'});}
+      else if(generationId&&terminalFailed){updateNeneJob(generationId,{status:'FAILED',error:err?.message||String(err)});neneClearPendingForJob(generationId);}
+      const message=err?.message||String(err);
+      alert(message);
     }
-    if (typeof credits !== 'undefined') credits -= cost;
-    if (typeof updateCredits === 'function') updateCredits();
-    const payload = {
-      type: type === 'image' ? 'image-to-video' : 'text-to-video',
-      prompt,
-      // Auto may fall back to Magic Hour, so use a model ID that both the
-      // router and Magic Hour can normalize safely.
-      model: provider === 'magic-hour' || provider === 'auto' ? 'ltx-2.5' : 'ltx-2-5-fast',
-      resolution,
-      duration,
-      provider
-    };
-    if (imageUri) payload.image_uri = imageUri;
-
-    const idempotencyKey = (window.crypto && typeof window.crypto.randomUUID === 'function')
-      ? window.crypto.randomUUID()
-      : 'nene_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
-    try { localStorage.setItem('nene_generation_idempotency', idempotencyKey); } catch (_) {}
-    const response = await window.NENEBackend.generate(payload, idempotencyKey);
-    const jobId = response && (response.job_id || response.id || response.jobId);
-    if (!jobId) throw new Error('The backend did not return a generation job ID.');
-    const activeProvider = String(response?.provider || provider || 'auto').toLowerCase();
-    const mode = type === 'image' ? 'image-to-video' : 'text-to-video';
-    recordNeneJob({id:jobId,status:'QUEUED',type:type==='image'?'Image → Video':'Text → Video',mode,provider:activeProvider,prompt,duration,resolution,cost,creditCharged:neneCreditsCharged});
-    try {
-      localStorage.setItem('nene_pending_job', JSON.stringify({
-        jobId, mode, type, prompt, provider: activeProvider, idempotencyKey, createdAt: new Date().toISOString()
-      }));
-    } catch (_) {}
-    const final = await window.NENEBackend.waitForJob(
-      jobId, mode, activeProvider,
-      function(job){
-        const s = String(job?.status || '').toUpperCase();
-        if (button) {
-          if (s === 'QUEUED') button.innerHTML = '⏳ Queued…';
-          else if (s === 'PROCESSING') button.innerHTML = '🎬 Generating…';
-          else if (s) button.innerHTML = '⏳ ' + s + '…';
-        }
-      },
-      900000, 7000
-    );
-    const finalStatus = String(final?.status || '').toLowerCase();
-    if (['failed','error','cancelled','canceled'].includes(finalStatus)) {
-      const detail = final?.error?.message || final?.error || final?.message || 'Video generation failed.';
-      throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
-    }
-    const videoUrl =
-      final?.video_url ||
-      final?._nene_video_url ||
-      final?.result?.video_url ||
-      final?.output?.video_url ||
-      final?.output?.media_url?.[0] ||
-      final?.result?.media_url?.[0] ||
-      final?.downloads?.[0]?.url ||
-      final?.result?.downloads?.[0]?.url ||
-      final?.result?.url ||
-      final?.url;
-    if (!videoUrl) throw new Error('Generation finished, but no video URL was returned.');
-    try {
-      localStorage.removeItem('nene_pending_job');
-      localStorage.removeItem('nene_generation_idempotency');
-    } catch (_) {}
-    updateNeneJob(jobId,{status:'COMPLETED',videoUrl});
-
-    const container =
-      document.getElementById('neneGenerationResult') ||
-      document.querySelector('.result, .generation-result, [data-result]');
-    const label = type === 'image' ? 'Image → Video' : 'Text → Video';
-    const html = `
-      <div style="margin-top:18px;padding:16px;border:1px solid rgba(212,175,55,.45);border-radius:16px;background:rgba(255,255,255,.04)">
-        <h3 style="margin:0 0 10px">🎬 ${label} ready</h3>
-        <video controls playsinline style="width:100%;max-width:900px;border-radius:12px" src="${videoUrl}"></video>
-        <p style="margin:10px 0 0"><a href="${videoUrl}" target="_blank" rel="noopener">Open video</a></p>
-      </div>`;
-    if (container) {
-      container.innerHTML = html;
-      container.style.display = '';
-    } else {
-      const section = document.querySelector('main') || document.body;
-      section.insertAdjacentHTML('beforeend', html);
-    }
-
-    if (typeof creations !== 'undefined') {
-      creations.unshift({
-        jobId,
-        name: neneCreationName(prompt, label),
-        type: label,
-        prompt,
-        videoUrl,
-        provider: activeProvider,
-        duration,
-        resolution,
-        icon: type === 'image' ? '🖼️' : '🎬',
-        createdAt: new Date().toISOString()
-      });
-      if (typeof saveState === 'function') saveState();
-      setTimeout(()=>{ if(typeof renderCreations==='function') renderCreations(); },50);
-    }
-  } catch (err) {
-    try {
-      const pending = JSON.parse(localStorage.getItem('nene_pending_job') || 'null');
-      if (pending && pending.jobId) {
-        const msg = String(err?.message || err);
-        if (/failed|error|cancelled|canceled/i.test(msg)) localStorage.removeItem('nene_pending_job');
-      }
-    } catch (_) {}
-    const pendingStillActive = err && err.code === 'NENE_JOB_PENDING';
-    if (typeof jobId !== 'undefined' && jobId) updateNeneJob(jobId,{status:pendingStillActive?'PROCESSING':'FAILED',error:pendingStillActive?null:(err?.message||String(err))});
-    // Refund only when NENE AI actually charged this generation attempt.
-    // Provider-side rejections (for example insufficient Magic Hour credits)
-    // must never consume the user's NENE AI credits.
-    if (!pendingStillActive && neneCreditsCharged) {
-      if (typeof credits !== 'undefined') credits = Math.min(1000, credits + cost);
-      neneCreditsCharged = false;
-      if (typeof updateCredits === 'function') updateCredits();
-    }
-    let userMessage = err?.message || String(err);
-    try {
-      const parsed = JSON.parse(userMessage);
-      const detail = parsed?.detail;
-      if (Array.isArray(detail) && detail[0]?.error) {
-        const providerError = detail[0].error;
-        if (providerError.code === 'card_required') {
-          userMessage = 'Pixazo requires a payment card for this API account before it can use its Free Tier. NENE AI will not ask you to add a card. Choose Magic Hour for a no-card test, or add the card in Pixazo if you want to use Pixazo.';
-        } else if (providerError.code === 'insufficient_credits') {
-          userMessage = 'Magic Hour does not have enough provider credits for this generation. These are Magic Hour credits, not NENE AI credits. NENE AI has refunded this failed attempt, and no second provider will be charged automatically.';
-        } else {
-          userMessage = providerError.message || userMessage;
-        }
-      }
-    } catch (_) {}
-    alert((pendingStillActive ? 'Video is still processing: ' : 'Video generation failed: ') + userMessage);
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.innerHTML = oldText || '✨ Generate Video';
-    }
+  }finally{
+    button.disabled=false;
+    button.innerHTML=oldText||'✨ Generate Video';
+    if(typeof updateCredits==='function')updateCredits();
   }
-}
+};
 
 function typeLabel(t){return {text:"Text → Video",image:"Image → Video",ad:"AI Advertisement",social:"Social Content",story:"Story → Video"}[t]}
 function typeIcon(t){return {text:"🎬",image:"🖼️",ad:"📢",social:"📱",story:"📖"}[t]}
@@ -1182,7 +1106,54 @@ function syncVideoProviderOptions(){
     }
   }
 }
-function updateCredits(){document.getElementById('credits').textContent=credits.toLocaleString();saveState()}
+async function updateCredits(){
+ try{
+  if(!window.NENEBackend?.getUrl())throw new Error('Connect the backend to load your real wallet.');
+  const token=window.neneAuthGetAccessToken?await window.neneAuthGetAccessToken():null;
+  if(!token)throw new Error('Sign in to view your wallet.');
+  const wallet=await window.NENEBackend.wallet(),balance=Number(wallet.available_credits);
+  if(!Number.isFinite(balance)||balance<0)throw new Error('Invalid wallet balance.');
+  credits=balance;document.querySelectorAll('#credits,[data-nene-wallet-balance]').forEach(n=>n.textContent=balance.toLocaleString());
+  document.querySelectorAll('[data-nene-wallet-status]').forEach(n=>n.textContent='Live account balance');
+  if(document.querySelector('.nav[data-nav="home"]')?.classList.contains('active'))renderHome();
+  return wallet;
+ }catch(e){document.querySelectorAll('#credits,[data-nene-wallet-balance]').forEach(n=>n.textContent='—');document.querySelectorAll('[data-nene-wallet-status]').forEach(n=>n.textContent=e.message||'Wallet unavailable');return null;}
+}
+async function openCreditPurchase(){
+ showModal('<div class="eyebrow">NENE AI wallet</div><h2>Buy credits</h2><p class="subtitle">Credits are added only after Paystack confirms payment.</p><div id="nenePurchaseBalance" class="notice">Loading wallet…</div><div id="nenePurchasePackages" class="list" style="margin-top:12px">Loading packages…</div><div id="nenePurchaseMessage" class="subtitle" role="status" style="margin-top:10px"></div><button class="btn" onclick="closeModal()">Close</button>');
+ const msg=document.getElementById('nenePurchaseMessage'),box=document.getElementById('nenePurchasePackages');
+ try{
+  const token=window.neneAuthGetAccessToken?await window.neneAuthGetAccessToken():null;if(!token)throw new Error('Sign in before buying credits.');
+  const [wallet,p]=await Promise.all([window.NENEBackend.wallet(),window.NENEBackend.paymentPackages()]);
+  document.getElementById('nenePurchaseBalance').textContent='Available: '+Number(wallet.available_credits).toLocaleString()+' credits';
+  box.replaceChildren();(p.packages||[]).forEach(pkg=>{const b=document.createElement('button');b.className='btn';b.textContent=pkg.name+' — ₦'+Number(pkg.amount_ngn).toLocaleString()+' · '+Number(pkg.credits).toLocaleString()+' credits';b.onclick=()=>startNeneCreditCheckout(pkg.id,b);box.appendChild(b);});
+  if(!box.children.length)throw new Error('No credit packages available.');
+  msg.textContent=p.mode==='test'?'TEST MODE — use Paystack test payment details only.':'Checkout is not confirmed as test mode; purchases are blocked for safety.';
+ }catch(e){box.replaceChildren();msg.textContent=e.message||'Wallet or packages unavailable.';}
+}
+async function startNeneCreditCheckout(packageId,button){
+ const msg=document.getElementById('nenePurchaseMessage'),old=button.textContent;
+ try{
+  const token=window.neneAuthGetAccessToken?await window.neneAuthGetAccessToken():null;if(!token)throw new Error('Sign in before checkout.');
+  const email=window.prompt('Email address for your Paystack receipt:','');if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))throw new Error('Enter a valid receipt email.');
+  button.disabled=true;button.textContent='Starting checkout…';
+  const checkout=await window.NENEBackend.createCreditCheckout(packageId,email.trim());
+  if(checkout.mode!=='test')throw new Error('Checkout is not in test mode. Redirect cancelled.');
+  sessionStorage.setItem('nene_pending_payment_reference',checkout.reference);
+  window.location.assign(checkout.authorization_url);
+ }catch(e){msg.textContent=e.message||'Checkout failed; no credits were added.';button.disabled=false;button.textContent=old;}
+}
+async function neneVerifyPaymentReturn(){
+ const params=new URLSearchParams(location.search),ref=params.get('reference')||params.get('trxref');
+ if(!ref||ref!==sessionStorage.getItem('nene_pending_payment_reference'))return;
+ const clean=new URL(location.href);clean.searchParams.delete('reference');clean.searchParams.delete('trxref');history.replaceState({},'',clean);
+ try{
+  const token=window.neneAuthGetAccessToken?await window.neneAuthGetAccessToken():null;if(!token)throw new Error('Sign in again before verifying this payment.');
+  const result=await window.NENEBackend.verifyCreditCheckout(ref);if(result.credited!==true)throw new Error('Payment is not confirmed. No credits are assumed added.');
+  sessionStorage.removeItem('nene_pending_payment_reference');await updateCredits();
+  showModal('<h2>Payment verified</h2><p class="subtitle">The backend confirmed payment and your wallet was refreshed.</p><div class="notice">Reference: '+neneEscapeHtml(ref)+'</div><button class="btn gold" onclick="closeModal()">Continue</button>');
+ }catch(e){showModal('<h2>Payment verification pending</h2><p class="subtitle">'+neneEscapeHtml(e.message||'Payment could not be verified.')+'</p><p class="subtitle">Do not pay again yet. Keep the same reference for a later check.</p><button class="btn gold" onclick="closeModal()">Close</button>');}
+}
 function showModal(x){document.getElementById('modalbox').innerHTML=x;document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
 function saveCreation(){toast("Saved to My Creations");closeModal();renderCreations()}
@@ -1190,7 +1161,22 @@ function shareDemo(){toast("Share flow is ready for the real app");}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
 function renderCreations(){
  setNav('creations');
- screen.innerHTML='<main><div class="eyebrow">Your library</div><h1>My Creations</h1><p class="subtitle">Videos, projects and reusable creative assets in one place.</p><div class="grid"><button class="card" onclick="createProject()"><div class="icon">＋</div><b>New Project</b><small>Start a dedicated creative workspace.</small></button><button class="card" onclick="renderProjects()"><div class="icon">📁</div><b>Projects</b><small>'+projects.length+' organized workspaces.</small></button><button class="card" onclick="openFeature(\'characters\')"><div class="icon">🎭</div><b>Characters</b><small>'+characters.length+' saved characters.</small></button></div><div class="section-title">Projects</div><div class="list">'+projects.slice(0,4).map(p=>'<div class="creation"><div class="thumb">'+(p.icon||'📁')+'</div><div style="flex:1;min-width:0"><b>'+p.name+'</b><div><span class="badge">'+p.type+'</span> <span class="badge">'+p.status+'</span></div><small>'+creations.filter(c=>c.projectId===p.id).length+' linked creations</small></div><button class="btn" style="width:auto;padding:8px 11px" onclick="openProject(\''+p.id+'\')">Open</button></div>').join('')+'</div><button class="btn secondary" style="margin-top:10px" onclick="renderProjects()">View all projects</button><div class="section-title">Creations</div><div class="list">'+creations.map(c=>'<div class="creation" style="align-items:flex-start"><div class="thumb">'+(c.icon||'🎬')+'</div><div style="flex:1;min-width:0"><b>'+ (c.name||'NENE AI Creation') +'</b><div><span class="badge">'+(c.type||'Video')+'</span>'+(c.provider?' <span class="badge">'+c.provider+'</span>':'')+(projectForCreation(c)?' <span class="badge">📁 '+projectForCreation(c).name+'</span>':'')+'</div><small>'+(c.createdAt?new Date(c.createdAt).toLocaleString():'Saved creation')+'</small>'+(c.videoUrl?'<video controls playsinline preload="metadata" style="width:100%;margin-top:9px;border-radius:12px;background:#000" src="'+c.videoUrl+'"></video><div style="margin-top:7px"><a href="'+c.videoUrl+'" target="_blank" rel="noopener" style="color:var(--gold2);font-size:12px">Open video</a></div>':'')+'</div></div>').join('')+'</div></main>';
+ const cards=creations.map(c=>{
+  const generationId=c.generationId||(c.durable?c.jobId:null);
+  const durable=!!generationId;
+  const cache=durable&&window.neneMediaUrlCache&&window.neneMediaUrlCache[generationId];
+  const safeCached=cache&&cache.expiresAt>Date.now();
+  const safeUrl=safeCached?neneEscapeHtml(cache.url):(!durable&&c.videoUrl?neneEscapeHtml(c.videoUrl):'');
+  const player=safeUrl?'<video controls playsinline preload="metadata" style="width:100%;margin-top:9px;border-radius:12px;background:#000" src="'+safeUrl+'"></video><div style="margin-top:7px"><a href="'+safeUrl+'" target="_blank" rel="noopener noreferrer" style="color:var(--gold2);font-size:12px">Open video</a></div>':'';
+  const job=durable?neneJobs.find(j=>j.id===generationId):null;
+  const status=job?String(job.status||'').toUpperCase():'';
+  const refresh=durable&&status==='COMPLETED'&&!safeCached?'<button class="btn secondary" style="width:auto;padding:8px 11px;margin-top:8px" onclick="refreshNeneMedia('+JSON.stringify(generationId)+')">↻ Refresh secure video link</button>':'';
+  const pending=durable&&!safeUrl&&status!=='COMPLETED'?'<small>Generation status: '+neneEscapeHtml(status||'SAVED')+'. Open Generation Center to resume or check it.</small>':'';
+  return '<div class="creation" style="align-items:flex-start"><div class="thumb">'+neneEscapeHtml(c.icon||'🎬')+'</div><div style="flex:1;min-width:0"><b>'+neneEscapeHtml(c.name||'NENE AI Creation')+'</b><div><span class="badge">'+neneEscapeHtml(c.type||'Video')+'</span>'+(c.provider?' <span class="badge">'+neneEscapeHtml(c.provider)+'</span>':'')+(projectForCreation(c)?' <span class="badge">📁 '+neneEscapeHtml(projectForCreation(c).name)+'</span>':'')+(status?' <span class="badge">'+neneEscapeHtml(status)+'</span>':'')+'</div><small>'+neneEscapeHtml(c.createdAt?new Date(c.createdAt).toLocaleString():'Saved creation')+'</small>'+player+refresh+pending+'</div></div>';
+ }).join('');
+ screen.innerHTML='<main><div class="eyebrow">Your library</div><h1>My Creations</h1><p class="subtitle">Videos, projects and reusable creative assets in one place. Secure video links are refreshed when needed and are not saved permanently.</p><div class="grid"><button class="card" onclick="createProject()"><div class="icon">＋</div><b>New Project</b><small>Start a dedicated creative workspace.</small></button><button class="card" onclick="renderProjects()"><div class="icon">📁</div><b>Projects</b><small>'+projects.length+' organized workspaces.</small></button><button class="card" onclick="openFeature(\'characters\')"><div class="icon">🎭</div><b>Characters</b><small>'+characters.length+' saved characters.</small></button></div><div class="section-title">Projects</div><div class="list">'+projects.slice(0,4).map(p=>'<div class="creation"><div class="thumb">'+neneEscapeHtml(p.icon||'📁')+'</div><div style="flex:1;min-width:0"><b>'+neneEscapeHtml(p.name||'Project')+'</b><div><span class="badge">'+neneEscapeHtml(p.type||'Project')+'</span> <span class="badge">'+neneEscapeHtml(p.status||'Saved')+'</span></div><small>'+creations.filter(c=>c.projectId===p.id).length+' linked creations</small></div><button class="btn" style="width:auto;padding:8px 11px" onclick="openProject('+JSON.stringify(p.id)+')">Open</button></div>').join('')+'</div><button class="btn secondary" style="margin-top:10px" onclick="renderProjects()">View all projects</button><div class="section-title">Creations</div><div class="list">'+(cards||'<div class="notice">No creations saved yet. Your generated videos will appear here.</div>')+'</div><button class="btn secondary" style="margin-top:12px" onclick="renderJobCenter()">Open Generation Center</button></main>';
+ window.neneMediaUrlRetryAfter=window.neneMediaUrlRetryAfter||{};
+ neneJobs.filter(j=>j.durable&&String(j.status||'').toUpperCase()==='COMPLETED'&&!(window.neneMediaUrlCache&&window.neneMediaUrlCache[j.id])&&Date.now()>Number(window.neneMediaUrlRetryAfter[j.id]||0)).forEach(j=>refreshNeneMedia(j.id));
 }
 // Profile feedback state — prevents Profile from crashing on first open.
 let feedbackEntries = [];
@@ -1294,7 +1280,7 @@ function renderProfile(){
   </div>
 
   <div class="section-title">Credits & Plans</div>
-  <button class="btn" onclick="showModal('<h2>Credits & Subscriptions</h2><p class=&quot;subtitle&quot;>Free prototype mode: payments are disabled. The real product can offer transparent credit packs and subscriptions, with clear generation costs before users spend credits.</p><div class=&quot;notice&quot;>Free: NENE AI watermark + limited credits<br>Paid: more credits + watermark-free HD<br>Higher tiers: advanced models, longer videos and 4K where supported.</div><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Got it</button>')">＋ Get more credits <span class="badge">Coming later</span></button>
+  <button class="btn" onclick="openCreditPurchase()">＋ Get more credits <span class="badge">Test checkout</span></button>
 
   <div class="section-title">Reviews & Feedback</div>
   <div class="list">
@@ -1341,6 +1327,8 @@ function renderProfile(){
 document.querySelectorAll('.nav').forEach(n=>n.addEventListener('click',()=>{const k=n.dataset.nav;if(k==='home')recoverPendingJob();
 renderHome();if(k==='creations')renderCreations();if(k==='profile')renderProfile();if(k==='create')renderCreateHub()}));
 renderHome();
+updateCredits();
+neneVerifyPaymentReturn();
 recoverPendingJob();
 resumeActiveNeneJobs();
 </script>
