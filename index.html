@@ -807,7 +807,7 @@ async function generateStoryScenes(){
       try{
         let response;
         let videoUrl;
-        const durableMode = provider==='auto' || provider==='ltx';
+        const durableMode = (provider==='auto' || provider==='ltx') && !imageUri;
         if(durableMode){
           const sceneDuration=[6,8,10].includes(Number(duration))?Number(duration):6;
           const idempotencyKey='story-'+String(durableStoryId||plan.id)+'-scene-'+String(index);
