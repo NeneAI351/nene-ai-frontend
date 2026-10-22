@@ -707,6 +707,53 @@ async function generateStoryScenes(){
     duration = [3,5,10,15,30].includes(duration) ? duration : 3;
   }
   const button=document.getElementById('neneGenerateStoryScenesBtn');
+
+  // Persist the story plan and ordered scenes in the authenticated backend before
+  // generation. Keep the existing legacy generation path as a compatibility
+  // fallback, but visibly warn if durable persistence is unavailable.
+  let durableStoryId = window.neneDurableStoryIdByPlan?.[String(plan.id)] || null;
+  try{
+    const headers = await window.NENEBackend.authHeaders({'Content-Type':'application/json'});
+    if(!durableStoryId){
+      const created = await fetch(backendUrl.replace(/\/$/, '')+'/api/stories',{
+        method:'POST',headers,
+        body:JSON.stringify({
+          title:String(plan.title||'Untitled Story').slice(0,160),
+          prompt:String(plan.storyPrompt||plan.title||'Story').slice(0,12000),
+          character_lock:{
+            direction:plan.characterDirection||'',
+            characters:(Array.isArray(plan.characters)?plan.characters:[]).map(ch=>({
+              name:ch.name||'',appearance:ch.appearance||'',personality:ch.personality||'',
+              wardrobe:ch.wardrobe||''
+            })).slice(0,50)
+          }
+        })
+      });
+      if(!created.ok) throw new Error('Story save returned HTTP '+created.status);
+      const story = await created.json();
+      durableStoryId = story.id;
+      window.neneDurableStoryIdByPlan = window.neneDurableStoryIdByPlan || {};
+      window.neneDurableStoryIdByPlan[String(plan.id)] = durableStoryId;
+    }
+    const saved = await fetch(backendUrl.replace(/\/$/, '')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/scenes',{
+      method:'PUT',headers,
+      body:JSON.stringify({scenes:plan.scenes.map((scene,index)=>({
+        scene_index:index,
+        prompt:[
+          'Story: '+String(plan.storyPrompt||plan.title||''),
+          'Scene '+String(scene.number||index+1)+': '+String(scene.title||''),
+          String(scene.brief||'')
+        ].filter(Boolean).join('\n').slice(0,12000),
+        duration_seconds:[6,8,10].includes(Number(duration))?Number(duration):6
+      }))})
+    });
+    if(!saved.ok) throw new Error('Scene plan save returned HTTP '+saved.status);
+    window.neneDurableStoryId = durableStoryId;
+  }catch(persistError){
+    console.warn('Durable Story plan persistence is unavailable; continuing the existing generation flow.',persistError);
+    toast('Story plan could not be saved to durable storage. Existing generation will continue; refresh recovery is not guaranteed.');
+  }
+
   let sceneResults=[];
   try{
     const savedScenes=JSON.parse(localStorage.getItem('nene_story_scene_results_v1')||'[]');
