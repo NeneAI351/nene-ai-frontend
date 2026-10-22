@@ -2,9 +2,8 @@ name: Frontend syntax checks
 
 on:
   pull_request:
-    branches: [main]
   push:
-    branches: [main, "feature/auth-signin-foundation"]
+    branches: [main, "feature/auth-signin-foundation", "feature/story-durable-api-connection"]
 
 jobs:
   javascript-syntax:
