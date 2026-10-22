@@ -819,7 +819,7 @@ async function generateStoryScenes(){
             prompt:storyPrompt,
             provider:'ltx',
             model:'ltx-2-5-fast',
-            resolution:['480p','720p'].includes(resolution)?resolution:'720p',
+            resolution:['720p','1080p'].includes(resolution)?resolution:'720p',
             duration:sceneDuration,
             ...(imageUri?{image_url:imageUri}:{})
           },idempotencyKey);
