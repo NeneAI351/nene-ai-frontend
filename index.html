@@ -805,16 +805,63 @@ async function generateStoryScenes(){
       if(typeof credits!=='undefined'){credits-=sceneCost;updateCredits();}
       let accepted=false;
       try{
-        const payload={
-          type:imageUri?'image-to-video':'text-to-video',
-          prompt:storyPrompt,
-          model:provider==='magic-hour'||provider==='auto'?'ltx-2.5':'ltx-2-5-fast',
-          resolution,
-          duration,
-          provider
-        };
-        if(imageUri) payload.image_uri=imageUri;
-        const response=await window.NENEBackend.generate(payload);
+        let response;
+        let videoUrl;
+        const durableMode = provider==='auto' || provider==='ltx';
+        if(durableMode){
+          const sceneDuration=[6,8,10].includes(Number(duration))?Number(duration):6;
+          const idempotencyKey='story-'+String(durableStoryId||plan.id)+'-scene-'+String(index);
+          const queued=await window.NENEBackend.createGeneration({
+            type:imageUri?'image-to-video':'text-to-video',
+            prompt:storyPrompt,
+            provider:'ltx',
+            model:'ltx-2-5-fast',
+            resolution:['480p','720p'].includes(resolution)?resolution:'720p',
+            duration:sceneDuration,
+            ...(imageUri?{image_url:imageUri}:{})
+          },idempotencyKey);
+          accepted=true;
+          const generationId=queued.generation_id;
+          if(!generationId) throw new Error('Durable scene queue did not return a generation ID.');
+          if(durableStoryId){
+            const link=await fetch(backendUrl.replace(/\/$/,'')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/scenes/'+index+'/generation',{
+              method:'POST',
+              headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
+              body:JSON.stringify({generation_id:generationId})
+            });
+            if(!link.ok) throw new Error('Could not attach durable generation to story scene (HTTP '+link.status+').');
+          }
+          const deadline=Date.now()+900000;
+          let durableResult=null;
+          while(Date.now()<deadline){
+            durableResult=await window.NENEBackend.generation(generationId);
+            const state=String(durableResult?.status||'').toLowerCase();
+            if(state==='succeeded') break;
+            if(state==='failed') throw new Error('Scene '+scene.number+' failed; reserved credits should be reconciled by the backend.');
+            if(button) button.textContent='🎬 Scene '+scene.number+'/'+plan.scenes.length+' — '+(state||'queued').toUpperCase()+'…';
+            await new Promise(resolve=>setTimeout(resolve,5000));
+          }
+          if(String(durableResult?.status||'').toLowerCase()!=='succeeded') throw new Error('Scene '+scene.number+' is still processing. Retry checking its saved story status; do not submit it again.');
+          const mediaResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/generations/'+encodeURIComponent(generationId)+'/media-url',{
+            headers:await window.NENEBackend.authHeaders(),cache:'no-store'
+          });
+          const mediaBody=await mediaResponse.json().catch(()=>({}));
+          if(!mediaResponse.ok || !mediaBody.url) throw new Error('Scene completed, but secure playback URL is not available yet.');
+          videoUrl=mediaBody.url;
+          response={generation_id:generationId,provider:'ltx',status:'succeeded'};
+        }else{
+          const payload={
+            type:imageUri?'image-to-video':'text-to-video',
+            prompt:storyPrompt,
+            model:provider==='magic-hour'?'ltx-2.5':'ltx-2-5-fast',
+            resolution,
+            duration,
+            provider
+          };
+          if(imageUri) payload.image_uri=imageUri;
+          response=await window.NENEBackend.generate(payload);
+          accepted=true;
+        }
         accepted=true;
         const jobId=response&&(response.job_id||response.id||response.jobId);
         if(!jobId) throw new Error('Scene '+scene.number+' did not return a generation job ID.');
