@@ -800,10 +800,12 @@ async function generateStoryScenes(){
       }
 
       const sceneCost=10;
-      if(typeof credits!=='undefined' && credits<sceneCost){
+      const useServerWallet=(provider==='auto'||provider==='ltx')&&!imageUri;
+      let localCreditDeducted=false;
+      if(!useServerWallet && typeof credits!=='undefined' && credits<sceneCost){
         throw new Error('Not enough NENE AI credits to continue the remaining story scenes.');
       }
-      if(typeof credits!=='undefined'){credits-=sceneCost;updateCredits();}
+      if(!useServerWallet && typeof credits!=='undefined'){credits-=sceneCost;updateCredits();localCreditDeducted=true;}
       let accepted=false;
       try{
         let response;
@@ -904,7 +906,7 @@ async function generateStoryScenes(){
           if(typeof saveState==='function')saveState();
         }
       }catch(err){
-        if(!accepted && typeof credits!=='undefined'){credits=Math.min(1000,credits+sceneCost);updateCredits();}
+        if(!accepted && localCreditDeducted && typeof credits!=='undefined'){credits=Math.min(1000,credits+sceneCost);updateCredits();}
         throw err;
       }
     }
