@@ -885,25 +885,29 @@ async function generateStoryScenes(){
         if(!videoUrl) throw new Error('Scene '+scene.number+' completed without a video URL.');
         const result={scene:scene.number,title:scene.title,videoUrl,provider:activeProvider,duration,resolution,characters:sceneCharacters.map(c=>c.name)};
         sceneResults.push(result);
-        try{
-          const stories=JSON.parse(localStorage.getItem('nene_story_scene_results_v1')||'[]');
-          stories.unshift({...result,storyId:plan.id,createdAt:new Date().toISOString()});
-          localStorage.setItem('nene_story_scene_results_v1',JSON.stringify(stories.slice(0,100)));
-        }catch(_){}
-        if(typeof creations!=='undefined'){
-          creations.unshift({
-            name:plan.title+' — Scene '+scene.number,
-            type:'Story Scene',
-            prompt:storyPrompt,
-            videoUrl,
-            provider:activeProvider,
-            duration,
-            resolution,
-            icon:'📖',
-            projectId:activeProjectId,
-            createdAt:new Date().toISOString()
-          });
-          if(typeof saveState==='function')saveState();
+        // Durable media URLs are short-lived bearer credentials. Keep them in
+        // this page session only; never write them to localStorage or saved creations.
+        if(!durableMode){
+          try{
+            const stories=JSON.parse(localStorage.getItem('nene_story_scene_results_v1')||'[]');
+            stories.unshift({...result,storyId:plan.id,createdAt:new Date().toISOString()});
+            localStorage.setItem('nene_story_scene_results_v1',JSON.stringify(stories.slice(0,100)));
+          }catch(_){}
+          if(typeof creations!=='undefined'){
+            creations.unshift({
+              name:plan.title+' — Scene '+scene.number,
+              type:'Story Scene',
+              prompt:storyPrompt,
+              videoUrl,
+              provider:activeProvider,
+              duration,
+              resolution,
+              icon:'📖',
+              projectId:activeProjectId,
+              createdAt:new Date().toISOString()
+            });
+            if(typeof saveState==='function')saveState();
+          }
         }
       }catch(err){
         if(!accepted && localCreditDeducted && typeof credits!=='undefined'){credits=Math.min(1000,credits+sceneCost);updateCredits();}
@@ -962,7 +966,7 @@ async function generateStoryScenes(){
         }
         assembledStory=await assembleResponse.json();
       }
-      if(assembledStory?.video_url && typeof creations!=='undefined'){
+      if(assembledStory?.video_url && !assembledStory?.durable && typeof creations!=='undefined'){
         creations.unshift({
           name:plan.title+' — Final Story',
           type:'Story Video',
