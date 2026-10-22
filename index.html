@@ -826,6 +826,7 @@ async function generateStoryScenes(){
           accepted=true;
           const generationId=queued.generation_id;
           if(!generationId) throw new Error('Durable scene queue did not return a generation ID.');
+          await updateCredits();
           durableSceneGenerationIds.set(index,generationId);
           if(durableStoryId){
             const link=await fetch(backendUrl.replace(/\/$/,'')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/scenes/'+index+'/generation',{
@@ -852,6 +853,7 @@ async function generateStoryScenes(){
           const mediaBody=await mediaResponse.json().catch(()=>({}));
           if(!mediaResponse.ok || !mediaBody.url) throw new Error('Scene completed, but secure playback URL is not available yet.');
           videoUrl=mediaBody.url;
+          await updateCredits();
           response={generation_id:generationId,provider:'ltx',status:'succeeded'};
         }else{
           const payload={
@@ -911,6 +913,7 @@ async function generateStoryScenes(){
         }
       }catch(err){
         if(!accepted && localCreditDeducted && typeof credits!=='undefined'){credits=Math.min(1000,credits+sceneCost);updateCredits();}
+        if(useServerWallet){await updateCredits();}
         throw err;
       }
     }
