@@ -863,19 +863,21 @@ async function generateStoryScenes(){
           accepted=true;
         }
         accepted=true;
-        const jobId=response&&(response.job_id||response.id||response.jobId);
-        if(!jobId) throw new Error('Scene '+scene.number+' did not return a generation job ID.');
         const activeProvider=String(response?.provider||provider||'auto').toLowerCase();
-        const mode=imageUri?'image-to-video':'text-to-video';
-        const final=await window.NENEBackend.waitForJob(jobId,mode,activeProvider,function(job){
-          const status=String(job?.status||'').toUpperCase();
-          if(button) button.textContent='🎬 Scene '+scene.number+'/'+plan.scenes.length+' — '+(status||'WORKING')+'…';
-        },900000,7000);
-        const finalStatus=String(final?.status||'').toLowerCase();
-        if(['failed','error','cancelled','canceled'].includes(finalStatus)){
-          throw new Error('Scene '+scene.number+' failed: '+(final?.error?.message||final?.message||'provider error'));
+        if(!durableMode){
+          const jobId=response&&(response.job_id||response.id||response.jobId);
+          if(!jobId) throw new Error('Scene '+scene.number+' did not return a generation job ID.');
+          const mode=imageUri?'image-to-video':'text-to-video';
+          const final=await window.NENEBackend.waitForJob(jobId,mode,activeProvider,function(job){
+            const status=String(job?.status||'').toUpperCase();
+            if(button) button.textContent='🎬 Scene '+scene.number+'/'+plan.scenes.length+' — '+(status||'WORKING')+'…';
+          },900000,7000);
+          const finalStatus=String(final?.status||'').toLowerCase();
+          if(['failed','error','cancelled','canceled'].includes(finalStatus)){
+            throw new Error('Scene '+scene.number+' failed: '+(final?.error?.message||final?.message||'provider error'));
+          }
+          videoUrl=final?.video_url||final?._nene_video_url||final?.result?.video_url||final?.output?.video_url||final?.output?.media_url?.[0]||final?.result?.media_url?.[0]||final?.downloads?.[0]?.url||final?.result?.downloads?.[0]?.url||final?.result?.url||final?.url;
         }
-        const videoUrl=final?.video_url||final?._nene_video_url||final?.result?.video_url||final?.output?.video_url||final?.output?.media_url?.[0]||final?.result?.media_url?.[0]||final?.downloads?.[0]?.url||final?.result?.downloads?.[0]?.url||final?.result?.url||final?.url;
         if(!videoUrl) throw new Error('Scene '+scene.number+' completed without a video URL.');
         const result={scene:scene.number,title:scene.title,videoUrl,provider:activeProvider,duration,resolution,characters:sceneCharacters.map(c=>c.name)};
         sceneResults.push(result);
