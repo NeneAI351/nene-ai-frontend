@@ -707,11 +707,59 @@ async function generateStoryScenes(){
     duration = [3,5,10,15,30].includes(duration) ? duration : 3;
   }
   const button=document.getElementById('neneGenerateStoryScenesBtn');
+
+  // Persist the story plan and ordered scenes in the authenticated backend before
+  // generation. Keep the existing legacy generation path as a compatibility
+  // fallback, but visibly warn if durable persistence is unavailable.
+  let durableStoryId = window.neneDurableStoryIdByPlan?.[String(plan.id)] || null;
+  try{
+    const headers = await window.NENEBackend.authHeaders({'Content-Type':'application/json'});
+    if(!durableStoryId){
+      const created = await fetch(backendUrl.replace(/\/$/, '')+'/api/stories',{
+        method:'POST',headers,
+        body:JSON.stringify({
+          title:String(plan.title||'Untitled Story').slice(0,160),
+          prompt:String(plan.storyPrompt||plan.title||'Story').slice(0,12000),
+          character_lock:{
+            direction:plan.characterDirection||'',
+            characters:(Array.isArray(plan.characters)?plan.characters:[]).map(ch=>({
+              name:ch.name||'',appearance:ch.appearance||'',personality:ch.personality||'',
+              wardrobe:ch.wardrobe||''
+            })).slice(0,50)
+          }
+        })
+      });
+      if(!created.ok) throw new Error('Story save returned HTTP '+created.status);
+      const story = await created.json();
+      durableStoryId = story.id;
+      window.neneDurableStoryIdByPlan = window.neneDurableStoryIdByPlan || {};
+      window.neneDurableStoryIdByPlan[String(plan.id)] = durableStoryId;
+    }
+    const saved = await fetch(backendUrl.replace(/\/$/, '')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/scenes',{
+      method:'PUT',headers,
+      body:JSON.stringify({scenes:plan.scenes.map((scene,index)=>({
+        scene_index:index,
+        prompt:[
+          'Story: '+String(plan.storyPrompt||plan.title||''),
+          'Scene '+String(scene.number||index+1)+': '+String(scene.title||''),
+          String(scene.brief||'')
+        ].filter(Boolean).join('\n').slice(0,12000),
+        duration_seconds:[6,8,10].includes(Number(duration))?Number(duration):6
+      }))})
+    });
+    if(!saved.ok) throw new Error('Scene plan save returned HTTP '+saved.status);
+    window.neneDurableStoryId = durableStoryId;
+  }catch(persistError){
+    console.warn('Durable Story plan persistence is unavailable; continuing the existing generation flow.',persistError);
+    toast('Story plan could not be saved to durable storage. Existing generation will continue; refresh recovery is not guaranteed.');
+  }
+
   let sceneResults=[];
   try{
     const savedScenes=JSON.parse(localStorage.getItem('nene_story_scene_results_v1')||'[]');
     sceneResults=savedScenes.filter(x=>x.storyId===plan.id && x.videoUrl).sort((a,b)=>Number(a.scene)-Number(b.scene));
   }catch(_){ sceneResults=[]; }
+  const durableSceneGenerationIds = new Map();
   window.neneStoryGenerating=true;
   if(button){button.disabled=true;button.textContent='⏳ Generating Story Scenes…';}
   try{
@@ -752,61 +800,120 @@ async function generateStoryScenes(){
       }
 
       const sceneCost=10;
-      if(typeof credits!=='undefined' && credits<sceneCost){
+      const useServerWallet=!!durableStoryId&&(provider==='auto'||provider==='ltx')&&!imageUri;
+      let localCreditDeducted=false;
+      if(!useServerWallet && typeof credits!=='undefined' && credits<sceneCost){
         throw new Error('Not enough NENE AI credits to continue the remaining story scenes.');
       }
-      if(typeof credits!=='undefined'){credits-=sceneCost;updateCredits();}
+      if(!useServerWallet && typeof credits!=='undefined'){credits-=sceneCost;updateCredits();localCreditDeducted=true;}
       let accepted=false;
       try{
-        const payload={
-          type:imageUri?'image-to-video':'text-to-video',
-          prompt:storyPrompt,
-          model:provider==='magic-hour'||provider==='auto'?'ltx-2.5':'ltx-2-5-fast',
-          resolution,
-          duration,
-          provider
-        };
-        if(imageUri) payload.image_uri=imageUri;
-        const response=await window.NENEBackend.generate(payload);
-        accepted=true;
-        const jobId=response&&(response.job_id||response.id||response.jobId);
-        if(!jobId) throw new Error('Scene '+scene.number+' did not return a generation job ID.');
-        const activeProvider=String(response?.provider||provider||'auto').toLowerCase();
-        const mode=imageUri?'image-to-video':'text-to-video';
-        const final=await window.NENEBackend.waitForJob(jobId,mode,activeProvider,function(job){
-          const status=String(job?.status||'').toUpperCase();
-          if(button) button.textContent='🎬 Scene '+scene.number+'/'+plan.scenes.length+' — '+(status||'WORKING')+'…';
-        },900000,7000);
-        const finalStatus=String(final?.status||'').toLowerCase();
-        if(['failed','error','cancelled','canceled'].includes(finalStatus)){
-          throw new Error('Scene '+scene.number+' failed: '+(final?.error?.message||final?.message||'provider error'));
+        let response;
+        let videoUrl;
+        const durableMode = !!durableStoryId && (provider==='auto' || provider==='ltx') && !imageUri;
+        if(durableMode){
+          const sceneDuration=[6,8,10].includes(Number(duration))?Number(duration):6;
+          const idempotencyKey='story-'+String(durableStoryId||plan.id)+'-scene-'+String(index);
+          const queued=await window.NENEBackend.createGeneration({
+            type:imageUri?'image-to-video':'text-to-video',
+            prompt:storyPrompt,
+            provider:'ltx',
+            model:'ltx-2-5-fast',
+            resolution:['720p','1080p'].includes(resolution)?resolution:'720p',
+            duration:sceneDuration,
+            ...(imageUri?{image_url:imageUri}:{})
+          },idempotencyKey);
+          accepted=true;
+          const generationId=queued.generation_id;
+          if(!generationId) throw new Error('Durable scene queue did not return a generation ID.');
+          await updateCredits();
+          durableSceneGenerationIds.set(index,generationId);
+          if(durableStoryId){
+            const link=await fetch(backendUrl.replace(/\/$/,'')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/scenes/'+index+'/generation',{
+              method:'POST',
+              headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
+              body:JSON.stringify({generation_id:generationId})
+            });
+            if(!link.ok) throw new Error('Could not attach durable generation to story scene (HTTP '+link.status+').');
+          }
+          const deadline=Date.now()+900000;
+          let durableResult=null;
+          while(Date.now()<deadline){
+            durableResult=await window.NENEBackend.generation(generationId);
+            const state=String(durableResult?.status||'').toLowerCase();
+            if(state==='succeeded') break;
+            if(state==='failed') throw new Error('Scene '+scene.number+' failed; reserved credits should be reconciled by the backend.');
+            if(button) button.textContent='🎬 Scene '+scene.number+'/'+plan.scenes.length+' — '+(state||'queued').toUpperCase()+'…';
+            await new Promise(resolve=>setTimeout(resolve,5000));
+          }
+          if(String(durableResult?.status||'').toLowerCase()!=='succeeded') throw new Error('Scene '+scene.number+' is still processing. Retry checking its saved story status; do not submit it again.');
+          const mediaResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/generations/'+encodeURIComponent(generationId)+'/media-url',{
+            headers:await window.NENEBackend.authHeaders(),cache:'no-store'
+          });
+          const mediaBody=await mediaResponse.json().catch(()=>({}));
+          if(!mediaResponse.ok || !mediaBody.url) throw new Error('Scene completed, but secure playback URL is not available yet.');
+          videoUrl=mediaBody.url;
+          await updateCredits();
+          response={generation_id:generationId,provider:'ltx',status:'succeeded'};
+        }else{
+          const payload={
+            type:imageUri?'image-to-video':'text-to-video',
+            prompt:storyPrompt,
+            model:provider==='magic-hour'?'ltx-2.5':'ltx-2-5-fast',
+            resolution,
+            duration,
+            provider
+          };
+          if(imageUri) payload.image_uri=imageUri;
+          response=await window.NENEBackend.generate(payload);
+          accepted=true;
         }
-        const videoUrl=final?.video_url||final?._nene_video_url||final?.result?.video_url||final?.output?.video_url||final?.output?.media_url?.[0]||final?.result?.media_url?.[0]||final?.downloads?.[0]?.url||final?.result?.downloads?.[0]?.url||final?.result?.url||final?.url;
+        accepted=true;
+        const activeProvider=String(response?.provider||provider||'auto').toLowerCase();
+        if(!durableMode){
+          const jobId=response&&(response.job_id||response.id||response.jobId);
+          if(!jobId) throw new Error('Scene '+scene.number+' did not return a generation job ID.');
+          const mode=imageUri?'image-to-video':'text-to-video';
+          const final=await window.NENEBackend.waitForJob(jobId,mode,activeProvider,function(job){
+            const status=String(job?.status||'').toUpperCase();
+            if(button) button.textContent='🎬 Scene '+scene.number+'/'+plan.scenes.length+' — '+(status||'WORKING')+'…';
+          },900000,7000);
+          const finalStatus=String(final?.status||'').toLowerCase();
+          if(['failed','error','cancelled','canceled'].includes(finalStatus)){
+            throw new Error('Scene '+scene.number+' failed: '+(final?.error?.message||final?.message||'provider error'));
+          }
+          videoUrl=final?.video_url||final?._nene_video_url||final?.result?.video_url||final?.output?.video_url||final?.output?.media_url?.[0]||final?.result?.media_url?.[0]||final?.downloads?.[0]?.url||final?.result?.downloads?.[0]?.url||final?.result?.url||final?.url;
+        }
         if(!videoUrl) throw new Error('Scene '+scene.number+' completed without a video URL.');
         const result={scene:scene.number,title:scene.title,videoUrl,provider:activeProvider,duration,resolution,characters:sceneCharacters.map(c=>c.name)};
         sceneResults.push(result);
-        try{
-          const stories=JSON.parse(localStorage.getItem('nene_story_scene_results_v1')||'[]');
-          stories.unshift({...result,storyId:plan.id,createdAt:new Date().toISOString()});
-          localStorage.setItem('nene_story_scene_results_v1',JSON.stringify(stories.slice(0,100)));
-        }catch(_){}
-        if(typeof creations!=='undefined'){
-          creations.unshift({
-            name:plan.title+' — Scene '+scene.number,
-            type:'Story Scene',
-            prompt:storyPrompt,
-            videoUrl,
-            provider:activeProvider,
-            duration,
-            resolution,
-            icon:'📖',
-            projectId:activeProjectId,
-            createdAt:new Date().toISOString()
-          });
-          if(typeof saveState==='function')saveState();
+        // Durable media URLs are short-lived bearer credentials. Keep them in
+        // this page session only; never write them to localStorage or saved creations.
+        if(!durableMode){
+          try{
+            const stories=JSON.parse(localStorage.getItem('nene_story_scene_results_v1')||'[]');
+            stories.unshift({...result,storyId:plan.id,createdAt:new Date().toISOString()});
+            localStorage.setItem('nene_story_scene_results_v1',JSON.stringify(stories.slice(0,100)));
+          }catch(_){}
+          if(typeof creations!=='undefined'){
+            creations.unshift({
+              name:plan.title+' — Scene '+scene.number,
+              type:'Story Scene',
+              prompt:storyPrompt,
+              videoUrl,
+              provider:activeProvider,
+              duration,
+              resolution,
+              icon:'📖',
+              projectId:activeProjectId,
+              createdAt:new Date().toISOString()
+            });
+            if(typeof saveState==='function')saveState();
+          }
         }
       }catch(err){
-        if(!accepted && typeof credits!=='undefined'){credits=Math.min(1000,credits+sceneCost);updateCredits();}
+        if(!accepted && localCreditDeducted && typeof credits!=='undefined'){credits=Math.min(1000,credits+sceneCost);updateCredits();}
+        if(useServerWallet){await updateCredits();}
         throw err;
       }
     }
@@ -818,20 +925,51 @@ async function generateStoryScenes(){
     let assembledStory=null;
     try{
       if(button) button.textContent='🧩 Assembling final Story…';
-      const assembleResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/story/assemble',{
-        method:'POST',
-        headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
-        body:JSON.stringify({
-          title:plan.title,
-          scene_urls:sceneResults.sort((a,b)=>Number(a.scene)-Number(b.scene)).map(r=>r.videoUrl)
-        })
-      });
-      if(!assembleResponse.ok){
-        const text=await assembleResponse.text();
-        throw new Error(text||'Story assembly failed.');
+      if(durableStoryId && durableSceneGenerationIds.size===plan.scenes.length){
+        const assemblyKey='story-assembly-'+String(durableStoryId);
+        const assembleResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/assemble',{
+          method:'POST',
+          headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json','Idempotency-Key':assemblyKey})
+        });
+        const assemblyBody=await assembleResponse.json().catch(()=>({}));
+        if(!assembleResponse.ok) throw new Error(assemblyBody?.detail||'Durable Story assembly could not be queued.');
+        const deadline=Date.now()+900000;
+        let assemblyStatus=null;
+        while(Date.now()<deadline){
+          const statusResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/assembly',{
+            headers:await window.NENEBackend.authHeaders(),cache:'no-store'
+          });
+          const statusBody=await statusResponse.json().catch(()=>({}));
+          if(!statusResponse.ok) throw new Error(statusBody?.detail||'Could not read Story assembly status.');
+          assemblyStatus=statusBody;
+          if(statusBody.story_status==='completed') break;
+          if(statusBody.story_status==='failed' || statusBody.assembly?.status==='failed')
+            throw new Error('Story assembly failed. Your completed scene generations remain saved.');
+          await new Promise(resolve=>setTimeout(resolve,3000));
+        }
+        if(assemblyStatus?.story_status!=='completed') throw new Error('Story is still assembling. Its durable job is saved and can be checked again.');
+        const playback=await fetch(backendUrl.replace(/\/$/,'')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/video',{
+          headers:await window.NENEBackend.authHeaders(),cache:'no-store'
+        });
+        const playbackBody=await playback.json().catch(()=>({}));
+        if(!playback.ok || !playbackBody.video_url) throw new Error(playbackBody?.detail||'Final video is saved but playback is not ready.');
+        assembledStory={video_url:playbackBody.video_url,durable:true,story_id:durableStoryId};
+      }else{
+        const assembleResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/story/assemble',{
+          method:'POST',
+          headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
+          body:JSON.stringify({
+            title:plan.title,
+            scene_urls:sceneResults.sort((a,b)=>Number(a.scene)-Number(b.scene)).map(r=>r.videoUrl)
+          })
+        });
+        if(!assembleResponse.ok){
+          const text=await assembleResponse.text();
+          throw new Error(text||'Story assembly failed.');
+        }
+        assembledStory=await assembleResponse.json();
       }
-      assembledStory=await assembleResponse.json();
-      if(assembledStory?.video_url && typeof creations!=='undefined'){
+      if(assembledStory?.video_url && !assembledStory?.durable && typeof creations!=='undefined'){
         creations.unshift({
           name:plan.title+' — Final Story',
           type:'Story Video',
