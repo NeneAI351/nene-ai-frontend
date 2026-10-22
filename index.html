@@ -759,6 +759,7 @@ async function generateStoryScenes(){
     const savedScenes=JSON.parse(localStorage.getItem('nene_story_scene_results_v1')||'[]');
     sceneResults=savedScenes.filter(x=>x.storyId===plan.id && x.videoUrl).sort((a,b)=>Number(a.scene)-Number(b.scene));
   }catch(_){ sceneResults=[]; }
+  const durableSceneGenerationIds = new Map();
   window.neneStoryGenerating=true;
   if(button){button.disabled=true;button.textContent='⏳ Generating Story Scenes…';}
   try{
@@ -823,6 +824,7 @@ async function generateStoryScenes(){
           accepted=true;
           const generationId=queued.generation_id;
           if(!generationId) throw new Error('Durable scene queue did not return a generation ID.');
+          durableSceneGenerationIds.set(index,generationId);
           if(durableStoryId){
             const link=await fetch(backendUrl.replace(/\/$/,'')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/scenes/'+index+'/generation',{
               method:'POST',
@@ -914,19 +916,50 @@ async function generateStoryScenes(){
     let assembledStory=null;
     try{
       if(button) button.textContent='🧩 Assembling final Story…';
-      const assembleResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/story/assemble',{
-        method:'POST',
-        headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
-        body:JSON.stringify({
-          title:plan.title,
-          scene_urls:sceneResults.sort((a,b)=>Number(a.scene)-Number(b.scene)).map(r=>r.videoUrl)
-        })
-      });
-      if(!assembleResponse.ok){
-        const text=await assembleResponse.text();
-        throw new Error(text||'Story assembly failed.');
+      if(durableStoryId && durableSceneGenerationIds.size===plan.scenes.length){
+        const assemblyKey='story-assembly-'+String(durableStoryId);
+        const assembleResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/assemble',{
+          method:'POST',
+          headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json','Idempotency-Key':assemblyKey})
+        });
+        const assemblyBody=await assembleResponse.json().catch(()=>({}));
+        if(!assembleResponse.ok) throw new Error(assemblyBody?.detail||'Durable Story assembly could not be queued.');
+        const deadline=Date.now()+900000;
+        let assemblyStatus=null;
+        while(Date.now()<deadline){
+          const statusResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/assembly',{
+            headers:await window.NENEBackend.authHeaders(),cache:'no-store'
+          });
+          const statusBody=await statusResponse.json().catch(()=>({}));
+          if(!statusResponse.ok) throw new Error(statusBody?.detail||'Could not read Story assembly status.');
+          assemblyStatus=statusBody;
+          if(statusBody.story_status==='completed') break;
+          if(statusBody.story_status==='failed' || statusBody.assembly?.status==='failed')
+            throw new Error('Story assembly failed. Your completed scene generations remain saved.');
+          await new Promise(resolve=>setTimeout(resolve,3000));
+        }
+        if(assemblyStatus?.story_status!=='completed') throw new Error('Story is still assembling. Its durable job is saved and can be checked again.');
+        const playback=await fetch(backendUrl.replace(/\/$/,'')+'/api/stories/'+encodeURIComponent(durableStoryId)+'/video',{
+          headers:await window.NENEBackend.authHeaders(),cache:'no-store'
+        });
+        const playbackBody=await playback.json().catch(()=>({}));
+        if(!playback.ok || !playbackBody.video_url) throw new Error(playbackBody?.detail||'Final video is saved but playback is not ready.');
+        assembledStory={video_url:playbackBody.video_url,durable:true,story_id:durableStoryId};
+      }else{
+        const assembleResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/story/assemble',{
+          method:'POST',
+          headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
+          body:JSON.stringify({
+            title:plan.title,
+            scene_urls:sceneResults.sort((a,b)=>Number(a.scene)-Number(b.scene)).map(r=>r.videoUrl)
+          })
+        });
+        if(!assembleResponse.ok){
+          const text=await assembleResponse.text();
+          throw new Error(text||'Story assembly failed.');
+        }
+        assembledStory=await assembleResponse.json();
       }
-      assembledStory=await assembleResponse.json();
       if(assembledStory?.video_url && typeof creations!=='undefined'){
         creations.unshift({
           name:plan.title+' — Final Story',
