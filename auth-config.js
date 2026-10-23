@@ -10,3 +10,6 @@ window.NENE_AUTH_CONFIG = Object.freeze({
   supabaseAnonKey: "sb_publishable_sKEK0zwZKHEm-v6-mEn9Hw_v_YCnGa0",
   redirectTo: window.location.origin + window.location.pathname
 });
+
+/* Public staging API origin. No API keys belong in this configuration. */
+window.NENE_DIRECTOR_CONFIG = Object.freeze({backendUrl: "https://nene-ai-staging.onrender.com"});

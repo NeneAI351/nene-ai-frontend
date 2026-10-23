@@ -346,7 +346,7 @@ function renderHome(){
   ${toolCard("📢","AI Advertisement","Create ads for brands and products.","ad")}
   ${toolCard("📱","Social Content","Make reels, shorts and social videos.","social")}
   ${toolCard("📖","Story → Video","Build scenes with Character Lock.","story")}
-  ${toolCard("🧠","AI Director","Give NENE AI the idea; it plans the whole production.","director")}
+  ${toolCard("🧠","AI Director","Plan scripts, scenes and production directions.","director")}
  </div>
  <div class="section-title">AI Studio</div>
  <div class="tool-grid">
@@ -378,7 +378,7 @@ function renderCreateHub(){
  <div class="eyebrow">Create</div><h1>Choose your workflow</h1>
  <p class="subtitle">Start simple or let NENE AI direct the entire production.</p>
  <div class="grid">
-  ${toolCard("🧠","AI Director","Idea → finished production plan.","director")}
+  ${toolCard("🧠","AI Director","Plan scripts, scenes and production directions.","director")}
   ${toolCard("🎬","Text → Video","Prompt to visual scenes.","text")}
   ${toolCard("🖼️","Image → Video","Bring photos to life.","image")}
   ${toolCard("📢","AI Advertisement","Product, offer, CTA and variants.","ad")}
@@ -404,6 +404,7 @@ function renderCreateHub(){
 }
 
 function openFeature(type){
+ if(type==="director"){window.neneOpenDirector();return;}
  if(type==="account" && typeof window.neneOpenAuth==="function"){
   showModal(
    '<div class="eyebrow">Account security</div><h2>Account &amp; Security</h2>'+
@@ -421,7 +422,7 @@ function openFeature(type){
  currentFeature=type;
  setNav('create');
  const data={
-  director:["🧠","AI Director","Describe the result you want. NENE AI plans the script, scenes, characters, voice, music, captions and final formats.","Tell NENE AI what you want to make..."],
+  director:["🧠","AI Director","AI Director is not connected to an AI planning service yet. It cannot create a script, storyboard or finished video.","Tell NENE AI what you want to make..."],
   characters:["🎭","Character Studio","Create reusable characters with a name, look, personality, wardrobe and reference images. Character Lock keeps identity consistent.","Describe your character..."],
   script:["✍️","AI Script Writer","Generate hooks, scripts, scene breakdowns, dialogue, CTAs and multiple versions for different platforms.","What should the script be about?"],
   voice:["🎙️","AI Voice + Lip Sync","Choose a voice, delivery style and language. The real app will support consent-based voice cloning and lip-sync.","Write the narration or dialogue..."],
@@ -440,7 +441,7 @@ function openFeature(type){
  };
  const d=data[type]||data.director;
  let extra="";
- if(type==="director") extra=`<div class="block"><div class="label">Production goal</div><div class="chips">${chips(["Viral social video","Business ad","Story film","YouTube video","Product launch","Educational video"])}</div></div><div class="block"><div class="label">AI planning</div><div class="notice">NENE AI will eventually choose the best generation model per scene, build a storyboard, maintain character/brand consistency and return editable results.</div></div>`;
+ if(type==="director") extra=`<div class="block"><div class="label">Production goal</div><div class="chips">${chips(["Viral social video","Business ad","Story film","YouTube video","Product launch","Educational video"])}</div></div><div class="block"><div class="label">AI planning</div><div class="notice">AI planning is unavailable. No production plan or video will be generated, and no credits will be charged. Your input stays on this screen; it is not saved or sent.</div></div>`;
  if(type==="characters") extra=`<div class="block"><div class="label">Character name</div><input class="field" id="characterName" placeholder="e.g. Amara"></div><div class="block"><div class="label">Appearance / identity description</div><textarea id="characterAppearance" placeholder="Age range, hairstyle, skin tone, facial features, body build, signature details..."></textarea></div><div class="block"><div class="label">Personality</div><textarea id="characterPersonality" placeholder="Confident, gentle, ambitious, funny..."></textarea></div><div class="block"><div class="label">Wardrobe / signature look</div><textarea id="characterWardrobe" placeholder="Describe the consistent clothing style, colors and accessories..."></textarea></div><div class="block"><div class="label">Identity style</div><div class="chips">${chips(["Realistic","Cinematic","Fashion","Animated","3D","Fantasy"])}</div></div><div class="block"><div class="label">Reference image</div><div class="upload preview" id="characterPreview">＋ Tap to add a character reference<input id="characterRef" type="file" accept="image/*" onchange="previewCharacterReference(event)"></div></div><div class="notice">🔒 <b>Character Lock:</b> this profile becomes the identity anchor for future Story → Video scenes. NENE AI will carry the same appearance description and reference into each scene.</div>`;
  if(type==="voice") extra=`<div class="block"><div class="label">Voice</div><div class="chips">${chips(["Warm","Confident","Calm","Energetic","Deep","Friendly"])}</div></div><div class="block"><div class="label">Language</div><select><option>English</option><option>French</option><option>Spanish</option><option>Portuguese</option><option>Arabic</option><option>Igbo</option><option>Yoruba</option></select></div><div class="notice">Voice cloning should require explicit consent and identity safeguards.</div>`;
  if(type==="audio") extra=`<div class="block"><div class="label">Music mood</div><div class="chips">${chips(["Cinematic","Afrobeats","Inspirational","Luxury","Emotional","Energetic","Minimal"])}</div></div><div class="block"><div class="label">Sound effects</div><div class="chips">${chips(["Whoosh","Impact","Ambient","Nature","UI","None"])}</div></div>`;
@@ -461,7 +462,7 @@ function openFeature(type){
  <p class="subtitle">${d[2]}</p>
  ${extra}
  <div class="block"><div class="label">Your input</div><textarea id="featurePrompt" placeholder="${d[3]}"></textarea></div>
- <div class="row"><button class="btn" onclick="renderCreateHub()">Cancel</button><button class="btn gold" onclick="runFeature('${type}')">✨ Build in prototype</button></div>
+ <div class="row"><button class="btn" onclick="renderCreateHub()">Cancel</button>${type==="director" ? '<button class="btn gold" disabled aria-disabled="true">AI planning unavailable</button>' : `<button class="btn gold" onclick="runFeature('${type}')">✨ Build in prototype</button>`}</div>
  <div class="notice" style="margin-top:12px">Prototype mode: this screen maps the real product experience. Actual AI generation, voice, payments, storage and publishing will be connected later.</div>
  </main>`;
 }
@@ -469,6 +470,10 @@ function toggleRow(label,key){
  return `<div class="toggle"><span>${label}</span><button class="switch ${settings[key]?'on':''}" onclick="settings['${key}']=!settings['${key}'];this.classList.toggle('on');this.querySelector('i').style.marginLeft=settings['${key}']?'21px':'0'"><i></i></button></div>`;
 }
 function runFeature(type){
+ if(type==="director"){
+   window.neneBuildDirectorPlan();
+   return;
+ }
  if(type==="characters"){
    const name=document.getElementById('characterName')?.value.trim();
    const appearance=document.getElementById('characterAppearance')?.value.trim();
@@ -483,11 +488,11 @@ function runFeature(type){
    setTimeout(()=>openFeature('characters'),350);
    return;
  }
- if(type==="director" || type==="script" || type==="editor"){
+ if(type==="script" || type==="editor"){
    toast("Prototype workflow saved");
-   projects.unshift({name:"New NENE AI "+(type==="director"?"Production":"Project"),type:type, status:"Draft",icon:"✨"});
+   projects.unshift({name:"New NENE AI Project",type:type, status:"Draft",icon:"✨"});
  } else toast("Prototype workflow saved");
- if(type==="director" || type==="editor") setTimeout(renderHome,450);
+ if(type==="editor") setTimeout(renderHome,450);
 }
 
 function chips(arr){
@@ -1329,7 +1334,7 @@ function renderProfile(){
 
   <div class="section-title">Product roadmap</div>
   <div class="list">
-   <div class="creation"><div class="thumb">🧠</div><div><b>AI Director</b><small>End-to-end idea → finished production</small></div></div>
+   <div class="creation"><div class="thumb">🧠</div><div><b>AI Director</b><small>Plan scripts, scenes and production directions</small></div></div>
    <div class="creation"><div class="thumb">✂️</div><div><b>AI Video Editor</b><small>Timeline, scene regeneration and conversational edits</small></div></div>
    <div class="creation"><div class="thumb">🎭</div><div><b>Character Studio</b><small>Persistent identity across scenes</small></div></div>
    <div class="creation"><div class="thumb">🌍</div><div><b>Global localization</b><small>Translation, dubbing, captions and regional formats</small></div></div>
@@ -1506,12 +1511,13 @@ async function neneTestBackend(){var d=document.getElementById('neneBackendDot')
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=12', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=13', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
 <script src="./auth-config.js"></script>
 <script src="./auth.js"></script>
+<script src="./director.js"></script>
 </body>
 </html>
