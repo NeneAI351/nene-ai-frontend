@@ -5,10 +5,10 @@ const fs=require('node:fs'),path=require('node:path');
 const code=fs.readFileSync(path.join(__dirname,'../script-writer.js'),'utf8');
 async function settle(){for(let i=0;i<20;i++)await new Promise(r=>setImmediate(r));}
 const marker='NENE_SCRIPT_V1\n';
-function setup(){
+function setup(sharedRecords=new Map()){
  const dom=new JSDOM('<div id="screen"></div>',{url:'https://nene.test',runScripts:'outside-only'}),w=dom.window;
  let user='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',enabled=true,fail=false,hold=null;
- const calls=[],records=new Map();
+ const calls=[],records=sharedRecords;
  w.neneRequireAccount=async()=>!!user;w.neneAuthGetUserId=async()=>user;
  w.neneAuthGetAccessToken=async()=>user?'x.'+Buffer.from(JSON.stringify({sub:user})).toString('base64url')+'.x':null;
  w.NENE_DIRECTOR_CONFIG={backendUrl:'https://api.test'};w.setNav=()=>{};w.renderCreateHub=()=>{};w.openFeature=()=>{throw Error('Prototype called');};w.toast=()=>{};
@@ -40,6 +40,14 @@ test('lost response, double submit and screen reopen keep the same paid request 
 });
 test('changed brief cannot silently start a second paid request',async()=>{
  const s=setup();const f=await generate(s);f.elements.idea.value='A completely different paid script idea.';f.dispatchEvent(new s.w.Event('submit',{cancelable:true}));await settle();assert.equal(s.calls.filter(c=>c.options.method==='POST').length,1);assert.match(s.w.document.querySelector('[data-script-status]').textContent,/previous request/);s.dom.window.close();
+});
+test('closing and reopening the app preserves the retry key and original request',async()=>{
+ const first=setup();first.failNext();await generate(first);
+ const stored=[...Array(first.w.localStorage.length)].map((_,i)=>{const key=first.w.localStorage.key(i);return [key,first.w.localStorage.getItem(key)];});
+ const key=first.calls.find(c=>c.options.method==='POST').options.headers['Idempotency-Key'];
+ const next=setup(first.records);for(const [k,v] of stored)next.w.localStorage.setItem(k,v);first.dom.window.close();
+ await next.w.openFeature('script');[...next.w.document.querySelectorAll('button')].find(b=>b.textContent==='Retry saved request').click();await settle();
+ assert.equal(next.calls.find(c=>c.options.method==='POST').options.headers['Idempotency-Key'],key);assert.equal(next.records.size,1);next.dom.window.close();
 });
 test('account switch clears output and ignores a stale request response',async()=>{
  const s=setup();await s.w.openFeature('script');let release;s.hold(new Promise(r=>release=r));const f=s.w.document.querySelector('form');f.elements.idea.value='A baker opens her first neighbourhood shop.';f.dispatchEvent(new s.w.Event('submit',{cancelable:true}));await settle();s.setUser('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');release();await settle();assert.equal(s.w.document.querySelector('[aria-label="Editable script copy"]'),null);s.hold(null);await s.w.openFeature('script');assert.equal(s.w.document.querySelector('[data-script-saved] button'),null);assert.ok([...s.w.document.querySelectorAll('button')].find(b=>b.textContent==='Retry saved request').hidden);s.dom.window.close();

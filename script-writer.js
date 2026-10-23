@@ -7,7 +7,7 @@
  const live=view=>active===view&&view.isConnected;
  const message=(view,text)=>{if(live(view))view.querySelector('[data-script-status]').textContent=text;};
  const pendingKey=owner=>'nene_script_request_v1:'+owner;
- function readPending(owner){try{const p=JSON.parse(sessionStorage.getItem(pendingKey(owner))||'null');return p?.owner===owner?p:null;}catch(_){return null;}}
+ function readPending(owner){try{const p=JSON.parse(localStorage.getItem(pendingKey(owner))||'null');return p?.owner===owner?p:null;}catch(_){return null;}}
  async function sameOwner(owner){if(owner!==await window.neneAuthGetUserId?.())throw Error('Account changed. Reopen AI Script Writer.');}
  async function api(owner,path,options={}){
   const token=await window.neneAuthGetAccessToken?.();await sameOwner(owner);
@@ -66,7 +66,7 @@
   const pendingNote=node('p',undefined,'subtitle');
   const result=node('div');result.dataset.scriptResult='';const list=node('div',undefined,'list');list.dataset.scriptSaved='';
   let state=null,pending=readPending(owner);
-  function pendingUi(){retry.hidden=!pending;abandon.hidden=!pending;retry.disabled=!state?.available;pendingNote.textContent=pending?'A request key is saved in this browser tab. Retry retrieves the same result without a second charge. Reload saved scripts before clearing an uncertain request.':'';}
+  function pendingUi(){retry.hidden=!pending;abandon.hidden=!pending;retry.disabled=!state?.available;pendingNote.textContent=pending?'A request key is saved in this browser. Retry retrieves the same result without a second charge. Reload saved scripts before clearing an uncertain request.':'';}
   async function refresh(){
    check.disabled=true;
    try{const value=await api(owner,'/status');if(!live(view)||ticket!==epoch)return;state=value;generate.disabled=!state.available;generate.textContent=state.available?`Generate script · ${state.credit_cost} paid credits`:'Script generation unavailable';message(view,state.available?`Each new script costs ${state.credit_cost} paid credits. Video generation is separate.`:'Paid AI script planning is not enabled for this account. No request has been sent and no credits have been charged.');pendingUi();await saved(view,owner);}
@@ -83,12 +83,12 @@
   form.onsubmit=async event=>{
    event.preventDefault();if(inflight||!state?.available)return;
    try{await sameOwner(owner);const brief=briefFor(form);if(pending&&JSON.stringify(pending.brief)!==JSON.stringify(brief)){message(view,'A previous request is still saved. Review or retry it before clearing it to start a different script.');return;}
-    if(!pending){pending={owner,key:crypto.randomUUID(),brief};try{sessionStorage.setItem(pendingKey(owner),JSON.stringify(pending));}catch(_){pending=null;throw Error('Request recovery storage is unavailable. Allow browser storage before generating.');}}
+    if(!pending){pending={owner,key:crypto.randomUUID(),brief};try{localStorage.setItem(pendingKey(owner),JSON.stringify(pending));}catch(_){pending=null;throw Error('Request recovery storage is unavailable. Allow browser storage before generating.');}}
     pendingUi();await send(pending);
    }catch(error){message(view,error.message);}
   };
   retry.onclick=()=>{if(pending)send(pending);};
-  abandon.onclick=()=>{if(inflight)return;try{sessionStorage.removeItem(pendingKey(owner));pending=null;pendingUi();message(view,'Saved request key cleared. Creating another script is a new paid request. Existing requests and charges are unchanged.');}catch(_){message(view,'Could not clear the saved request.');}};
+  abandon.onclick=()=>{if(inflight)return;try{localStorage.removeItem(pendingKey(owner));pending=null;pendingUi();message(view,'Saved request key cleared. Creating another script is a new paid request. Existing requests and charges are unchanged.');}catch(_){message(view,'Could not clear the saved request.');}};
   check.onclick=()=>{if(!inflight)refresh();};form.append(generate);view.append(form,status,pendingNote,retry,abandon,check,result,node('h2','Recent saved scripts'),list);document.getElementById('screen').replaceChildren(view);pendingUi();await refresh();
  }
  window.neneOpenScriptWriter=open;
