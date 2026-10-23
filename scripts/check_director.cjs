@@ -62,5 +62,25 @@ async function setup({ signedIn=true, available=true, fail=false }={}) {
     assert.match(w.document.getElementById('directorMessage').textContent,/Not enabled/);
     dom.window.close();
   }
+  {
+    // Exercise the actual home/Create card handler, not just the module.
+    const html=fs.readFileSync('index.html','utf8');
+    const dom=new JSDOM(html,{url:'https://neneai351.github.io/nene-ai-frontend/',runScripts:'outside-only'});
+    const w=dom.window;
+    w.alert=()=>{};w.fetch=async()=>({ok:true,status:200,json:async()=>({available:false,message:'Not enabled',items:[]})});
+    for(const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+      if(!/\bsrc\s*=/.test(match[1]) && match[2].trim())w.eval(match[2]);
+    }
+    w.neneAuthGetAccessToken=async()=>null;
+    w.NENE_DIRECTOR_CONFIG={backendUrl:'https://staging.example'};
+    w.eval(source);
+    const card=[...w.document.querySelectorAll('button')].find(x=>x.textContent.includes('AI Director'));
+    assert.ok(card,'Home Director card exists');
+    w.eval(card.getAttribute('onclick'));await tick();
+    assert.equal(w.document.querySelector('#screen h1').textContent,'AI Director');
+    assert.ok(w.document.getElementById('directorIdea'));
+    assert.ok(!w.document.getElementById('screen').textContent.includes('undefined'));
+    dom.window.close();
+  }
   console.log('Director UI verified: auth, availability, real request, stable retry key, safe output, scene transfer and preserved input on failure.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
