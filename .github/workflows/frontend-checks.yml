@@ -33,3 +33,6 @@ jobs:
 
       - name: Verify fullscreen layout and Studio paging
         run: node scripts/check_layout.cjs
+
+      - name: Verify Profile actions and account isolation
+        run: node scripts/check_profile.cjs

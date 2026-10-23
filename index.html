@@ -120,7 +120,7 @@ window.NENEBackend={
 };
 </script>
 
-<link rel="stylesheet" href="./layout.css?v=18">
+<link rel="stylesheet" href="./layout.css?v=19">
 </head>
 <body>
 <div class="app">
@@ -1337,17 +1337,18 @@ resumeActiveNeneJobs();
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=18', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=19', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=18"></script>
-<script src="./account-setup.js?v=18"></script>
-<script src="./auth.js?v=18"></script>
-<script src="./director.js?v=18"></script>
-<script src="./paid-access.js?v=18"></script>
-<script src="./ad-studio.js?v=18"></script>
-<script src="./layout.js?v=18"></script>
+<script src="./auth-config.js?v=19"></script>
+<script src="./account-setup.js?v=19"></script>
+<script src="./profile.js?v=19"></script>
+<script src="./auth.js?v=19"></script>
+<script src="./director.js?v=19"></script>
+<script src="./paid-access.js?v=19"></script>
+<script src="./ad-studio.js?v=19"></script>
+<script src="./layout.js?v=19"></script>
 </body>
 </html>
