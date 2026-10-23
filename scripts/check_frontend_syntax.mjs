@@ -1,5 +1,24 @@
 import { readFileSync } from "node:fs";
 
+// The browser cannot offer the intended PWA installation metadata when the
+// manifest is invalid JSON or its referenced PNG icons have the wrong size.
+const manifest = JSON.parse(readFileSync("manifest.webmanifest", "utf8"));
+if (!manifest.name || !manifest.start_url || manifest.display !== "standalone") {
+  throw new Error("Installation manifest is missing required app metadata");
+}
+for (const size of [192, 512]) {
+  const icon = manifest.icons?.find(item => item.sizes === `${size}x${size}` && item.type === "image/png");
+  if (!icon || !/^\.\/[A-Za-z0-9_-]+\.png$/.test(icon.src)) {
+    throw new Error(`Missing local ${size}px PNG installation icon`);
+  }
+  const png = readFileSync(icon.src);
+  if (png.length < 24 || png.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a" ||
+      png.readUInt32BE(16) !== size || png.readUInt32BE(20) !== size) {
+    throw new Error(`Invalid PNG dimensions for ${icon.src}`);
+  }
+}
+console.log("Installation manifest and PNG icon dimensions OK");
+
 const files = ["auth.js", "auth-config.js", "sw.js"];
 for (const file of files) {
   const source = readFileSync(file, "utf8");
