@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
- <link rel="manifest" href="./manifest.webmanifest?v=23">
+ <link rel="manifest" href="./manifest.webmanifest?v=24">
 <meta name="theme-color" content="#070707">
 <link rel="icon" href="./nene-icon-192-v2.png" type="image/png"> 
 <link rel="apple-touch-icon" href="./nene-icon-192-v2.png">
@@ -121,12 +121,12 @@ window.NENEBackend={
 };
 </script>
 
-<link rel="stylesheet" href="./layout.css?v=23">
+<link rel="stylesheet" href="./layout.css?v=24">
 </head>
 <body>
 <div class="app">
 <header>
-  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=23" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
+  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=24" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
   <div class="credits">Paid Credits<br><b id="credits">0</b></div>
   <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
   <button id="neneFullscreenButton" class="fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
@@ -364,6 +364,7 @@ function renderCreateHub(){
 }
 
 function openFeature(type){
+ if(type==='script'){if(window.neneOpenScriptWriter)return window.neneOpenScriptWriter();toast('AI Script Writer could not load. Refresh the app.');return;}
  if(type==='characters'){if(window.NENECharacters)return window.NENECharacters.render();toast('Character Studio could not load. Refresh the app.');return;}
  if(type==="ad"){window.neneOpenAdvertisement();return;}
  if(type==="director"){window.neneOpenDirector();return;}
@@ -438,7 +439,8 @@ function runFeature(type){
    if(window.NENECharacters)return window.NENECharacters.render();
    toast('Character Studio could not load. Refresh the app.');return;
  }
- if(type==="script" || type==="editor"){
+ if(type==="script"){if(window.neneOpenScriptWriter)return window.neneOpenScriptWriter();toast('AI Script Writer could not load. Refresh the app.');return;}
+ if(type==="editor"){
    toast("Prototype workflow saved");
    projects.unshift({name:"New NENE AI Project",type:type, status:"Draft",icon:"✨"});
  } else toast("Prototype workflow saved");
@@ -1178,20 +1180,21 @@ resumeActiveNeneJobs();
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=23', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=24', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=23"></script>
-<script src="./account-setup.js?v=23"></script>
-<script src="./profile.js?v=23"></script>
-<script src="./characters.js?v=23"></script>
-<script src="./auth.js?v=23"></script>
-<script src="./director.js?v=23"></script>
-<script src="./paid-access.js?v=23"></script>
-<script src="./ad-studio.js?v=23"></script>
-<script src="./layout.js?v=23"></script>
+<script src="./auth-config.js?v=24"></script>
+<script src="./account-setup.js?v=24"></script>
+<script src="./profile.js?v=24"></script>
+<script src="./characters.js?v=24"></script>
+<script src="./script-writer.js?v=24"></script>
+<script src="./auth.js?v=24"></script>
+<script src="./director.js?v=24"></script>
+<script src="./paid-access.js?v=24"></script>
+<script src="./ad-studio.js?v=24"></script>
+<script src="./layout.js?v=24"></script>
 </body>
 </html>
 

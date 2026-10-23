@@ -10,4 +10,5 @@ jobs:
           node-version: '24'
       - run: npm install --prefix tests --ignore-scripts --no-audit --no-fund
       - run: node --check characters.js
-      - run: node --test tests/character-studio.test.cjs
+      - run: node --check script-writer.js
+      - run: node --test tests/character-studio.test.cjs tests/script-writer.test.cjs
