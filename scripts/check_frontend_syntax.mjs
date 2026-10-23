@@ -19,7 +19,7 @@ for (const size of [192, 512]) {
 }
 console.log("Installation manifest and PNG icon dimensions OK");
 
-const files = ["auth.js", "auth-config.js", "sw.js", "director.js", "paid-access.js", "account-setup.js"];
+const files = ["auth.js", "auth-config.js", "sw.js", "director.js", "paid-access.js", "account-setup.js", "ad-studio.js"];
 for (const file of files) {
   const source = readFileSync(file, "utf8");
   new Function(source);

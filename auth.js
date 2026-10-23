@@ -78,6 +78,12 @@
     return data.session?.user || null;
   }
 
+  window.neneAuthGetUserId = async function () {
+    const auth=initClient();if(!auth)return null;
+    const {data,error}=await auth.auth.getSession();if(error)throw error;
+    return data.session?.user?.id || null;
+  };
+
   window.neneAuthGetAccessToken = async function () {
     const auth = initClient();
     if (!auth) return null;
