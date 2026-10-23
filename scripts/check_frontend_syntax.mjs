@@ -41,3 +41,13 @@ for (let i = 0; i < tags.length; i += 1) {
   inlineCount += 1;
 }
 console.log("Syntax OK:", inlineCount, "inline scripts in index.html");
+
+// Every local entry module must be precached at the same version as the page.
+const worker = readFileSync("sw.js", "utf8");
+for (const match of html.matchAll(/<script\b[^>]*\bsrc="(\.\/[^" ]+)"/gi)) {
+  if (!worker.includes("'" + match[1] + "'")) {
+    throw new Error("Service worker does not precache current script: " + match[1]);
+  }
+}
+if (!worker.includes("'./terms.html'")) throw new Error("Agreement document is missing from the app cache");
+console.log("Service-worker entry modules and agreement document OK");
