@@ -1,7 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="42" fill="#070707"/>
-  <circle cx="96" cy="96" r="67" fill="none" stroke="#D4AF37" stroke-width="5"/>
-  <text x="96" y="88" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#F5E6B3">NENE</text>
-  <text x="96" y="121" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#D4AF37">AI</text>
-  <circle cx="96" cy="96" r="4" fill="#D4AF37"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="NENE AI">
+ <defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff0b9"/><stop offset=".45" stop-color="#e5c16c"/><stop offset="1" stop-color="#a77930"/></linearGradient></defs>
+ <rect width="512" height="512" fill="#070707"/>
+ <circle cx="256" cy="224" r="144" fill="none" stroke="url(#gold)" stroke-width="2"/>
+ <path d="M156 154h37v140h-37Z M307 154h37v140h-37Z M174 154h42l110 140h-42Z" fill="url(#gold)"/>
+ <path d="M242 207l30 18-30 18Z" fill="#070707"/>
+ <text x="256" y="422" text-anchor="middle" fill="#ead6a0" font-family="DejaVu Sans,Arial,sans-serif" font-size="31" font-weight="500" letter-spacing="5">NENE AI</text>
 </svg>
