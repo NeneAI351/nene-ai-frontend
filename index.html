@@ -512,6 +512,7 @@ function previewCharacterReference(e){
 }
 
 function openTool(type){
+ if(type==="director"){window.neneOpenDirector();return;}
  setNav('create');
  const titles={text:"Text → Video",image:"Image → Video",ad:"AI Advertisement",social:"Social Content",story:"Story → Video"};
  const icons={text:"🎬",image:"🖼️",ad:"📢",social:"📱",story:"📖"};
