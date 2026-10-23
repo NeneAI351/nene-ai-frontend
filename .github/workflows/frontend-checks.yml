@@ -16,3 +16,8 @@ jobs:
           node-version: "22"
       - name: Validate auth modules and inline application scripts
         run: node scripts/check_frontend_syntax.mjs
+
+      - name: Install Director UI test dependency
+        run: npm install --no-save --no-audit --no-fund jsdom@26.1.0
+      - name: Verify Director interactions and error handling
+        run: node scripts/check_director.cjs

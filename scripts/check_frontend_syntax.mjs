@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-const files = ["auth.js", "auth-config.js", "sw.js"];
+const files = ["auth.js", "auth-config.js", "sw.js", "director.js"];
 for (const file of files) {
   const source = readFileSync(file, "utf8");
   new Function(source);

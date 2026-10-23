@@ -346,7 +346,7 @@ function renderHome(){
   ${toolCard("📢","AI Advertisement","Create ads for brands and products.","ad")}
   ${toolCard("📱","Social Content","Make reels, shorts and social videos.","social")}
   ${toolCard("📖","Story → Video","Build scenes with Character Lock.","story")}
-  ${toolCard("🧠","AI Director","AI production planning — not available yet.","director")}
+  ${toolCard("🧠","AI Director","Plan scripts, scenes and production directions.","director")}
  </div>
  <div class="section-title">AI Studio</div>
  <div class="tool-grid">
@@ -378,7 +378,7 @@ function renderCreateHub(){
  <div class="eyebrow">Create</div><h1>Choose your workflow</h1>
  <p class="subtitle">Start simple or let NENE AI direct the entire production.</p>
  <div class="grid">
-  ${toolCard("🧠","AI Director","AI production planning — not available yet.","director")}
+  ${toolCard("🧠","AI Director","Plan scripts, scenes and production directions.","director")}
   ${toolCard("🎬","Text → Video","Prompt to visual scenes.","text")}
   ${toolCard("🖼️","Image → Video","Bring photos to life.","image")}
   ${toolCard("📢","AI Advertisement","Product, offer, CTA and variants.","ad")}
@@ -404,6 +404,7 @@ function renderCreateHub(){
 }
 
 function openFeature(type){
+ if(type==="director"){window.neneOpenDirector();return;}
  if(type==="account" && typeof window.neneOpenAuth==="function"){
   showModal(
    '<div class="eyebrow">Account security</div><h2>Account &amp; Security</h2>'+
@@ -470,7 +471,7 @@ function toggleRow(label,key){
 }
 function runFeature(type){
  if(type==="director"){
-   toast("AI Director is not available yet. No plan was created and no credits were charged.");
+   window.neneBuildDirectorPlan();
    return;
  }
  if(type==="characters"){
@@ -1333,7 +1334,7 @@ function renderProfile(){
 
   <div class="section-title">Product roadmap</div>
   <div class="list">
-   <div class="creation"><div class="thumb">🧠</div><div><b>AI Director</b><small>AI production planning — not available yet</small></div></div>
+   <div class="creation"><div class="thumb">🧠</div><div><b>AI Director</b><small>Plan scripts, scenes and production directions</small></div></div>
    <div class="creation"><div class="thumb">✂️</div><div><b>AI Video Editor</b><small>Timeline, scene regeneration and conversational edits</small></div></div>
    <div class="creation"><div class="thumb">🎭</div><div><b>Character Studio</b><small>Persistent identity across scenes</small></div></div>
    <div class="creation"><div class="thumb">🌍</div><div><b>Global localization</b><small>Translation, dubbing, captions and regional formats</small></div></div>
@@ -1510,12 +1511,13 @@ async function neneTestBackend(){var d=document.getElementById('neneBackendDot')
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=12', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=13', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
 <script src="./auth-config.js"></script>
 <script src="./auth.js"></script>
+<script src="./director.js"></script>
 </body>
 </html>
