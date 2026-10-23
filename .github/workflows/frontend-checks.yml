@@ -24,3 +24,6 @@ jobs:
 
       - name: Verify paid wallet and refund policy
         run: node scripts/check_paid_access.cjs
+
+      - name: Verify one-time account agreement
+        run: node scripts/check_account_setup.cjs
