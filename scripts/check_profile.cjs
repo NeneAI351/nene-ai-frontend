@@ -4,7 +4,7 @@ let downloaded;w.URL.createObjectURL=blob=>{downloaded=blob;return 'blob:test';}
 let id='alice',allow=true,route;w.neneAuthGetUserId=async()=>id;w.neneRequireAccount=async()=>allow;w.neneOpenAuth=mode=>{route=mode||'signin';};w.neneSignOut=async()=>{id=null;};w.neneOpenPaidCredits=()=>{route='credits';};w.renderCreateHub=()=>{route='create';};w.renderCreations=()=>{route='creations';};w.renderJobCenter=()=>{route='jobs';};w.NENE_PAID_WALLET=17;
 const click=async a=>{const el=w.document.querySelector(`[data-profile-action="${a}"]`);assert.ok(el,'Missing '+a);await el.onclick();};
 (async()=>{
- await w.renderProfile();assert.match(w.document.getElementById('profilePaidBalance').textContent,/17/);
+ await w.renderProfile();assert.equal(w.document.querySelectorAll('.profile-shortcut').length,4);assert.equal(w.document.querySelectorAll('.profile-group').length,4);assert.equal(w.document.querySelectorAll('.profile-group[open]').length,0);assert.match(w.document.querySelector('.profile-groups').textContent,/Coming soon/);assert.ok(w.document.querySelector('.profile-session-footer [data-profile-action=signout]'));assert.match(w.document.getElementById('profilePaidBalance').textContent,/17/);
  for(const a of ['create','jobs','credits']){await click(a);assert.equal(route,a);}
  for(const a of ['safety','disclosure','rights','languages','teams','usage','account','privacy','export']){await click(a);assert.ok(w.document.querySelector('#modal').textContent.trim());await click('close');}
  await click('recovery');assert.equal(route,'jobs');
