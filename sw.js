@@ -1,19 +1,19 @@
-const CACHE = 'nene-ai-shell-v19';
+const CACHE = 'nene-ai-shell-v20';
 
 const SHELL = [
   './',
   './index.html',
-  './auth-config.js?v=19',
-  './account-setup.js?v=19',
+  './auth-config.js?v=20',
+  './account-setup.js?v=20',
   './terms.html',
   './privacy.html',
-  './profile.js?v=19',
-  './auth.js?v=19',
-  './paid-access.js?v=19',
-  './ad-studio.js?v=19',
-  './layout.js?v=19',
-  './layout.css?v=19',
-  './director.js?v=19',
+  './profile.js?v=20',
+  './auth.js?v=20',
+  './paid-access.js?v=20',
+  './ad-studio.js?v=20',
+  './layout.js?v=20',
+  './layout.css?v=20',
+  './director.js?v=20',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png'
