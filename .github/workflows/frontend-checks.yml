@@ -21,3 +21,6 @@ jobs:
         run: npm install --no-save --no-audit --no-fund jsdom@26.1.0
       - name: Verify Director interactions and error handling
         run: node scripts/check_director.cjs
+
+      - name: Verify paid wallet and refund policy
+        run: node scripts/check_paid_access.cjs
