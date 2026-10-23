@@ -27,3 +27,6 @@ jobs:
 
       - name: Verify one-time account agreement
         run: node scripts/check_account_setup.cjs
+
+      - name: Verify paid advertisement workflow
+        run: node scripts/check_ad_studio.cjs
