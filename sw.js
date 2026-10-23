@@ -1,20 +1,25 @@
-const CACHE = 'nene-ai-shell-v21';
+const CACHE = 'nene-ai-shell-v22';
 
 const SHELL = [
   './',
   './index.html',
-  './auth-config.js?v=21',
-  './account-setup.js?v=21',
+  './auth-config.js?v=22',
+  './account-setup.js?v=22',
   './terms.html',
   './privacy.html',
-  './profile.js?v=21',
-  './auth.js?v=21',
-  './paid-access.js?v=21',
-  './ad-studio.js?v=21',
-  './layout.js?v=21',
-  './layout.css?v=21',
-  './director.js?v=21',
+  './profile.js?v=22',
+  './auth.js?v=22',
+  './paid-access.js?v=22',
+  './ad-studio.js?v=22',
+  './layout.js?v=22',
+  './layout.css?v=22',
+  './director.js?v=22',
   './manifest.webmanifest',
+  './manifest.webmanifest?v=22',
+  './brand-logo.svg',
+  './brand-mark.svg?v=22',
+  './nene-icon-192-v2.png',
+  './nene-icon-512-v2.png',
   './icon-192.png',
   './icon-512.png'
 ];
