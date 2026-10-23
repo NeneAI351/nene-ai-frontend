@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
- <link rel="manifest" href="./manifest.webmanifest?v=22">
+ <link rel="manifest" href="./manifest.webmanifest?v=23">
 <meta name="theme-color" content="#070707">
 <link rel="icon" href="./nene-icon-192-v2.png" type="image/png"> 
 <link rel="apple-touch-icon" href="./nene-icon-192-v2.png">
@@ -121,12 +121,12 @@ window.NENEBackend={
 };
 </script>
 
-<link rel="stylesheet" href="./layout.css?v=22">
+<link rel="stylesheet" href="./layout.css?v=23">
 </head>
 <body>
 <div class="app">
 <header>
-  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=22" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
+  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=23" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
   <div class="credits">Paid Credits<br><b id="credits">0</b></div>
   <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
   <button id="neneFullscreenButton" class="fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
@@ -165,17 +165,9 @@ function renderProjects(){setNav('creations');screen.innerHTML='<main><div class
 function renameProject(id){const p=projects.find(x=>x.id===id);if(!p)return;showModal('<div class="eyebrow">Rename Project</div><h2 style="margin:0 0 12px">'+p.name+'</h2><div class="block"><div class="label">New name</div><input class="field" id="renameProjectInput" value="'+String(p.name).replace(/"/g,'&quot;')+'"></div><div style="display:flex;gap:8px;margin-top:14px"><button class="btn" onclick="confirmRenameProject(\''+p.id+'\')">Save</button><button class="btn secondary" onclick="closeModal()">Cancel</button></div>');}
 function confirmRenameProject(id){const p=projects.find(x=>x.id===id);if(!p)return;const name=(document.getElementById('renameProjectInput')?.value||'').trim();if(!name){toast('Enter a project name');return}p.name=name;p.updatedAt=new Date().toISOString();saveProjects();closeModal();openProject(id);toast('Project renamed');}
 function duplicateProject(id){const p=projects.find(x=>x.id===id);if(!p)return;const now=new Date().toISOString();const copy={...p,id:'project_'+Date.now().toString(36),name:p.name+' Copy',status:'Draft',createdAt:now,updatedAt:now};projects.unshift(copy);saveProjects();openProject(copy.id);toast('Project duplicated');}
-const CHARACTER_STATE_KEY='nene_ai_characters_v1';
-let savedCharacters=[];
-try{savedCharacters=JSON.parse(localStorage.getItem(CHARACTER_STATE_KEY)||'[]');if(!Array.isArray(savedCharacters))savedCharacters=[];}catch(_){savedCharacters=[];}
-const characters=[
- {name:"NENE Creator",desc:"Primary AI persona",icon:"👩🏾‍💻",builtin:true},
- {name:"Product Hero",desc:"Reusable product character",icon:"✨",builtin:true},
- ...savedCharacters
-];
-function saveCharacters(){
-  try{localStorage.setItem(CHARACTER_STATE_KEY,JSON.stringify(characters.filter(c=>!c.builtin).slice(0,50)));}catch(_){}
-}
+// Populated only from the authenticated character API; legacy shared browser data
+// has no provable owner and is deliberately not imported into an account.
+const characters=[];
 const brandKit={name:"NENE AI",colors:"Black · Gold · Cream",font:"Premium Serif + Clean Sans"};
 const settings={aiDisclosure:true,saveHistory:true,personalization:true,analytics:false};
 let currentFeature="";
@@ -372,6 +364,7 @@ function renderCreateHub(){
 }
 
 function openFeature(type){
+ if(type==='characters'){if(window.NENECharacters)return window.NENECharacters.render();toast('Character Studio could not load. Refresh the app.');return;}
  if(type==="ad"){window.neneOpenAdvertisement();return;}
  if(type==="director"){window.neneOpenDirector();return;}
  if(type==="account" && typeof window.neneOpenAuth==="function"){
@@ -392,7 +385,6 @@ function openFeature(type){
  setNav('create');
  const data={
   director:["🧠","AI Director","AI Director is not connected to an AI planning service yet. It cannot create a script, storyboard or finished video.","Tell NENE AI what you want to make..."],
-  characters:["🎭","Character Studio","Create reusable characters with a name, look, personality, wardrobe and reference images. Character Lock keeps identity consistent.","Describe your character..."],
   script:["✍️","AI Script Writer","Generate hooks, scripts, scene breakdowns, dialogue, CTAs and multiple versions for different platforms.","What should the script be about?"],
   voice:["🎙️","AI Voice + Lip Sync","Choose a voice, delivery style and language. The real app will support consent-based voice cloning and lip-sync.","Write the narration or dialogue..."],
   audio:["🎵","Music + Sound Effects","Create a soundtrack brief, mood, tempo and scene effects. Commercial-use rights will be handled in the real product.","Describe the music and sound you need..."],
@@ -411,7 +403,6 @@ function openFeature(type){
  const d=data[type]||data.director;
  let extra="";
  if(type==="director") extra=`<div class="block"><div class="label">Production goal</div><div class="chips">${chips(["Viral social video","Business ad","Story film","YouTube video","Product launch","Educational video"])}</div></div><div class="block"><div class="label">AI planning</div><div class="notice">AI planning is unavailable. No production plan or video will be generated, and no credits will be charged. Your input stays on this screen; it is not saved or sent.</div></div>`;
- if(type==="characters") extra=`<div class="block"><div class="label">Character name</div><input class="field" id="characterName" placeholder="e.g. Amara"></div><div class="block"><div class="label">Appearance / identity description</div><textarea id="characterAppearance" placeholder="Age range, hairstyle, skin tone, facial features, body build, signature details..."></textarea></div><div class="block"><div class="label">Personality</div><textarea id="characterPersonality" placeholder="Confident, gentle, ambitious, funny..."></textarea></div><div class="block"><div class="label">Wardrobe / signature look</div><textarea id="characterWardrobe" placeholder="Describe the consistent clothing style, colors and accessories..."></textarea></div><div class="block"><div class="label">Identity style</div><div class="chips">${chips(["Realistic","Cinematic","Fashion","Animated","3D","Fantasy"])}</div></div><div class="block"><div class="label">Reference image</div><div class="upload preview" id="characterPreview">＋ Tap to add a character reference<input id="characterRef" type="file" accept="image/*" onchange="previewCharacterReference(event)"></div></div><div class="notice">🔒 <b>Character Lock:</b> this profile becomes the identity anchor for future Story → Video scenes. NENE AI will carry the same appearance description and reference into each scene.</div>`;
  if(type==="voice") extra=`<div class="block"><div class="label">Voice</div><div class="chips">${chips(["Warm","Confident","Calm","Energetic","Deep","Friendly"])}</div></div><div class="block"><div class="label">Language</div><select><option>English</option><option>French</option><option>Spanish</option><option>Portuguese</option><option>Arabic</option><option>Igbo</option><option>Yoruba</option></select></div><div class="notice">Voice cloning should require explicit consent and identity safeguards.</div>`;
  if(type==="audio") extra=`<div class="block"><div class="label">Music mood</div><div class="chips">${chips(["Cinematic","Afrobeats","Inspirational","Luxury","Emotional","Energetic","Minimal"])}</div></div><div class="block"><div class="label">Sound effects</div><div class="chips">${chips(["Whoosh","Impact","Ambient","Nature","UI","None"])}</div></div>`;
  if(type==="captions") extra=`<div class="block"><div class="label">Caption style</div><div class="chips">${chips(["Clean","Bold","Karaoke","Typewriter","Minimal","Creator"])}</div></div><div class="block"><div class="label">Output</div><div class="chips">${chips(["Burn into video","SRT file","Both"])}</div></div>`;
@@ -444,18 +435,8 @@ function runFeature(type){
    return;
  }
  if(type==="characters"){
-   const name=document.getElementById('characterName')?.value.trim();
-   const appearance=document.getElementById('characterAppearance')?.value.trim();
-   const personality=document.getElementById('characterPersonality')?.value.trim();
-   const wardrobe=document.getElementById('characterWardrobe')?.value.trim();
-   const ref=window.neneCharacterReferenceData||null;
-   if(!name){alert('Please give your character a name.');return;}
-   if(!appearance){alert('Please describe the character appearance.');return;}
-   const character={id:'char_'+Date.now(),name,desc:appearance.slice(0,90),appearance,personality,wardrobe,referenceImage:ref,icon:'🎭',createdAt:new Date().toISOString()};
-   characters.push(character);saveCharacters();
-   toast('Character profile saved with Character Lock');
-   setTimeout(()=>openFeature('characters'),350);
-   return;
+   if(window.NENECharacters)return window.NENECharacters.render();
+   toast('Character Studio could not load. Refresh the app.');return;
  }
  if(type==="script" || type==="editor"){
    toast("Prototype workflow saved");
@@ -492,8 +473,8 @@ function openTool(type){
  if(type==="image") extra+=`<div class="block"><div class="label">Describe the motion</div><textarea id="prompt" placeholder="Example: Make the subject smile, move naturally, let the hair move in the breeze, cinematic camera movement..."></textarea></div>`;
  if(type==="ad") extra=`<div class="block"><div class="label">What are you selling?</div><input class="field" id="product" placeholder="e.g. Luxury skincare brand"></div><div class="block"><div class="label">Ad template</div><div class="chips">${chips(["Product Launch","UGC Style","Luxury","Testimonial","Problem → Solution","Promo Offer"])}</div></div><div class="block"><div class="label">Ad brief</div><textarea id="prompt" placeholder="Describe your audience, offer, message and call to action..."></textarea></div>`;
  if(type==="social") extra=`<div class="block"><div class="label">Content idea</div><textarea id="prompt" placeholder="Example: Create a 30-second motivational Reel about small steps and big dreams..."></textarea></div><div class="block"><div class="label">Platform</div><div class="chips">${chips(["TikTok","Instagram Reels","YouTube Shorts","Facebook","LinkedIn","X"])}</div></div><div class="block"><div class="label">Template</div><div class="chips">${chips(["Hook + Value","Storytime","Listicle","Talking Head","Product Showcase","Trend"])}</div></div>`;
- if(type==="story") extra=`<div class="block"><div class="label">Story idea</div><textarea id="prompt" placeholder="Tell NENE AI the story, setting, conflict, important moments and ending..."></textarea></div><div class="block"><div class="label">Characters in this story</div><div id="storyCharacterList" class="list">${characters.map((c,i)=>`<label class="creation" style="cursor:pointer"><input type="checkbox" class="storyCharacterCheck" value="${i}" style="width:20px;height:20px;margin-right:10px"><div class="thumb">${c.icon||'🎭'}</div><div><b>${c.name}</b><small>${c.desc||'Saved character profile'}</small></div></label>`).join('')}</div><small style="display:block;color:var(--muted);margin-top:7px">Select one or more locked characters. Each selected character keeps their own identity anchor.</small></div><div class="block"><div class="label">Additional character direction</div><textarea id="storyCharacter" placeholder="Optional: what this character is doing or wearing in this story..."></textarea></div><div class="block"><div class="label">Number of scenes</div><select id="storyScenes" onchange="renderStoryCharacterAssignments()"><option value="3">3 scenes</option><option value="5" selected>5 scenes</option><option value="8">8 scenes</option><option value="10">10 scenes</option></select></div><div class="block"><div class="label">Scene character assignments</div><div id="storySceneCharacters"></div><small style="display:block;color:var(--muted);margin-top:7px">Choose exactly which locked characters appear in each scene. The same character can appear in multiple scenes.</small></div><div class="notice">🎭 <b>Character Lock:</b> NENE AI will carry the selected character's identity anchor into every planned scene. Scene generation will reuse the same identity instructions and reference.</div>`;
- let options = type==="story" ? `<div class="block"><div class="label">Genre</div><div class="chips">${chips(["Life Journey","Drama","Comedy","Love Story","Fantasy","Thriller"])}</div></div><div class="block"><div class="label">Character Consistency</div><button class="btn" id="lockBtn" onclick="toggleLock()">🔒 Character Lock: ON</button></div>` :
+ if(type==="story") extra=`<div class="block"><div class="label">Story idea</div><textarea id="prompt" placeholder="Tell NENE AI the story, setting, conflict, important moments and ending..."></textarea></div><div class="block"><div class="label">Characters in this story</div><div id="storyCharacterList" class="list">${characters.map((c,i)=>`<label class="creation" style="cursor:pointer"><input type="checkbox" class="storyCharacterCheck" value="${i}" style="width:20px;height:20px;margin-right:10px"><div class="thumb">${c.icon||'🎭'}</div><div><b>${escapeNeneText(c.name)}</b><small>${escapeNeneText(c.desc||'Saved character profile')}</small></div></label>`).join('')}</div><small style="display:block;color:var(--muted);margin-top:7px">Select one or more saved characters. Character guidance reuses each selected character’s description. Exact visual identity is not guaranteed.</small></div><div class="block"><div class="label">Additional character direction</div><textarea id="storyCharacter" placeholder="Optional: what this character is doing or wearing in this story..."></textarea></div><div class="block"><div class="label">Number of scenes</div><select id="storyScenes" onchange="renderStoryCharacterAssignments()"><option value="3">3 scenes</option><option value="5" selected>5 scenes</option><option value="8">8 scenes</option><option value="10">10 scenes</option></select></div><div class="block"><div class="label">Scene character assignments</div><div id="storySceneCharacters"></div><small style="display:block;color:var(--muted);margin-top:7px">Choose exactly which locked characters appear in each scene. The same character can appear in multiple scenes.</small></div><div class="notice">🎭 <b>Character Lock:</b> NENE AI reuses character descriptions in each assigned scene. A single-character scene can use its reference image; multiple-character scenes use descriptions. Exact visual identity is not guaranteed.</div>`;
+ let options = type==="story" ? `<div class="block"><div class="label">Genre</div><div class="chips">${chips(["Life Journey","Drama","Comedy","Love Story","Fantasy","Thriller"])}</div></div><div class="block"><div class="label">Character guidance</div><div class="notice">Saved descriptions guide each assigned scene. Single-character reference images can guide appearance; results may vary.</div></div>` :
  type==="ad" ? `<div class="block"><div class="label">Ad style</div><div class="chips">${chips(["Realistic","Cinematic","Luxury","Modern","Minimalist"])}</div></div>` :
  type==="social" ? `<div class="block"><div class="label">Platform</div><div class="chips">${chips(["TikTok","Instagram Reels","YouTube Shorts","Facebook"])}</div></div><div class="block"><div class="label">Add-ons</div><div class="chips">${chips(["Captions","AI Voice","Music"])}</div></div>` :
  type==="image" ? `<div class="block"><div class="label">Motion controls</div><div class="row"><select id="neneImageMotion"><option>Natural, realistic movement</option><option>Slow, elegant movement</option><option>Gentle camera movement</option><option>Dynamic commercial movement</option><option>Subtle movement with stable framing</option></select><select id="neneImageCamera"><option>Smooth cinematic camera</option><option>Slow dolly-in</option><option>Gentle tracking shot</option><option>Slow orbit</option><option>Static locked camera</option></select></div><div class="row" style="margin-top:8px"><select id="neneImageStyle"><option>Photorealistic</option><option>Cinematic</option><option>Luxury commercial</option><option>Editorial</option><option>Documentary</option></select><select id="neneImageLighting"><option>Natural cinematic lighting</option><option>Golden-hour lighting</option><option>Soft diffused lighting</option><option>Luxury studio lighting</option><option>Dramatic high-contrast lighting</option></select></div><div class="notice" style="margin-top:10px">🔒 Identity protection: NENE AI will instruct the video model to preserve the source subject's face, clothing and overall appearance while adding motion.</div></div>` :
@@ -520,9 +501,9 @@ function renderStoryCharacterAssignments(){
   const count=Number(document.getElementById('storyScenes')?.value||5);
   if(!box)return;
   const selected=getSelectedStoryCharacters();
-  if(!selected.length){box.innerHTML='<div class="notice">Select your locked characters above first.</div>';return;}
+  if(!selected.length){box.innerHTML='<div class="notice">Select your saved characters above first.</div>';return;}
   box.innerHTML=Array.from({length:count},(_,idx)=>{
-    return '<div class="block" style="margin:8px 0"><div class="label">Scene '+(idx+1)+'</div><div class="chips">'+selected.map(ci=>{const c=characters[ci];return '<label class="chip" style="cursor:pointer"><input type="checkbox" class="sceneCharacterCheck" data-scene="'+idx+'" value="'+ci+'" checked style="margin-right:6px">🔒 '+c.name+'</label>';}).join('')+'</div></div>';
+    return '<div class="block" style="margin:8px 0"><div class="label">Scene '+(idx+1)+'</div><div class="chips">'+selected.map(ci=>{const c=characters[ci];return '<label class="chip" style="cursor:pointer"><input type="checkbox" class="sceneCharacterCheck" data-scene="'+idx+'" value="'+ci+'" checked style="margin-right:6px">🔒 '+escapeNeneText(c.name)+'</label>';}).join('')+'</div></div>';
   }).join('');
 }
 function storyCharacterSelectionChanged(){
@@ -534,7 +515,7 @@ function buildStoryPlan(){
   const scenes=Number(document.getElementById('storyScenes')?.value||5);
   const selectedIndices=getSelectedStoryCharacters();
   if(!prompt){alert('Please describe your story first.');return;}
-  if(!selectedIndices.length){alert('Please select at least one locked character first.');return;}
+  if(!selectedIndices.length){alert('Please select at least one saved character first.');return;}
   const selectedCharacters=selectedIndices.map(i=>characters[i]).filter(Boolean);
   const genre=(document.querySelector('.chips .chip.active')?.textContent||'Life Journey').trim();
   const templates=[
@@ -561,6 +542,7 @@ function buildStoryPlan(){
   }
   const plan={
     id:'story_'+Date.now(),
+    owner:window.NENECharacters?.owner,
     title:(prompt.split(/\s+/).slice(0,7).join(' ')||'NENE AI Story'),
     storyPrompt:prompt,
     genre,
@@ -573,19 +555,20 @@ function buildStoryPlan(){
     createdAt:new Date().toISOString()
   };
   try{
-    const plans=JSON.parse(localStorage.getItem('nene_story_plans_v1')||'[]');
+    const planKey='nene_story_plans_v2:'+plan.owner;
+    const plans=JSON.parse(localStorage.getItem(planKey)||'[]');
     plans.unshift(plan);
-    localStorage.setItem('nene_story_plans_v1',JSON.stringify(plans.slice(0,50)));
+    localStorage.setItem(planKey,JSON.stringify(plans.slice(0,50),(key,value)=>key==='referenceImage'?undefined:value));
   }catch(_){}
   const button=document.getElementById('neneGenerateBtn');
-  if(button){button.disabled=true;button.innerHTML='✓ Story plan saved with Character Lock';}
+  if(button){button.disabled=true;button.innerHTML='✓ Story plan prepared with character guidance';}
   const main=document.querySelector('main');
   if(main){
-    const cards=scenePlans.map(sc=>'<div class="creation"><div class="thumb">🎬</div><div><b>Scene '+sc.number+': '+sc.title+'</b><small>'+sc.brief+'</small><small style="display:block;color:#d8b55b">🔒 '+sc.characters.map(c=>c.name).join(' + ')+' locked</small></div></div>').join('');
-    main.insertAdjacentHTML('beforeend','<div class="block" style="margin-top:16px"><div class="label">Your scene plan</div><div class="list">'+cards+'</div><div class="notice" style="margin-top:10px">🎭 Character Lock is ON. '+selectedCharacters.map(c=>c.name).join(', ')+' '+(selectedCharacters.length===1?'is':'are')+' locked to the story, with per-scene character assignments saved.</div></div>');
+    const cards=scenePlans.map(sc=>'<div class="creation"><div class="thumb">🎬</div><div><b>Scene '+sc.number+': '+escapeNeneText(sc.title)+'</b><small>'+escapeNeneText(sc.brief)+'</small><small style="display:block;color:#d8b55b">🔒 '+escapeNeneText(sc.characters.map(c=>c.name).join(' + '))+' · character guidance</small></div></div>').join('');
+    main.insertAdjacentHTML('beforeend','<div class="block" style="margin-top:16px"><div class="label">Your scene plan</div><div class="list">'+cards+'</div><div class="notice" style="margin-top:10px">🎭 Character guidance: '+escapeNeneText(selectedCharacters.map(c=>c.name).join(', '))+' '+(selectedCharacters.length===1?'is':'are')+' assigned to the story scenes. Descriptions guide the outputs; exact visual identity is not guaranteed.</div></div>');
   }
   window.neneCurrentStoryPlan = plan;
-  toast('Story plan saved with multiple Character Locks');
+  toast('Story plan prepared with character guidance');
   const generateStoryButton = document.createElement('button');
   generateStoryButton.type = 'button';
   generateStoryButton.className = 'btn gold';
@@ -649,19 +632,17 @@ async function generateStoryScenes(){
         'Scene-specific story idea: '+plan.title+'.'
       ].filter(Boolean).join('\n');
 
+      if(plan.owner!==await window.neneAuthGetUserId?.())throw new Error('Account changed. Reopen Story before generating.');
       const primaryCharacter = sceneCharacters.length===1 ? sceneCharacters[0] : null;
       let imageUri=null;
       if(primaryCharacter?.referenceImage){
-        try{
-          const upload=await fetch(backendUrl.replace(/\/$/,'')+'/api/image-upload',{
-            method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
-            body:JSON.stringify({data_uri:primaryCharacter.referenceImage})
-          });
-          if(upload.ok){
-            const data=await upload.json();
-            imageUri=data.image_url||null;
-          }
-        }catch(_){ imageUri=null; }
+        const upload=await fetch(backendUrl.replace(/\/$/,'')+'/api/image-upload',{
+          method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
+          body:JSON.stringify({data_uri:primaryCharacter.referenceImage})
+        });
+        if(!upload.ok)throw new Error('Character reference upload failed. No scene was submitted. Please try again.');
+        const data=await upload.json();imageUri=data.image_url||null;
+        if(!imageUri)throw new Error('Character reference could not be confirmed. No scene was submitted.');
       }
 
       const sceneCost=10;
@@ -724,9 +705,9 @@ async function generateStoryScenes(){
       }
     }
     try{
-      const projects=JSON.parse(localStorage.getItem('nene_story_projects_v1')||'[]');
+      const projects=JSON.parse(localStorage.getItem('nene_story_projects_v2:'+plan.owner)||'[]');
       projects.unshift({id:plan.id,title:plan.title,characters:plan.characters,scenes:sceneResults,status:'scenes-generated',createdAt:new Date().toISOString()});
-      localStorage.setItem('nene_story_projects_v1',JSON.stringify(projects.slice(0,50)));
+      localStorage.setItem('nene_story_projects_v2:'+plan.owner,JSON.stringify(projects.slice(0,50),(key,value)=>key==='referenceImage'?undefined:value));
     }catch(_){}
     let assembledStory=null;
     try{
@@ -1197,18 +1178,20 @@ resumeActiveNeneJobs();
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=22', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=23', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=22"></script>
-<script src="./account-setup.js?v=22"></script>
-<script src="./profile.js?v=22"></script>
-<script src="./auth.js?v=22"></script>
-<script src="./director.js?v=22"></script>
-<script src="./paid-access.js?v=22"></script>
-<script src="./ad-studio.js?v=22"></script>
-<script src="./layout.js?v=22"></script>
+<script src="./auth-config.js?v=23"></script>
+<script src="./account-setup.js?v=23"></script>
+<script src="./profile.js?v=23"></script>
+<script src="./characters.js?v=23"></script>
+<script src="./auth.js?v=23"></script>
+<script src="./director.js?v=23"></script>
+<script src="./paid-access.js?v=23"></script>
+<script src="./ad-studio.js?v=23"></script>
+<script src="./layout.js?v=23"></script>
 </body>
 </html>
+
