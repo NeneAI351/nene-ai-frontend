@@ -4,7 +4,7 @@
   let requestNumber = 0;
   window.NENE_PAID_WALLET = null;
   const policy = 'After purchased credits are delivered to your account, change-of-mind cash refunds are not offered. Failed processing without delivery restores reserved credits to your NENE AI wallet, rather than issuing a cash refund. Applicable law and app-store/payment-platform refund rules still apply. Duplicate charges, unauthorized payments and paid credits not delivered remain eligible for investigation and any required remedy.';
-  function draw() { if (typeof updateCredits === 'function') updateCredits(); }
+  function draw() { if (typeof updateCredits === 'function') updateCredits(); const profile=document.getElementById('profilePaidBalance'); if(profile) profile.textContent='Paid credits: '+(Number.isFinite(window.NENE_PAID_WALLET)?window.NENE_PAID_WALLET:'unavailable'); }
   window.neneRefreshPaidWallet = async () => {
     const current = ++requestNumber;
     window.NENE_PAID_WALLET = null; draw();

@@ -120,7 +120,7 @@ window.NENEBackend={
 };
 </script>
 
-<link rel="stylesheet" href="./layout.css?v=18">
+<link rel="stylesheet" href="./layout.css?v=19">
 </head>
 <body>
 <div class="app">
@@ -1167,151 +1167,10 @@ function renderCreations(){
  setNav('creations');
  screen.innerHTML='<main><div class="eyebrow">Your library</div><h1>My Creations</h1><p class="subtitle">Videos, projects and reusable creative assets in one place.</p><div class="grid"><button class="card" onclick="createProject()"><div class="icon">＋</div><b>New Project</b><small>Start a dedicated creative workspace.</small></button><button class="card" onclick="renderProjects()"><div class="icon">📁</div><b>Projects</b><small>'+projects.length+' organized workspaces.</small></button><button class="card" onclick="openFeature(\'characters\')"><div class="icon">🎭</div><b>Characters</b><small>'+characters.length+' saved characters.</small></button></div><div class="section-title">Projects</div><div class="list">'+projects.slice(0,4).map(p=>'<div class="creation"><div class="thumb">'+(p.icon||'📁')+'</div><div style="flex:1;min-width:0"><b>'+p.name+'</b><div><span class="badge">'+p.type+'</span> <span class="badge">'+p.status+'</span></div><small>'+creations.filter(c=>c.projectId===p.id).length+' linked creations</small></div><button class="btn" style="width:auto;padding:8px 11px" onclick="openProject(\''+p.id+'\')">Open</button></div>').join('')+'</div><button class="btn secondary" style="margin-top:10px" onclick="renderProjects()">View all projects</button><div class="section-title">Creations</div><div class="list">'+creations.map(c=>'<div class="creation" style="align-items:flex-start"><div class="thumb">'+(c.icon||'🎬')+'</div><div style="flex:1;min-width:0"><b>'+ (c.name||'NENE AI Creation') +'</b><div><span class="badge">'+(c.type||'Video')+'</span>'+(c.provider?' <span class="badge">'+c.provider+'</span>':'')+(projectForCreation(c)?' <span class="badge">📁 '+projectForCreation(c).name+'</span>':'')+'</div><small>'+(c.createdAt?new Date(c.createdAt).toLocaleString():'Saved creation')+'</small>'+(c.videoUrl?'<video controls playsinline preload="metadata" style="width:100%;margin-top:9px;border-radius:12px;background:#000" src="'+c.videoUrl+'"></video><div style="margin-top:7px"><a href="'+c.videoUrl+'" target="_blank" rel="noopener" style="color:var(--gold2);font-size:12px">Open video</a></div>':'')+'</div></div>').join('')+'</div></main>';
 }
-// Profile feedback state — prevents Profile from crashing on first open.
-let feedbackEntries = [];
-
-function setRating(n){
-  selectedRating=n;
-  document.querySelectorAll('.star').forEach((s,i)=>s.classList.toggle('active',i<n));
-  const label=document.getElementById('ratingLabel');
-  if(label) label.textContent = n ? `${n}/5 — ${['','Needs work','Fair','Good','Very good','Excellent'][n]}` : 'Tap a star to rate';
-}
-function submitFeedback(){
-  const text=(document.getElementById('feedbackText')||{}).value?.trim() || '';
-  const category=(document.getElementById('feedbackCategory')||{}).value || 'General feedback';
-  if(!selectedRating && !text){
-    toast('Please add a rating or feedback first');
-    return;
-  }
-  feedbackEntries.unshift({
-    rating:selectedRating,
-    category,
-    text,
-    date:new Date().toLocaleDateString()
-  });
-  selectedRating=0;
-  closeModal();
-  toast('Thank you — your feedback was saved');
-  renderProfile();
-}
-function openFeedback(){
-  selectedRating=0;
-  showModal(`<h2>Rate NENE AI</h2>
-    <p class="subtitle">Your honest feedback helps us improve the quality of NENE AI.</p>
-    <div class="label">Your rating</div>
-    <div id="starRow" style="display:flex;gap:7px;font-size:34px;margin:8px 0 2px">
-      <button class="star" onclick="setRating(1)">★</button>
-      <button class="star" onclick="setRating(2)">★</button>
-      <button class="star" onclick="setRating(3)">★</button>
-      <button class="star" onclick="setRating(4)">★</button>
-      <button class="star" onclick="setRating(5)">★</button>
-    </div>
-    <div id="ratingLabel" class="subtitle">Tap a star to rate</div>
-    <div class="block">
-      <div class="label">What would you like to tell us?</div>
-      <select id="feedbackCategory" class="field">
-        <option>Video quality</option>
-        <option>Ease of use</option>
-        <option>Generation speed</option>
-        <option>Features</option>
-        <option>Something went wrong</option>
-        <option>General feedback</option>
-        <option>Feature suggestion</option>
-      </select>
-    </div>
-    <div class="block">
-      <textarea id="feedbackText" placeholder="Tell us what you loved, what didn't work, or what you want NENE AI to add..."></textarea>
-    </div>
-    <div class="row">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn gold" onclick="submitFeedback()">Submit feedback</button>
-    </div>`);
-}
-function reportProblem(){
-  showModal(`<h2>Report a problem</h2>
-    <p class="subtitle">Tell us what went wrong. In the real app, this will send a report with the relevant creation details.</p>
-    <div class="block"><textarea id="feedbackText" placeholder="Describe the problem..."></textarea></div>
-    <button class="btn gold" onclick="selectedRating=0; submitFeedback()">Send report</button>`);
-}
-function suggestFeature(){
-  showModal(`<h2>Suggest a feature</h2>
-    <p class="subtitle">What would make NENE AI more useful to you?</p>
-    <div class="block"><textarea id="feedbackText" placeholder="Example: Let me create the same character in 20 scenes..."></textarea></div>
-    <button class="btn gold" onclick="selectedRating=0; submitFeedback()">Send suggestion</button>`);
-}
-
+// The dedicated Profile module installs the account and settings actions.
 function renderProfile(){
  setNav('profile');
- const latest = feedbackEntries[0];
- screen.innerHTML=`<main>
-  <div class="eyebrow">Account</div><h1>Your Profile</h1>
-  <div class="profile-card">
-   <img class="profile-big" src="${avatarData}">
-   <h2 style="margin-bottom:4px">NENE AI Creator</h2><p class="subtitle">Founder / Creator profile</p>
-   <div class="row"><div class="notice"><b>${credits}</b><br>credits left</div><div class="notice"><b>${creations.length}</b><br>creations</div></div>
-  </div>
-
-  <div class="section-title">Secure account</div>
-  <div class="notice" id="neneAuthSummary">Secure sign-in is being prepared. Account creation is unavailable until NENE AI authentication is configured.</div>
-  <div class="notice" style="margin-top:8px"><b>Account</b><br><span id="neneAuthAccountName">Not signed in</span></div>
-  <div class="list" style="margin-top:10px">
-   <button class="btn gold" onclick="neneOpenAuth()">Sign in / Create account</button>
-   <button class="btn" onclick="neneSignOut()">Sign out</button>
-  </div>
-
-  <div class="section-title">Workspace</div>
-  <div class="list">
-   <button class="btn" onclick="renderCreateHub()">＋ Create</button>
-   <button class="btn" onclick="openFeature('characters')">🎭 Characters</button><button class="card" onclick="renderJobCenter()"><div class="icon">⚙️</div><b>Generation Center</b><small>Track queued, processing and completed jobs.</small></button>
-   <button class="btn" onclick="openFeature('brand')">🏷️ Brand Kit</button>
-   <button class="btn" onclick="openFeature('privacy')">🔐 Privacy Center</button>
-   <button class="btn" onclick="openFeature('account')">👤 Account & Security</button>
-  </div>
-
-  <div class="section-title">Credits & Plans</div>
-  <button class="btn" onclick="neneOpenPaidCredits()">＋ Paid credits &amp; refund policy</button>
-
-  <div class="section-title">Reviews & Feedback</div>
-  <div class="list">
-   <button class="btn" onclick="openFeedback()">⭐ Rate NENE AI</button>
-   <button class="btn" onclick="reportProblem()">⚠️ Report a problem</button>
-   <button class="btn" onclick="suggestFeature()">💡 Suggest a feature</button>
-  </div>
-  ${latest ? `<div class="notice" style="margin-top:12px"><b>Latest feedback saved</b><br>${latest.rating ? `Rating: ${'★'.repeat(latest.rating)}${'☆'.repeat(5-latest.rating)}` : 'No star rating'} · ${latest.category}${latest.text ? `<br><small>${latest.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</small>` : ''}</div>` : ''}
-
-  <div class="section-title">Safety & Trust</div>
-  <div class="list">
-   <button class="btn" onclick="openFeature('safety')">🛡️ Safety & Content Controls</button>
-   <button class="btn" onclick="showModal('<h2>AI-generated content</h2><p class=&quot;subtitle&quot;>NENE AI should clearly disclose when content is AI-generated and use provenance metadata/watermarking where appropriate.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>')">🏷️ AI Content Disclosure</button>
-   <button class="btn" onclick="showModal('<h2>Rights & Commercial Use</h2><p class=&quot;subtitle&quot;>The production app should explain model-specific commercial rights, user-uploaded asset rights, music licensing, voice consent and copyright responsibilities before export.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>')">©️ Rights & Commercial Use</button>
-  </div>
-
-  <div class="section-title">Global & Business</div>
-  <div class="list">
-   <button class="btn" onclick="openFeature('translate')">🌍 Languages & Localization</button>
-   <button class="btn" onclick="showModal('<h2>Team & Collaboration</h2><p class=&quot;subtitle&quot;>Future NENE AI workspaces can support owners, editors, reviewers, comments, approvals, version history and shared brand assets.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>')">👥 Teams & Collaboration</button>
-   <button class="btn" onclick="showModal('<h2>Export & Publishing</h2><p class=&quot;subtitle&quot;>The real product should support MP4 exports, share links, platform-ready presets, scheduled publishing integrations later, and clear export quality/watermark status.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>')">📤 Export & Publishing</button>
-   <button class="btn" onclick="showModal('<h2>Generation Recovery</h2><p class=&quot;subtitle&quot;>If a generation fails because of a system error, the real service should clearly show the failure reason and automatically return or restore eligible credits.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>')">↻ Failed Generation & Credit Recovery</button>
-   <button class="btn" onclick="showModal('<h2>Report Abuse</h2><p class=&quot;subtitle&quot;>Users should be able to report impersonation, non-consensual likeness, harmful content, fraud, copyright concerns or other abuse from any creation.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>')">🚩 Report Abuse</button>
-   <button class="btn" onclick="showModal('<h2>Usage & Fair Use</h2><p class=&quot;subtitle&quot;>The real service should protect reliability with transparent generation limits, queue rules, abuse prevention and fair-use safeguards.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>')">⚖️ Usage & Fair Use</button>
-  </div>
-
-  <div class="section-title">Legal</div>
-  <div class="list">
-   <button class="btn" onclick="showModal('<h2>Privacy Policy</h2><p class=&quot;subtitle&quot;>Production placeholder: explain what data is collected, why it is used, retention, deletion, third-party processors and user rights.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>')">Privacy Policy</button>
-   <button class="btn" onclick="showModal('<h2>Terms of Service</h2><p class=&quot;subtitle&quot;>Production placeholder: cover accounts, credits, acceptable use, ownership, commercial use, refunds, limitations and termination.</p><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Close</button>')">Terms of Service</button>
-  </div>
-
-  <div class="section-title">Product roadmap</div>
-  <div class="list">
-   <div class="creation"><div class="thumb">🧠</div><div><b>AI Director</b><small>Plan scripts, scenes and production directions</small></div></div>
-   <div class="creation"><div class="thumb">✂️</div><div><b>AI Video Editor</b><small>Timeline, scene regeneration and conversational edits</small></div></div>
-   <div class="creation"><div class="thumb">🎭</div><div><b>Character Studio</b><small>Persistent identity across scenes</small></div></div>
-   <div class="creation"><div class="thumb">🌍</div><div><b>Global localization</b><small>Translation, dubbing, captions and regional formats</small></div></div>
-   <div class="creation"><div class="thumb">🛡️</div><div><b>Safety & provenance</b><small>Consent, moderation, disclosure and content provenance</small></div></div>
-   <div class="creation"><div class="thumb">⭐</div><div><b>Continuous user feedback</b><small>Ratings, reports and feature requests</small></div></div>
-  </div>
- </main>`;
+ screen.innerHTML='<main><h1>Your Profile</h1><p class="notice">Profile controls could not load. Refresh the app to try again.</p><button class="btn" onclick="location.reload()">Refresh app</button></main>';
 }
 document.querySelectorAll('.nav').forEach(n=>n.addEventListener('click',()=>{const k=n.dataset.nav;if(k==='home')recoverPendingJob();
 renderHome();if(k==='creations')renderCreations();if(k==='profile')renderProfile();if(k==='create')renderCreateHub()}));
@@ -1337,17 +1196,18 @@ resumeActiveNeneJobs();
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=18', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=19', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=18"></script>
-<script src="./account-setup.js?v=18"></script>
-<script src="./auth.js?v=18"></script>
-<script src="./director.js?v=18"></script>
-<script src="./paid-access.js?v=18"></script>
-<script src="./ad-studio.js?v=18"></script>
-<script src="./layout.js?v=18"></script>
+<script src="./auth-config.js?v=19"></script>
+<script src="./account-setup.js?v=19"></script>
+<script src="./profile.js?v=19"></script>
+<script src="./auth.js?v=19"></script>
+<script src="./director.js?v=19"></script>
+<script src="./paid-access.js?v=19"></script>
+<script src="./ad-studio.js?v=19"></script>
+<script src="./layout.js?v=19"></script>
 </body>
 </html>
