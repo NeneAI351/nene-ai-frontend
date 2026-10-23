@@ -82,13 +82,16 @@
     if(v.busy || !v.accepting)return;
     if(!v.pending && (!v.quote || v.quote.draft!==JSON.stringify(draft(v)))){say(v,'Review the current price before generating.');return;}
     v.busy=true;v.generate.disabled=true;lock(v,true);
+    let requestStarted=false;
+    const hadPending=!!v.pending;
     try{
       if(!v.pending){
-        v.pending={key:crypto.randomUUID(),draft:draft(v),payload:{...v.quote.body,credit_limit:v.quote.cost}};
+        v.pending={key:crypto.randomUUID(),uncertain:true,draft:draft(v),payload:{...v.quote.body,credit_limit:v.quote.cost}};
         // Persist before the request: uncertain responses can reuse the same key
         // after a page reload. Never persist tokens or signed video URLs.
       }
       write(v,'pending',v.pending);
+      requestStarted=true;
       say(v,'Submitting your paid advertisement once…');
       const result=await api(v,'/api/generations',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':v.pending.key},body:JSON.stringify(v.pending.payload)});
       if(!alive(v))return;
@@ -98,10 +101,17 @@
       await poll(v,result.generation_id,0);
       try{await window.neneRefreshPaidWallet?.();}catch(_){}
     }catch(error){
-      if([400,401,402,403,422].includes(error.status)||(error.status===409 && /price increased/i.test(error.message))){
+      if(!requestStarted){
+        v.pending=null;say(v,'Could not save a safe pending request on this device. No generation was submitted.');return;
+      }
+      const definiteRejection=[400,401,402,403,422].includes(error.status)||(error.status===409 && /price increased/i.test(error.message));
+      if(definiteRejection && (!hadPending || (error.status===409 && /price increased/i.test(error.message)))){
         localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
         v.generate.textContent='Review price before generating';
-      }else v.generate.textContent='Retry pending submission safely';
+      }else {
+        if(v.pending){v.pending.uncertain=true;try{write(v,'pending',v.pending);}catch(_) {}}
+        v.generate.textContent='Retry pending submission safely';
+      }
       say(v,error.message+(v.pending?' Your submission is saved. Retry this same request safely.':''));
     }finally{
       v.busy=false;if(alive(v)){lock(v,!!v.pending);v.generate.disabled=!(v.pending&&v.accepting);}

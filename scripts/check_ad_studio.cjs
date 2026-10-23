@@ -93,6 +93,13 @@ const posts=calls=>calls.filter(x=>x.url.endsWith('/api/generations'));
   const pending=JSON.parse(first.w.localStorage.getItem('nene_ad_pending_v1:'+USER));
   assert.ok(pending.key);assert.match(first.w.document.getElementById('ad-generate').textContent,/Retry pending/);
   first.dom.window.close();
+  assert.equal(pending.uncertain,true);
+  // A later authentication rejection says nothing about whether the original
+  // timed-out request was accepted. Keep its key instead of risking a new job.
+  const expired=await setup({pending,postError:401});
+  expired.w.document.getElementById('ad-generate').click();await flush();
+  assert.equal(JSON.parse(expired.w.localStorage.getItem('nene_ad_pending_v1:'+USER)).key,pending.key);
+  expired.dom.window.close();
   const retry=await setup({pending});
   assert.equal(retry.w.document.getElementById('ad-product').disabled,true);
   retry.w.document.getElementById('ad-generate').click();await flush();
