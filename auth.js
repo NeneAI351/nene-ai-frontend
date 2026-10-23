@@ -72,6 +72,9 @@
     const { data, error } = await auth.auth.getSession();
     if (error) throw error;
     updateAuthUi(data.session?.user || null);
+    if (data.session && window.neneAccountSetup) {
+      try { await window.neneAccountSetup.sync(data.session); } catch (_) { /* Retry during account setup. */ }
+    }
     return data.session?.user || null;
   }
 
@@ -80,6 +83,7 @@
     if (!auth) return null;
     const { data, error } = await auth.auth.getSession();
     if (error) throw error;
+    if (data.session && window.neneAccountSetup) await window.neneAccountSetup.sync(data.session);
     return data.session?.access_token || null;
   };
 
@@ -96,7 +100,7 @@
         '<div class="eyebrow">NENE AI account</div><h2>Your account</h2>' +
         '<p class="subtitle">Signed in as <span id="neneAuthModalEmail"></span></p>' +
         '<div class="notice">Your identity is verified by the configured authentication provider. Account data and credits still require server-side authorization; browser storage is not proof of payment.</div>' +
-        '<div class="list" style="margin-top:12px"><button class="btn" onclick="neneSignOut()">Sign out</button><button class="btn gold" onclick="closeModal()">Close</button></div>'
+        '<div class="list" style="margin-top:12px"><button class="btn" onclick="neneOpenAccountAgreement()">Account setup &amp; terms</button><button class="btn" onclick="neneSignOut()">Sign out</button><button class="btn gold" onclick="closeModal()">Close</button></div>'
       );
       const email = document.getElementById("neneAuthModalEmail");
       if (email) email.textContent = currentAuthUser.email || "NENE AI user";
@@ -143,6 +147,7 @@
       '<form id="neneAuthForm" novalidate>' +
       emailField +
       passwordField +
+      (mode === "signup" ? '<label class="notice" style="display:block;margin:12px 0"><input type="checkbox" id="neneSignupAgreement" required> I agree to the <a href="./terms.html" target="_blank" rel="noopener" style="color:#ffe7a1">Terms of Service and Refund Policy</a>.</label><p class="subtitle" style="font-size:12px">Generation requires paid credits. No change-of-mind cash refunds after credits are delivered; required legal/store refunds and failed-generation credit restoration remain.</p>' : '') +
       '<button class="btn gold" id="neneAuthSubmit" type="submit">' + submit + '</button>' +
       '</form>' +
       '<div id="neneAuthMessage" role="status" aria-live="polite" style="font-size:12px;line-height:1.5;margin-top:12px"></div>' +
@@ -181,6 +186,10 @@
         setMessage("Enter your password.", true);
         return;
       }
+      if (mode === "signup" && (!document.getElementById("neneSignupAgreement")?.checked || !window.neneAccountSetup?.version)) {
+        setMessage("Read and accept the Terms of Service and Refund Policy to create your account.", true);
+        return;
+      }
       submitButton.disabled = true;
       submitButton.textContent = "Please wait…";
       setMessage("", false);
@@ -191,7 +200,8 @@
           result = await auth.auth.signUp({
             email,
             password,
-            options: { emailRedirectTo: config.redirectTo || window.location.origin }
+            options: { emailRedirectTo: config.redirectTo || window.location.origin,
+              data: {nene_terms_accepted:true,nene_terms_version:window.neneAccountSetup.version} }
           });
           if (!result.error && !result.data.session) {
             setMessage("Account created. Check your email to confirm your address, then sign in.", false);
@@ -212,6 +222,9 @@
         }
         if (result.error) throw result.error;
         updateAuthUi(result.data?.user || result.data?.session?.user || null);
+        if (result.data?.session && window.neneAccountSetup) {
+          try { await window.neneAccountSetup.sync(result.data.session); } catch (_) { /* Backend retries later; no repeat acceptance. */ }
+        }
         setMessage("You are signed in. NENE AI will send your verified access token with protected backend requests.", false);
         window.setTimeout(() => closeModal(), 900);
       } catch (error) {
@@ -231,6 +244,16 @@
         }
       }
     });
+  };
+
+  window.neneOpenAccountAgreement = async function () {
+    try {
+      const {data,error}=await initClient().auth.getSession();
+      if (error || !data.session) {window.neneOpenAuth("signin");return;}
+      if (await window.neneAccountSetup.sync(data.session)) {
+        showModal('<h2>Account agreement</h2><p class="subtitle">Your agreement is recorded. You do not need to accept again at sign-in or purchase.</p><p>'+window.neneAccountSetup.link+'</p><button class="btn gold" onclick="closeModal()">Close</button>');
+      } else window.neneAccountSetup.open(data.session);
+    } catch (_) {if (typeof toast === "function") toast("Could not verify account setup. Please try again.");}
   };
 
   window.neneSignOut = async function () {
@@ -265,7 +288,11 @@
     } catch (_error) {
       updateAuthUi(null);
     }
-    if (user) return true;
+    if (user) {
+      const {data,error}=await initClient().auth.getSession();
+      if (error || !window.neneAccountSetup) return false;
+      return window.neneAccountSetup.require(data.session);
+    }
     window.neneOpenAuth("signup");
     window.setTimeout(() => {
       setMessage(
