@@ -30,3 +30,6 @@ jobs:
 
       - name: Verify paid advertisement workflow
         run: node scripts/check_ad_studio.cjs
+
+      - name: Verify fullscreen layout and Studio paging
+        run: node scripts/check_layout.cjs

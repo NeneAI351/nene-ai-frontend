@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
  <link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#070707">
 <link rel="icon" href="./icon-192.png" type="image/png"> 
-<title>NENE AI — Prototype</title>
+<title>NENE AI</title>
 <style>
 :root{
   --bg:#070707; --panel:#11100e; --panel2:#171512; --gold:#f4c95d;
@@ -67,19 +67,7 @@ hr{border:0;border-top:1px solid #2d2516;margin:18px 0}
 
 </style>
 
-<style id="nene-v2-css">
-.nv2-panel{margin-top:14px;padding:16px;border:1px solid rgba(212,175,55,.22);border-radius:18px;background:rgba(255,255,255,.035)}
-.nv2-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
-.nv2-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid rgba(255,255,255,.12);border-radius:999px;font-size:12px;color:#eee;background:rgba(255,255,255,.035)}
-.nv2-title{font-weight:700;font-size:16px;margin-bottom:6px}.nv2-muted{color:#aaa;font-size:12px;line-height:1.5}
-.nv2-btn{border:1px solid rgba(212,175,55,.35);background:rgba(212,175,55,.1);color:#f6e7a7;padding:9px 12px;border-radius:12px;cursor:pointer}
-.nv2-btn:hover{background:rgba(212,175,55,.18)}
-.nv2-input{width:100%;box-sizing:border-box;background:#111;color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:11px;padding:10px;margin-top:7px}
-.nv2-progress{height:7px;border-radius:99px;background:#242424;overflow:hidden}.nv2-progress>span{display:block;height:100%;width:62%;background:linear-gradient(90deg,#8d7421,#e8c85b)}
-.nv2-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.07)}
-.nv2-row:last-child{border-bottom:0}
-.nv2-kicker{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#caaE4b}
-</style>
+
 
 
 <style id="nene-backend-bridge-css">
@@ -132,6 +120,7 @@ window.NENEBackend={
 };
 </script>
 
+<link rel="stylesheet" href="./layout.css?v=18">
 </head>
 <body>
 <div class="app">
@@ -139,6 +128,7 @@ window.NENEBackend={
   <div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div>
   <div class="credits">Paid Credits<br><b id="credits">0</b></div>
   <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
+  <button id="neneFullscreenButton" class="fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
   <img id="avatar" class="avatar" alt="NENE AI profile" title="NENE AI profile">
 </header>
 <div id="screen"></div>
@@ -337,7 +327,7 @@ function setNav(key){
 function renderHome(){
  setNav('home');
  screen.innerHTML=`<main>
- <section class="hero"><div class="hero-row"><img src="${avatarData}"><div><div class="eyebrow">Welcome to NENE AI</div><h1>Create. Imagine. Bring it to life.</h1><div class="subtitle">One creative studio for videos, stories, ads, social content and complete AI production.</div></div></div></section>
+ <section class="hero"><div class="hero-row"><img src="${avatarData}"><div><div class="eyebrow">Welcome to NENE AI</div><h1>Create. Imagine. Bring it to life.</h1><div class="subtitle">Create videos, stories and ads in one place.</div><button type="button" class="studio-shortcut" onclick="neneOpenStudio()">AI Studio · 12 tools →</button></div></div></section>
  <div class="kpi"><div class="notice"><b>${credits.toLocaleString()}</b><br>credits</div><div class="notice"><b>${creations.length}</b><br>creations</div><div class="notice"><b>${projects.length}</b><br>projects</div></div>
  <div class="section-title">What do you want to create?</div>
  <div class="grid">
@@ -348,26 +338,16 @@ function renderHome(){
   ${toolCard("📖","Story → Video","Build scenes with Character Lock.","story")}
   ${toolCard("🧠","AI Director","Plan scripts, scenes and production directions.","director")}
  </div>
- <div class="section-title">AI Studio</div>
- <div class="tool-grid">
-  ${miniCard("🎭","Character Studio","Create reusable characters, outfits and reference looks.","characters")}
-  ${miniCard("✍️","AI Script Writer","Hooks, scripts, scenes, dialogue and CTAs.","script")}
-  ${miniCard("🎙️","AI Voice","Narration, voices and lip-sync workflow.","voice")}
-  ${miniCard("🎵","Music + SFX","Generate or select music and sound effects.","audio")}
-  ${miniCard("💬","Captions","Auto captions, styles and SRT workflow.","captions")}
-  ${miniCard("🌍","Translate & Dub","Localize videos for global audiences.","translate")}
-  ${miniCard("✂️","AI Video Editor","Timeline, scenes, trims and AI edits.","editor")}
-  ${miniCard("🏷️","Brand Kit","Logo, fonts, colors and brand-safe outputs.","brand")}
-  ${miniCard("🧩","Model Lab","Compare or let NENE AI choose the best model per scene.","models")}
-  ${miniCard("📐","Formats & Reframe","9:16, 1:1, 4:5 and 16:9 with smart framing.","formats")}
-  ${miniCard("🪄","AI Image Studio","Generate reference images, scenes and product visuals.","images")}
-  ${miniCard("✨","Enhance & Upscale","Clean, extend and upscale finished visuals.","enhance")}
- </div>
- <div class="section-title">Projects</div>
- <div class="list">${projects.map(p=>`<div class="creation"><div class="thumb">${p.icon}</div><div style="flex:1"><b>${p.name}</b><div><span class="badge">${p.type}</span> <span class="badge">${p.status}</span></div><small>Open project workspace</small></div><button class="btn" style="width:auto;padding:8px 11px" onclick="openFeature('editor')">Open</button></div>`).join('')}</div>
- <div class="notice" style="margin-top:14px"><b>Built for serious creators.</b><br>NENE AI is designed around the full journey: idea → script → scenes → characters → video → voice → music → captions → edit → export → share.</div>
+ ${studioSectionMarkup()}
+ <section class="recent-projects" aria-labelledby="recent-projects-title">
+ <div class="section-heading"><h2 id="recent-projects-title">Recent projects</h2><button class="text-button" type="button" onclick="renderProjects()">View all projects →</button></div>
+ <div class="list">${[...projects].sort((a,b)=>(Date.parse(b.updatedAt)||0)-(Date.parse(a.updatedAt)||0)).slice(0,2).map(p=>`<div class="creation"><div class="thumb">${escapeNeneText(p.icon||'📁')}</div><div class="project-summary"><b>${escapeNeneText(p.name)}</b><div><span class="badge">${escapeNeneText(p.type)}</span> <span class="badge">${escapeNeneText(p.status)}</span></div></div><button class="project-open" type="button" data-project-id="${escapeNeneText(p.id)}">Open</button></div>`).join('')}</div>
+ </section>
  </main>`;
+ if(window.neneMountStudioSections)window.neneMountStudioSections();
 }
+function escapeNeneText(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function studioSectionMarkup(){return `<section class="studio-section" aria-labelledby="studio-heading"><div class="section-heading"><h2 id="studio-heading">AI Studio</h2><button type="button" class="text-button" onclick="neneOpenStudio()">View all 12 tools →</button></div><p class="studio-hint">Swipe to explore more tools <span aria-hidden="true">→</span></p><div data-studio-carousel><p class="subtitle">Loading AI Studio…</p></div></section>`;}
 function miniCard(icon,title,desc,type){return `<button class="tool-mini" onclick="openFeature('${type}')"><div style="font-size:21px">${icon}</div><b>${title}</b><small>${desc}</small></button>`}
 function toolCard(icon,title,desc,type){return `<button class="card" onclick="openTool('${type}')"><div class="icon">${icon}</div><b>${title}</b><small>${desc}</small></button>`}
 
@@ -385,22 +365,9 @@ function renderCreateHub(){
   ${toolCard("📱","Social Content","Platform-ready short-form content.","social")}
   ${toolCard("📖","Story → Video","Stories with persistent characters.","story")}
  </div>
- <div class="section-title">Power tools</div>
- <div class="tool-grid">
-  ${miniCard("🎭","Characters","Persistent identity and reference images.","characters")}
-  ${miniCard("✍️","Script","Generate or refine your script.","script")}
-  ${miniCard("🎙️","Voice + Lip Sync","Voiceover and speaking characters.","voice")}
-  ${miniCard("🎵","Music + SFX","Soundtrack and effects.","audio")}
-  ${miniCard("💬","Captions","Accessible, editable subtitles.","captions")}
-  ${miniCard("🌍","Translation","Dub and localize globally.","translate")}
-  ${miniCard("✂️","Editor","Refine every scene.","editor")}
-  ${miniCard("🏷️","Brand Kit","Keep every output on-brand.","brand")}
-  ${miniCard("🧩","Model Lab","Choose or auto-select the best model.","models")}
-  ${miniCard("📐","Formats","Reframe for every platform.","formats")}
-  ${miniCard("🪄","Image Studio","Create reference and product images.","images")}
-  ${miniCard("✨","Enhance","Upscale and refine your result.","enhance")}
- </div>
+ ${studioSectionMarkup()}
  </main>`;
+ if(window.neneMountStudioSections)window.neneMountStudioSections();
 }
 
 function openFeature(type){
@@ -1353,150 +1320,6 @@ recoverPendingJob();
 resumeActiveNeneJobs();
 </script>
 
-<!-- NENE AI v2 product-completeness layer -->
-<section class="nv2-panel" id="neneProductCompleteness">
-  <div class="nv2-kicker">NENE AI • Product Control Center</div>
-  <div class="nv2-title">Everything from idea to published video</div>
-  <div class="nv2-muted">A single prototype layer covering onboarding, projects, versions, queues, notifications, organization, assets, collaboration, support, analytics, accessibility, localization, business controls, reliability, security, legal rights, and remixing.</div>
-
-  <div class="nv2-grid" style="margin-top:12px">
-    <div class="nv2-panel">
-      <div class="nv2-title">1. Onboarding</div>
-      <div class="nv2-muted">Welcome tour, goal selection, creator/business path, paid-credit wallet, sample project, and first-video checklist.</div>
-      <button class="nv2-btn" onclick="neneV2Toast('Onboarding checklist opened')">Start tour</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">2. Projects & Versions</div>
-      <div class="nv2-muted">Project folders, autosave, named versions, duplicate project, restore previous version, and draft status.</div>
-      <button class="nv2-btn" onclick="neneV2Toast('Version history opened')">View versions</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">3. Generation Queue</div>
-      <div class="nv2-muted">Queued, generating, completed and failed jobs with progress and safe retry.</div>
-      <div class="nv2-progress" style="margin:9px 0"><span></span></div>
-      <button class="nv2-btn" onclick="neneV2Toast('Generation queue opened')">Open queue</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">4. Notifications</div>
-      <div class="nv2-muted">Generation complete, failed generation, credit warnings, collaboration invites, publishing reminders and product updates.</div>
-      <button class="nv2-btn" onclick="neneV2Toast('Notifications marked as read')">Mark all read</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">5. Search & Organization</div>
-      <div class="nv2-muted">Search projects, videos, characters, prompts, assets and templates. Filter by date, type, status and platform.</div>
-      <input class="nv2-input" placeholder="Search NENE AI..." oninput="neneV2Search(this.value)">
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">6. Asset Library</div>
-      <div class="nv2-muted">Images, clips, audio, voices, characters, logos, brand assets and reusable prompt blocks.</div>
-      <button class="nv2-btn" onclick="neneV2Toast('Asset library opened')">Open library</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">7. Collaboration</div>
-      <div class="nv2-muted">Projects can later support owners, editors, viewers, comments, approvals and shared brand assets.</div>
-      <button class="nv2-btn" onclick="neneV2Toast('Collaboration workspace opened')">Team workspace</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">8. Customer Support</div>
-      <div class="nv2-muted">Help center, searchable guides, report-a-problem, generation issue reporting and support ticket history.</div>
-      <button class="nv2-btn" onclick="neneV2Toast('Support center opened')">Get help</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">9. Creator Analytics</div>
-      <div class="nv2-muted">Generation usage, completion rates, exports, top formats, project activity and future publishing performance integrations.</div>
-      <button class="nv2-btn" onclick="neneV2Toast('Analytics dashboard opened')">View analytics</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">10. Accessibility</div>
-      <div class="nv2-muted">Keyboard navigation, readable contrast, captions, reduced motion, screen-reader labels and accessible controls.</div>
-      <button class="nv2-btn" onclick="neneV2Toast('Accessibility preferences opened')">Accessibility</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">11. Global & Languages</div>
-      <div class="nv2-muted">Language selector, localized UI, subtitles, dubbing, date/number formats and region-aware content controls.</div>
-      <select class="nv2-input" onchange="neneV2Toast('Language set to '+this.value)">
-        <option>English</option><option>French</option><option>Spanish</option><option>Portuguese</option><option>Arabic</option><option>Hindi</option><option>Chinese</option><option>Japanese</option>
-      </select>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">12. Business & Enterprise</div>
-      <div class="nv2-muted">Organizations, team seats, approval workflows, brand governance, usage controls, invoices and future API access.</div>
-      <button class="nv2-btn" onclick="neneV2Toast('Business workspace preview opened')">Business mode</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">13. Reliability</div>
-      <div class="nv2-muted">Autosave, resumable jobs, retries, graceful failures, status pages, generation recovery and credit protection.</div>
-      <span class="nv2-chip">✓ Credit-safe retry</span>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">14. Security</div>
-      <div class="nv2-muted">Secure sessions, account recovery, device/session management, abuse prevention, rate limits and protected user assets.</div>
-      <span class="nv2-chip">✓ Security center</span>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">15. Legal & Rights</div>
-      <div class="nv2-muted">Terms, privacy, commercial-use guidance, asset rights, consent for likeness/voice, copyright reporting and AI-content disclosure.</div>
-      <button class="nv2-btn" onclick="neneV2Toast('Rights & legal center opened')">Rights center</button>
-    </div>
-    <div class="nv2-panel">
-      <div class="nv2-title">16. Remix & Regenerate</div>
-      <div class="nv2-muted">Keep the video but change the scene, character, style, duration, voice, language, camera, platform or mood.</div>
-      <input id="neneRemixPrompt" class="nv2-input" placeholder="e.g. Keep everything, make it more luxurious...">
-      <button class="nv2-btn" style="margin-top:8px" onclick="neneV2Remix()">Remix video</button>
-    </div>
-  </div>
-
-  <div class="nv2-panel">
-    <div class="nv2-title">Release readiness</div>
-    <div class="nv2-muted">The prototype now represents the complete product surface. Real production work will still require backend infrastructure, AI model integrations, storage, authentication, moderation, billing, monitoring and legal review.</div>
-    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:10px">
-      <span class="nv2-chip">✓ Beginner-friendly flow</span>
-      <span class="nv2-chip">✓ Creator workflow</span>
-      <span class="nv2-chip">✓ Business workflow</span>
-      <span class="nv2-chip">✓ Global-ready</span>
-      <span class="nv2-chip">✓ Safety & rights</span>
-      <span class="nv2-chip">✓ Feedback loop</span>
-      <span class="nv2-chip">✓ Remix loop</span>
-    </div>
-  </div>
-</section>
-
-
-<script id="nene-v2-js">
-function neneV2Toast(msg){
-  if(typeof showToast === 'function'){ showToast(msg); }
-  else { alert(msg); }
-}
-function neneV2Search(q){
-  if(q.trim()) neneV2Toast('Searching for “'+q.trim()+'”');
-}
-function neneV2Remix(){
-  const el=document.getElementById('neneRemixPrompt');
-  const q=el ? el.value.trim() : '';
-  if(!q){ neneV2Toast('Tell NENE AI what you want to change.'); return; }
-  neneV2Toast('Remix queued: '+q);
-}
-</script>
-
-
-<div class="nv2-panel" id="neneBackendPanel">
-<div class="nv2-kicker">NENE AI • Real Engine Connection</div>
-<div class="nv2-title">Secure backend connection</div>
-<div class="nv2-muted">The prototype is prepared to communicate with a secure NENE AI backend. Provider secrets must stay on the backend, never in this HTML.</div>
-<input id="neneBackendUrl" class="nv2-input" placeholder="Backend URL, e.g. http://127.0.0.1:8000">
-<div style="display:flex;gap:8px;margin-top:9px"><button class="nv2-btn" onclick="neneConnectBackend()">Connect</button><button class="nv2-btn" onclick="neneTestBackend()">Test</button></div>
-<div class="nene-live-status"><span id="neneBackendDot" class="nene-live-dot"></span><span id="neneBackendStatus">Prototype mode</span></div>
-</div>
-<script>
-(function(){var i=document.getElementById('neneBackendUrl');if(i)i.value=window.NENEBackend.getUrl()||'';})();
-async function neneConnectBackend(){var i=document.getElementById('neneBackendUrl');window.NENEBackend.setUrl(i?i.value:'');await neneTestBackend();}
-async function neneTestBackend(){var d=document.getElementById('neneBackendDot'),s=document.getElementById('neneBackendStatus'),x=await window.NENEBackend.health();if(x.connected){d.classList.add('online');s.textContent='Backend connected and responding.';}else{d.classList.remove('online');s.textContent='Not connected — prototype mode remains available.';}}
-</script>
-
-
-
-
-
 <script id="nene-mobile-navigation-fallback">
 (function(){
   document.addEventListener('click', function(e){
@@ -1514,16 +1337,17 @@ async function neneTestBackend(){var d=document.getElementById('neneBackendDot')
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=17', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=18', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=17"></script>
-<script src="./account-setup.js?v=17"></script>
-<script src="./auth.js?v=17"></script>
-<script src="./director.js?v=17"></script>
-<script src="./paid-access.js?v=17"></script>
-<script src="./ad-studio.js?v=17"></script>
+<script src="./auth-config.js?v=18"></script>
+<script src="./account-setup.js?v=18"></script>
+<script src="./auth.js?v=18"></script>
+<script src="./director.js?v=18"></script>
+<script src="./paid-access.js?v=18"></script>
+<script src="./ad-studio.js?v=18"></script>
+<script src="./layout.js?v=18"></script>
 </body>
 </html>
