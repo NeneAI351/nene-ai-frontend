@@ -137,7 +137,7 @@ window.NENEBackend={
 <div class="app">
 <header>
   <div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div>
-  <div class="credits">Free Credits<br><b id="credits">1,000</b></div>
+  <div class="credits">Paid Credits<br><b id="credits">0</b></div>
   <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
   <img id="avatar" class="avatar" alt="NENE AI profile" title="NENE AI profile">
 </header>
@@ -192,13 +192,13 @@ let currentFeature="";
 const NENE_STATE_KEY='nene_ai_state_v1';
 let neneSavedState={};
 try{neneSavedState=JSON.parse(localStorage.getItem(NENE_STATE_KEY)||'{}')||{};}catch(_){neneSavedState={};}
-let credits=Number.isFinite(Number(neneSavedState.credits)) ? Number(neneSavedState.credits) : 1000;
+let credits=0; // Never restore a credit balance from browser storage.
 let creations=Array.isArray(neneSavedState.creations) && neneSavedState.creations.length ? neneSavedState.creations : [
  {name:"Welcome Demo",type:"Text → Video",icon:"🎬"},
  {name:"Brand Story",type:"AI Advertisement",icon:"📢"}
 ];
 function saveState(){
- try{localStorage.setItem(NENE_STATE_KEY,JSON.stringify({credits,creations:creations.slice(0,100)}));}catch(_){}
+ try{localStorage.setItem(NENE_STATE_KEY,JSON.stringify({creations:creations.slice(0,100)}));}catch(_){}
  saveProjects();
 }
 const JOBS_KEY='nene_ai_jobs_v1';
@@ -529,7 +529,7 @@ function openTool(type){
  type==="image" ? `<div class="block"><div class="label">Motion controls</div><div class="row"><select id="neneImageMotion"><option>Natural, realistic movement</option><option>Slow, elegant movement</option><option>Gentle camera movement</option><option>Dynamic commercial movement</option><option>Subtle movement with stable framing</option></select><select id="neneImageCamera"><option>Smooth cinematic camera</option><option>Slow dolly-in</option><option>Gentle tracking shot</option><option>Slow orbit</option><option>Static locked camera</option></select></div><div class="row" style="margin-top:8px"><select id="neneImageStyle"><option>Photorealistic</option><option>Cinematic</option><option>Luxury commercial</option><option>Editorial</option><option>Documentary</option></select><select id="neneImageLighting"><option>Natural cinematic lighting</option><option>Golden-hour lighting</option><option>Soft diffused lighting</option><option>Luxury studio lighting</option><option>Dramatic high-contrast lighting</option></select></div><div class="notice" style="margin-top:10px">🔒 Identity protection: NENE AI will instruct the video model to preserve the source subject's face, clothing and overall appearance while adding motion.</div></div>` :
  type==="text" ? `<div class="block"><div class="label">Production controls</div><div class="row"><select id="neneStyle"><option>Cinematic</option><option>Photorealistic</option><option>Luxury commercial</option><option>Documentary</option><option>Editorial</option><option>Dynamic</option></select><select id="neneShot"><option>Medium shot</option><option>Close-up</option><option>Wide establishing shot</option><option>Aerial shot</option><option>Tracking shot</option></select></div><div class="row" style="margin-top:8px"><select id="neneCamera"><option>Smooth cinematic camera</option><option>Slow dolly-in</option><option>Gentle tracking shot</option><option>Slow orbit</option><option>Static locked camera</option><option>Handheld documentary camera</option></select><select id="neneLighting"><option>Natural cinematic lighting</option><option>Golden-hour lighting</option><option>Luxury studio lighting</option><option>Dramatic high-contrast lighting</option><option>Soft diffused lighting</option><option>Neon night lighting</option></select></div><div class="block"><div class="label">Motion</div><select id="neneMotion" class="field"><option>Natural, realistic movement</option><option>Slow, elegant movement</option><option>Energetic dynamic movement</option><option>Subtle movement with stable framing</option><option>Fast commercial-style movement</option></select></div></div>` :
  `<div class="block"><div class="label">Visual style</div><div class="chips">${chips(["Cinematic","Realistic","Animated","3D","Vintage","Dynamic"])}</div></div>`;
- screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider" onchange="syncVideoProviderOptions()"><option value="auto">Auto (Best available)</option><option value="pixazo">Pixazo</option><option value="magic-hour">Magic Hour (free may watermark)</option><option value="ltx">LTX (provider plan)</option></select></div><div class="notice" id="neneProviderNotice">Real video generation is enabled when your secure NENE AI backend is connected. NENE AI does not add a watermark to your generated media. Provider branding, if any, is controlled by the provider and its plan.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">${type==="story" ? "✨ Build Story Plan" : "✨ Generate "+titles[type]+" · "+costs[type]+" credits"}</button></div></main>`;
+ screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider" onchange="syncVideoProviderOptions()"><option value="auto">Auto (Best available)</option><option value="pixazo">Pixazo</option><option value="magic-hour">Magic Hour (free may watermark)</option><option value="ltx">LTX (provider plan)</option></select></div><div class="notice" id="neneProviderNotice">Real video generation is enabled when your secure NENE AI backend is connected. NENE AI does not add a watermark to your generated media. Provider branding, if any, is controlled by the provider and its plan.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">${type==="story" ? "✨ Build Story Plan" : "✨ Generate "+titles[type]+" · Paid credits required"}</button></div></main>`;
  const genBtn=document.getElementById('neneGenerateBtn');
 window.currentNeneToolType=type;
 if(type==="story"){document.querySelectorAll('.storyCharacterCheck').forEach(el=>el.addEventListener('change',storyCharacterSelectionChanged));renderStoryCharacterAssignments();}
@@ -1188,7 +1188,7 @@ function syncVideoProviderOptions(){
     }
   }
 }
-function updateCredits(){document.getElementById('credits').textContent=credits.toLocaleString();saveState()}
+function updateCredits(){credits=Number.isFinite(window.NENE_PAID_WALLET)?window.NENE_PAID_WALLET:0;document.getElementById('credits').textContent=Number.isFinite(window.NENE_PAID_WALLET)?credits.toLocaleString():'—';saveState()}
 function showModal(x){document.getElementById('modalbox').innerHTML=x;document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
 function saveCreation(){toast("Saved to My Creations");closeModal();renderCreations()}
@@ -1300,7 +1300,7 @@ function renderProfile(){
   </div>
 
   <div class="section-title">Credits & Plans</div>
-  <button class="btn" onclick="showModal('<h2>Credits & Subscriptions</h2><p class=&quot;subtitle&quot;>Free prototype mode: payments are disabled. The real product can offer transparent credit packs and subscriptions, with clear generation costs before users spend credits.</p><div class=&quot;notice&quot;>Free: NENE AI watermark + limited credits<br>Paid: more credits + watermark-free HD<br>Higher tiers: advanced models, longer videos and 4K where supported.</div><button class=&quot;btn gold&quot; onclick=&quot;closeModal()&quot;>Got it</button>')">＋ Get more credits <span class="badge">Coming later</span></button>
+  <button class="btn" onclick="neneOpenPaidCredits()">＋ Paid credits &amp; refund policy</button>
 
   <div class="section-title">Reviews & Feedback</div>
   <div class="list">
@@ -1512,13 +1512,14 @@ async function neneTestBackend(){var d=document.getElementById('neneBackendDot')
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=14', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=15', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=14"></script>
-<script src="./auth.js"></script>
-<script src="./director.js?v=14"></script>
+<script src="./auth-config.js?v=15"></script>
+<script src="./auth.js?v=15"></script>
+<script src="./director.js?v=15"></script>
+<script src="./paid-access.js?v=15"></script>
 </body>
 </html>

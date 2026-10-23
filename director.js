@@ -107,6 +107,7 @@
       // Keep the same key until the brief changes: repeated clicks retrieve the
       // saved result rather than charging the model for identical work again.
       await loadPlans(view);
+      await window.neneRefreshPaidWallet?.();
     } catch (error) { if (activeView === view) message(view, error.message); }
     finally { busy = false; if (view.isConnected) button.disabled = false; }
   };
@@ -119,7 +120,7 @@
     back.onclick = () => { if (!busy) { activeView = null; renderCreateHub(); } };
     header.append(back, node('h1', 'AI Director')); view.append(header);
     view.append(node('p', 'Turn your idea into a script, visual scene prompts and production directions.', 'subtitle'),
-      node('p', 'Planning beta. No video credits are charged for a plan. Video generation is a separate action with its own price. Your brief is sent to our AI planning provider when you choose Create production plan.', 'notice'));
+      node('p', 'Paid credits are required for each new production plan. The price is shown below when paid planning is available. Video generation is charged separately. Your brief is sent to our AI planning provider when you choose Create production plan.', 'notice'));
     const label = node('label', 'Your idea', 'label'); label.htmlFor = 'directorIdea';
     const idea = node('textarea'); idea.id = 'directorIdea'; idea.maxLength = 6000;
     idea.placeholder = 'Describe your story, audience, characters, setting and desired ending…';
@@ -139,6 +140,7 @@
         const state = await api('/status');
         if (activeView !== view || !view.isConnected) return;
         generate.disabled = !state.available; message(view, state.message);
+        generate.textContent = state.available && state.credit_cost ? `Create production plan · ${state.credit_cost} paid credits` : 'Create production plan';
         await loadPlans(view);
       } catch (error) { if (activeView === view) { generate.disabled = true; message(view, error.message); } }
       finally { check.disabled = false; }

@@ -1,10 +1,11 @@
-const CACHE = 'nene-ai-shell-v14';
+const CACHE = 'nene-ai-shell-v15';
 
 const SHELL = [
   './',
   './index.html',
   './auth-config.js?v=14',
-  './auth.js',
+  './auth.js?v=15',
+  './paid-access.js?v=15',
   './director.js?v=14',
   './manifest.webmanifest',
   './icon-192.png',

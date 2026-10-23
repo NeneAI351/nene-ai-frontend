@@ -49,7 +49,9 @@
   }
 
   function updateAuthUi(user) {
+    const changed = currentAuthUser?.id !== user?.id;
     currentAuthUser = user || null;
+    if (changed) window.dispatchEvent(new CustomEvent('nene-auth-changed'));
     const button = document.getElementById("neneAuthHeaderButton");
     if (button) button.textContent = user ? "Account" : "Sign in";
     const summary = document.getElementById("neneAuthSummary");
