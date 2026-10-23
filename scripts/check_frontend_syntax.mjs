@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 // The browser cannot offer the intended PWA installation metadata when the
 // manifest is invalid JSON or its referenced PNG icons have the wrong size.
 const manifest = JSON.parse(readFileSync("manifest.webmanifest", "utf8"));
-if (!manifest.name || !manifest.start_url || manifest.display !== "standalone") {
+if (!manifest.name || !manifest.start_url || !["standalone", "fullscreen"].includes(manifest.display)) {
   throw new Error("Installation manifest is missing required app metadata");
 }
 for (const size of [192, 512]) {
@@ -19,7 +19,7 @@ for (const size of [192, 512]) {
 }
 console.log("Installation manifest and PNG icon dimensions OK");
 
-const files = ["auth.js", "auth-config.js", "sw.js", "director.js", "paid-access.js", "account-setup.js", "ad-studio.js"];
+const files = ["auth.js", "auth-config.js", "sw.js", "director.js", "paid-access.js", "account-setup.js", "ad-studio.js", "layout.js"];
 for (const file of files) {
   const source = readFileSync(file, "utf8");
   new Function(source);
@@ -51,3 +51,7 @@ for (const match of html.matchAll(/<script\b[^>]*\bsrc="(\.\/[^" ]+)"/gi)) {
 }
 if (!worker.includes("'./terms.html'")) throw new Error("Agreement document is missing from the app cache");
 console.log("Service-worker entry modules and agreement document OK");
+
+for (const match of html.matchAll(/<link\b[^>]*\bhref="(\.\/layout\.css[^" ]*)"/gi)) {
+  if (!worker.includes("'" + match[1] + "'")) throw new Error("Current layout stylesheet is missing from cache");
+}
