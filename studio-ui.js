@@ -12,7 +12,7 @@
  function enhance(options){
   for(const old of views)if(!old.root.isConnected){old.observer.disconnect();old.emptyObserver?.disconnect();views.delete(old);}
   const {root,form,signin,check,refresh,review,generate,jobs,getState}=options;
-  root.classList.add('studio-page');
+  root.classList.add('creation-studio');
   const ui={root,signin,version:0},bar=node('div',undefined,'studio-account'),badge=node('span','Checking account…','studio-account-status');ui.badge=badge;
   signin.textContent='Sign in';signin.classList.add('studio-text-button');bar.append(badge,signin);
   if(check){check.textContent='Refresh';check.title='Refresh availability and saved work';check.classList.add('studio-text-button');bar.append(check);}
