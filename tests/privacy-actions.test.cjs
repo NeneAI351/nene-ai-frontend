@@ -22,3 +22,15 @@ test('public privacy help works without a session and does not claim it deleted 
  const s=await setup({signed:false,help:true}),d=s.w.document,f=d.getElementById('privacy-contact-form');f.elements.email.value='user@example.test';f.elements.kind.value='deletion_access_help';f.elements.message.value='Please help me recover access to request deletion.';f.dispatchEvent(new s.w.Event('submit',{cancelable:true}));await settle();assert.equal(s.calls.length,1);assert.equal(s.calls[0].options.headers.Authorization,undefined);assert.match(d.getElementById('privacy-status').textContent,/not completed account deletion/);s.dom.window.close();
 });
 test('receipt status reveals progress without requiring a new account or login',async()=>{const s=await setup({signed:false,receipt:true});assert.ok(s.calls[0].url.endsWith('/deletions/'+RECEIPT));assert.equal(s.calls[0].options.headers.Authorization,undefined);assert.match(s.w.document.getElementById('privacy-status').textContent,/have been deleted/);assert.equal(s.w.document.getElementById('delete-form').hidden,true);s.dom.window.close();});
+test('account record download requires sign-in and checks the current owner after the response',async()=>{
+ const out=await setup({signed:false});await assert.rejects(out.w.neneDownloadAccountRecords(),/Sign in/);assert.equal(out.calls.length,0);out.dom.window.close();
+ const s=await setup();let blobs=0;s.w.URL.createObjectURL=()=>{blobs++;return 'blob:export';};s.w.URL.revokeObjectURL=()=>{};
+ s.w.fetch=async()=>{s.setOwner(OTHER);return {ok:true,json:async()=>({format:'nene-ai-account-records-v1',records:{}})};};
+ await assert.rejects(s.w.neneDownloadAccountRecords(),/Account changed/);assert.equal(blobs,0);s.dom.window.close();
+});
+test('account records download uses the verified account token without accepting new terms',async()=>{
+ const s=await setup();let filename=null;s.w.URL.createObjectURL=()=> 'blob:account';s.w.URL.revokeObjectURL=()=>{};s.w.HTMLAnchorElement.prototype.click=function(){filename=this.download;};
+ s.w.neneAuthGetAccessToken=()=>{throw Error('Terms-gated token must not be used');};
+ s.w.fetch=async(url,options)=>{s.calls.push({url,options});return {ok:true,json:async()=>({format:'nene-ai-account-records-v1',records:{account:[{id:OWNER}]}})};};
+ await s.w.neneDownloadAccountRecords();assert.equal(filename,'nene-ai-account-records.json');assert.ok(s.calls[0].url.endsWith('/api/privacy/account-export'));assert.equal(s.calls[0].options.cache,'no-store');assert.match(s.calls[0].options.headers.Authorization,/Bearer/);s.dom.window.close();
+});

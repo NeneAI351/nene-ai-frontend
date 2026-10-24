@@ -19,6 +19,15 @@
   for(const key of keys)if(key.startsWith('nene_')&&key.endsWith(':'+owner))localStorage.removeItem(key);
   if(includeLegacy)for(const key of ['nene_ai_state_v1','nene_ai_projects_v1','nene_ai_jobs_v1','nene_pending_job','nene_generation_idempotency','nene_story_scene_results_v1'])localStorage.removeItem(key);
  }
+ window.neneDownloadAccountRecords=async function(){
+  const owner=await window.neneAuthGetUserId?.();
+  if(!owner)throw Error('Sign in to download your account records.');
+  const data=await api('/account-export',{},owner);
+  if(owner!==await window.neneAuthGetUserId?.())throw Error('Account changed. No file was downloaded.');
+  if(data.format!=='nene-ai-account-records-v1'||!data.records)throw Error('The account export could not be confirmed.');
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download='nene-ai-account-records.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ };
  async function receipt(id,attempt=0){
   if(!UUID.test(id)){message('Enter a valid deletion receipt.');return;}
   clearTimeout(timer);
