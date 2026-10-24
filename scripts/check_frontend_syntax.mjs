@@ -27,6 +27,15 @@ for (const file of files) {
 }
 
 const html = readFileSync("index.html", "utf8");
+// Stable manifest identity lets installed apps discover later icon versions.
+const manifestLink=html.match(/<link\b[^>]*\brel="manifest"[^>]*\bhref="([^"]+)"/i);
+if(manifestLink?.[1]!=="./manifest.webmanifest")throw new Error("Keep the installed-app manifest URL stable across releases");
+const primaryIcon=manifest.icons.find(icon=>icon.sizes==="192x192").src;
+for(const rel of ["icon","apple-touch-icon"]){
+  const link=html.match(new RegExp('<link\\b[^>]*\\brel="'+rel+'"[^>]*\\bhref="([^"]+)"','i'));
+  if(link?.[1]!==primaryIcon)throw new Error("Browser and home-screen icons must match the current manifest: "+rel);
+}
+
 const tags = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
 let inlineCount = 0;
 for (let i = 0; i < tags.length; i += 1) {
@@ -44,6 +53,8 @@ console.log("Syntax OK:", inlineCount, "inline scripts in index.html");
 
 // Every local entry module must be precached at the same version as the page.
 const worker = readFileSync("sw.js", "utf8");
+for(const icon of manifest.icons)if(!worker.includes("'"+icon.src+"'"))throw new Error("Current app icon is missing from offline cache: "+icon.src);
+
 for (const match of html.matchAll(/<script\b[^>]*\bsrc="(\.\/[^" ]+)"/gi)) {
   if (!worker.includes("'" + match[1] + "'")) {
     throw new Error("Service worker does not precache current script: " + match[1]);
@@ -55,3 +66,4 @@ console.log("Service-worker entry modules and agreement document OK");
 for (const match of html.matchAll(/<link\b[^>]*\bhref="(\.\/layout\.css[^" ]*)"/gi)) {
   if (!worker.includes("'" + match[1] + "'")) throw new Error("Current layout stylesheet is missing from cache");
 }
+
