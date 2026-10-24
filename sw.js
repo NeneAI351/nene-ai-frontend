@@ -1,4 +1,4 @@
-const CACHE = 'nene-ai-shell-v28';
+const CACHE = 'nene-ai-shell-v29';
 
 const SHELL = [
   './',
@@ -81,6 +81,7 @@ self.addEventListener('fetch', event => {
       )
   );
 });
+
 
 
 

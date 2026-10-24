@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
- <link rel="manifest" href="./manifest.webmanifest?v=28">
+ <link rel="manifest" href="./manifest.webmanifest?v=29">
 <meta name="theme-color" content="#070707">
 <link rel="icon" href="./nene-icon-192-v2.png" type="image/png"> 
 <link rel="apple-touch-icon" href="./nene-icon-192-v2.png">
@@ -121,13 +121,13 @@ window.NENEBackend={
 };
 </script>
 
-<link rel="stylesheet" href="./layout.css?v=28">
-<link rel="stylesheet" href="./video-studio.css?v=28">
+<link rel="stylesheet" href="./layout.css?v=29">
+<link rel="stylesheet" href="./video-studio.css?v=29">
 </head>
 <body>
 <div class="app">
 <header>
-  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=28" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
+  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=29" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
   <div class="credits">Paid Credits<br><b id="credits">0</b></div>
   <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
   <button id="neneFullscreenButton" class="fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
@@ -505,11 +505,13 @@ function renderStoryCharacterAssignments(){
   const box=document.getElementById('storySceneCharacters');
   const count=Number(document.getElementById('storyScenes')?.value||5);
   if(!box)return;
+  const sounds=[...box.querySelectorAll('.storySceneAudio')].map((n,i)=>({audio:n.value,sound:box.querySelectorAll('.storySceneSound')[i]?.value||''}));
   const selected=getSelectedStoryCharacters();
   if(!selected.length){box.innerHTML='<div class="notice">Select your saved characters above first.</div>';return;}
   box.innerHTML=Array.from({length:count},(_,idx)=>{
     return '<div class="block" style="margin:8px 0"><div class="label">Scene '+(idx+1)+'</div><div class="chips">'+selected.map(ci=>{const c=characters[ci];return '<label class="chip" style="cursor:pointer"><input type="checkbox" class="sceneCharacterCheck" data-scene="'+idx+'" value="'+ci+'" checked style="margin-right:6px">🔒 '+escapeNeneText(c.name)+'</label>';}).join('')+'</div></div>';
   }).join('');
+  box.querySelectorAll('.block').forEach((block,i)=>{const label=document.createElement('label');label.textContent='Scene sound';const select=document.createElement('select');select.className='storySceneAudio';select.dataset.scene=i;select.innerHTML='<option value="audio">AI scene sound</option><option value="silent">Silent</option>';select.value=sounds[i]?.audio||'audio';const sound=document.createElement('textarea');sound.className='storySceneSound';sound.dataset.scene=i;sound.maxLength=500;sound.placeholder='Optional sound direction: dialogue, ambience or effects';sound.value=sounds[i]?.sound||'';sound.setAttribute('aria-label','Scene '+(i+1)+' sound direction');select.setAttribute('aria-label','Scene '+(i+1)+' sound');select.onchange=()=>sound.disabled=select.value==='silent';select.onchange();label.append(select);block.append(label,sound);});
 }
 function storyCharacterSelectionChanged(){
   renderStoryCharacterAssignments();
@@ -540,6 +542,8 @@ function buildStoryPlan(){
       title:i<templates.length?t[0]:'Scene '+(i+1),
       brief:t[1],
       characterLock:true,
+      generate_audio:document.querySelector('.storySceneAudio[data-scene="'+i+'"]')?.value!=='silent',
+      sound_direction:(document.querySelector('.storySceneSound[data-scene="'+i+'"]')?.value||'').trim(),
       characters:sceneCharacters.map(c=>({
         id:c.id,name:c.name,appearance:c.appearance||'',personality:c.personality||'',wardrobe:c.wardrobe||'',referenceImage:c.referenceImage||null
       }))
@@ -584,185 +588,8 @@ function buildStoryPlan(){
   if(main) main.appendChild(generateStoryButton);
 }
 async function generateStoryScenes(){
-  const plan = window.neneCurrentStoryPlan;
-  if(!plan || !Array.isArray(plan.scenes) || !plan.scenes.length){
-    alert('Build the Story Plan first.');
-    return;
-  }
-  if(window.neneStoryGenerating){ return; }
-  const backendUrl = window.NENEBackend?.getUrl ? window.NENEBackend.getUrl() : '';
-  if(!backendUrl){
-    alert('Connect the NENE AI backend first.');
-    return;
-  }
-  const provider = document.getElementById('neneProvider')?.value || 'auto';
-  const resolutionEl = document.getElementById('neneResolution');
-  const durationEl = document.getElementById('neneDuration');
-  let resolution = resolutionEl?.value || '480p';
-  let duration = Number(durationEl?.value || 3);
-  if(provider === 'magic-hour'){
-    if(!['480p','720p','1080p'].includes(resolution)) resolution='480p';
-    duration = [3,5,10,15,30].includes(duration) ? duration : 3;
-  }else if(provider === 'auto'){
-    resolution = ['480p','1280x720','1920x1080','3840x2160'].includes(resolution) ? resolution : '480p';
-    duration = [3,5,10,15,30].includes(duration) ? duration : 3;
-  }
-  const button=document.getElementById('neneGenerateStoryScenesBtn');
-  let sceneResults=[];
-  try{
-    const savedScenes=JSON.parse(localStorage.getItem('nene_story_scene_results_v1')||'[]');
-    sceneResults=savedScenes.filter(x=>x.storyId===plan.id && x.videoUrl).sort((a,b)=>Number(a.scene)-Number(b.scene));
-  }catch(_){ sceneResults=[]; }
-  window.neneStoryGenerating=true;
-  if(button){button.disabled=true;button.textContent='⏳ Generating Story Scenes…';}
-  try{
-    for(let index=0; index<plan.scenes.length; index++){
-      const scene=plan.scenes[index];
-      if(sceneResults.some(x=>x.scene===scene.number && x.videoUrl)) continue;
-      const sceneCharacters=Array.isArray(scene.characters)?scene.characters:[];
-      const identityBlock=sceneCharacters.map(c=>{
-        return 'CHARACTER LOCK — '+c.name+': appearance: '+(c.appearance||'not specified')+
-          '; personality: '+(c.personality||'not specified')+
-          '; wardrobe: '+(c.wardrobe||'not specified')+
-          '. Preserve this identity consistently; do not replace, rename, age, recolor, or redesign the character.';
-      }).join('\n');
-      const storyPrompt=[
-        'NENE AI STORY SCENE '+scene.number+' OF '+plan.scenes.length+'.',
-        'Overall story: '+(plan.storyPrompt||plan.title)+'.',
-        plan.characterDirection ? 'Story character direction: '+plan.characterDirection+'.' : '',
-        'Scene purpose: '+scene.title+'. '+scene.brief,
-        'Create a cinematic, coherent, photorealistic production-quality shot.',
-        identityBlock,
-        'Keep continuity with the locked characters, setting, wardrobe and visual language. Natural anatomy, realistic motion, coherent lighting, stable details, no flicker, no identity drift.',
-        'Scene-specific story idea: '+plan.title+'.'
-      ].filter(Boolean).join('\n');
-
-      if(plan.owner!==await window.neneAuthGetUserId?.())throw new Error('Account changed. Reopen Story before generating.');
-      const primaryCharacter = sceneCharacters.length===1 ? sceneCharacters[0] : null;
-      let imageUri=null;
-      if(primaryCharacter?.referenceImage){
-        const upload=await fetch(backendUrl.replace(/\/$/,'')+'/api/image-upload',{
-          method:'POST',headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
-          body:JSON.stringify({data_uri:primaryCharacter.referenceImage})
-        });
-        if(!upload.ok)throw new Error('Character reference upload failed. No scene was submitted. Please try again.');
-        const data=await upload.json();imageUri=data.image_url||null;
-        if(!imageUri)throw new Error('Character reference could not be confirmed. No scene was submitted.');
-      }
-
-      const sceneCost=10;
-      if(typeof credits!=='undefined' && credits<sceneCost){
-        throw new Error('Not enough NENE AI credits to continue the remaining story scenes.');
-      }
-      if(typeof credits!=='undefined'){credits-=sceneCost;updateCredits();}
-      let accepted=false;
-      try{
-        const payload={
-          type:imageUri?'image-to-video':'text-to-video',
-          prompt:storyPrompt,
-          model:provider==='magic-hour'||provider==='auto'?'ltx-2.5':'ltx-2-5-fast',
-          resolution,
-          duration,
-          provider
-        };
-        if(imageUri) payload.image_uri=imageUri;
-        const response=await window.NENEBackend.generate(payload);
-        accepted=true;
-        const jobId=response&&(response.job_id||response.id||response.jobId);
-        if(!jobId) throw new Error('Scene '+scene.number+' did not return a generation job ID.');
-        const activeProvider=String(response?.provider||provider||'auto').toLowerCase();
-        const mode=imageUri?'image-to-video':'text-to-video';
-        const final=await window.NENEBackend.waitForJob(jobId,mode,activeProvider,function(job){
-          const status=String(job?.status||'').toUpperCase();
-          if(button) button.textContent='🎬 Scene '+scene.number+'/'+plan.scenes.length+' — '+(status||'WORKING')+'…';
-        },900000,7000);
-        const finalStatus=String(final?.status||'').toLowerCase();
-        if(['failed','error','cancelled','canceled'].includes(finalStatus)){
-          throw new Error('Scene '+scene.number+' failed: '+(final?.error?.message||final?.message||'provider error'));
-        }
-        const videoUrl=final?.video_url||final?._nene_video_url||final?.result?.video_url||final?.output?.video_url||final?.output?.media_url?.[0]||final?.result?.media_url?.[0]||final?.downloads?.[0]?.url||final?.result?.downloads?.[0]?.url||final?.result?.url||final?.url;
-        if(!videoUrl) throw new Error('Scene '+scene.number+' completed without a video URL.');
-        const result={scene:scene.number,title:scene.title,videoUrl,provider:activeProvider,duration,resolution,characters:sceneCharacters.map(c=>c.name)};
-        sceneResults.push(result);
-        try{
-          const stories=JSON.parse(localStorage.getItem('nene_story_scene_results_v1')||'[]');
-          stories.unshift({...result,storyId:plan.id,createdAt:new Date().toISOString()});
-          localStorage.setItem('nene_story_scene_results_v1',JSON.stringify(stories.slice(0,100)));
-        }catch(_){}
-        if(typeof creations!=='undefined'){
-          creations.unshift({
-            name:plan.title+' — Scene '+scene.number,
-            type:'Story Scene',
-            prompt:storyPrompt,
-            videoUrl,
-            provider:activeProvider,
-            duration,
-            resolution,
-            icon:'📖',
-            projectId:activeProjectId,
-            createdAt:new Date().toISOString()
-          });
-          if(typeof saveState==='function')saveState();
-        }
-      }catch(err){
-        if(!accepted && typeof credits!=='undefined'){credits=Math.min(1000,credits+sceneCost);updateCredits();}
-        throw err;
-      }
-    }
-    try{
-      const projects=JSON.parse(localStorage.getItem('nene_story_projects_v2:'+plan.owner)||'[]');
-      projects.unshift({id:plan.id,title:plan.title,characters:plan.characters,scenes:sceneResults,status:'scenes-generated',createdAt:new Date().toISOString()});
-      localStorage.setItem('nene_story_projects_v2:'+plan.owner,JSON.stringify(projects.slice(0,50),(key,value)=>key==='referenceImage'?undefined:value));
-    }catch(_){}
-    let assembledStory=null;
-    try{
-      if(button) button.textContent='🧩 Assembling final Story…';
-      const assembleResponse=await fetch(backendUrl.replace(/\/$/,'')+'/api/story/assemble',{
-        method:'POST',
-        headers:await window.NENEBackend.authHeaders({'Content-Type':'application/json'}),
-        body:JSON.stringify({
-          title:plan.title,
-          scene_urls:sceneResults.sort((a,b)=>Number(a.scene)-Number(b.scene)).map(r=>r.videoUrl)
-        })
-      });
-      if(!assembleResponse.ok){
-        const text=await assembleResponse.text();
-        throw new Error(text||'Story assembly failed.');
-      }
-      assembledStory=await assembleResponse.json();
-      if(assembledStory?.video_url && typeof creations!=='undefined'){
-        creations.unshift({
-          name:plan.title+' — Final Story',
-          type:'Story Video',
-          prompt:plan.storyPrompt||plan.title,
-          videoUrl:assembledStory.video_url,
-          provider:'NENE AI Assembly',
-          duration:sceneResults.reduce((sum,r)=>sum+Number(r.duration||0),0),
-          resolution:'1280x720 assembled',
-          icon:'📖',
-          projectId:activeProjectId,
-          createdAt:new Date().toISOString()
-        });
-        if(typeof saveState==='function')saveState();
-      }
-    }catch(assemblyError){
-      console.warn('Story assembly unavailable:',assemblyError);
-    }
-    const main=document.querySelector('main');
-    if(main){
-      const cards=sceneResults.map(r=>'<div class="creation"><div class="thumb">🎬</div><div style="flex:1"><b>Scene '+r.scene+': '+r.title+'</b><small>'+r.characters.join(' + ')+'</small><video controls playsinline preload="metadata" style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+r.videoUrl+'"></video><div style="margin-top:6px"><a href="'+r.videoUrl+'" target="_blank" rel="noopener" style="color:var(--gold2);font-size:12px">Open scene video</a></div></div></div>').join('');
-      const finalCard=assembledStory?.video_url
-        ? '<div class="section-title">Final Story</div><div class="creation"><div class="thumb">📖</div><div style="flex:1"><b>'+plan.title+'</b><small>All '+sceneResults.length+' scenes assembled into one video.</small><video controls playsinline preload="metadata" style="width:100%;margin-top:8px;border-radius:12px;background:#000" src="'+assembledStory.video_url+'"></video><div style="margin-top:6px"><a href="'+assembledStory.video_url+'" target="_blank" rel="noopener" style="color:var(--gold2);font-size:12px">Open final Story video</a></div></div></div>'
-        : '<div class="notice" style="margin-top:10px">✓ '+sceneResults.length+' scene(s) generated and saved. Final assembly was not completed, but the individual scenes remain available.</div>';
-      main.insertAdjacentHTML('beforeend','<div class="section-title">Generated Story Scenes</div><div class="list">'+cards+'</div>'+finalCard);
-    }
-    toast(assembledStory?.video_url?'Story generated and assembled':'Story scenes generated and saved');
-  }catch(err){
-    alert('Story generation stopped: '+(err?.message||String(err))+'\nCompleted scenes remain saved in My Creations.');
-  }finally{
-    window.neneStoryGenerating=false;
-    if(button){button.disabled=false;button.textContent='🎬 Generate Story Scenes';}
-  }
+  if(typeof window.neneGenerateDurableStory!=='function'){alert('Story Studio is updating. Reload before generating.');return;}
+  return window.neneGenerateDurableStory(window.neneCurrentStoryPlan);
 }
 function toggleLock(){const b=document.getElementById('lockBtn');b.textContent=b.textContent.includes('ON')?'🔓 Character Lock: OFF':'🔒 Character Lock: ON'}
 async function neneReadImageData(file){
@@ -1179,26 +1006,28 @@ resumeActiveNeneJobs();
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=28', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=29', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=28"></script>
-<script src="./account-setup.js?v=28"></script>
-<script src="./profile.js?v=28"></script>
-<script src="./characters.js?v=28"></script>
-<script src="./script-writer.js?v=28"></script>
-<script src="./auth.js?v=28"></script>
-<script src="./director.js?v=28"></script>
-<script src="./paid-access.js?v=28"></script>
-<script src="./ad-studio.js?v=28"></script>
-<script src="./social-content.js?v=28"></script>
-<script src="./prompt-assist.js?v=28"></script>
-<script src="./video-studio.js?v=28"></script>
-<script src="./layout.js?v=28"></script>
+<script src="./auth-config.js?v=29"></script>
+<script src="./account-setup.js?v=29"></script>
+<script src="./profile.js?v=29"></script>
+<script src="./characters.js?v=29"></script>
+<script src="./script-writer.js?v=29"></script>
+<script src="./auth.js?v=29"></script>
+<script src="./director.js?v=29"></script>
+<script src="./paid-access.js?v=29"></script>
+<script src="./ad-studio.js?v=29"></script>
+<script src="./social-content.js?v=29"></script>
+<script src="./prompt-assist.js?v=29"></script>
+<script src="./video-studio.js?v=29"></script>
+<script src="./story-studio.js?v=29"></script>
+<script src="./layout.js?v=29"></script>
 </body>
 </html>
+
 
 
 
