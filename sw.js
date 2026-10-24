@@ -1,26 +1,27 @@
-const CACHE = 'nene-ai-shell-v25';
+const CACHE = 'nene-ai-shell-v26';
 
 const SHELL = [
   './',
   './index.html',
-  './auth-config.js?v=25',
-  './account-setup.js?v=25',
+  './auth-config.js?v=26',
+  './account-setup.js?v=26',
   './terms.html',
   './privacy.html',
-  './profile.js?v=25',
-  './auth.js?v=25',
-  './characters.js?v=25',
-  './script-writer.js?v=25',
-  './paid-access.js?v=25',
-  './ad-studio.js?v=25',
-  './social-content.js?v=25',
-  './layout.js?v=25',
-  './layout.css?v=25',
-  './director.js?v=25',
+  './profile.js?v=26',
+  './auth.js?v=26',
+  './characters.js?v=26',
+  './script-writer.js?v=26',
+  './paid-access.js?v=26',
+  './ad-studio.js?v=26',
+  './social-content.js?v=26',
+  './prompt-assist.js?v=26',
+  './layout.js?v=26',
+  './layout.css?v=26',
+  './director.js?v=26',
   './manifest.webmanifest',
-  './manifest.webmanifest?v=25',
+  './manifest.webmanifest?v=26',
   './brand-logo.svg',
-  './brand-mark.svg?v=25',
+  './brand-mark.svg?v=26',
   './nene-icon-192-v2.png',
   './nene-icon-512-v2.png',
   './icon-192.png',
@@ -78,5 +79,6 @@ self.addEventListener('fetch', event => {
       )
   );
 });
+
 
 
