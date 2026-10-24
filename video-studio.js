@@ -3,14 +3,14 @@
   'use strict';
   let active = null;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const fields = ['idea','style','shot','camera','lighting','motion','duration','resolution','ratio'];
+  const fields = ['idea','style','shot','camera','lighting','motion','duration','resolution','ratio','audio','sound'];
   const el = (tag,text,cls) => {const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
   const displayValue=(name,value)=>name==='duration'?value+' seconds':name==='ratio'?({'16:9':'16:9 · Landscape','9:16':'9:16 · Portrait','1:1':'1:1 · Square'}[value]||value):value;
   function say(v,text){if(active===v && v.root.isConnected)v.message.textContent=text;}
   function storageKey(v,suffix){return `nene_video_${v.mode}_${suffix}_v1:${v.owner}`;}
   function read(v,suffix,fallback){try{return JSON.parse(localStorage.getItem(storageKey(v,suffix))||'null')||fallback;}catch(_){return fallback;}}
   function write(v,suffix,value){localStorage.setItem(storageKey(v,suffix),JSON.stringify(value));}
-  function lock(v,locked){for(const name of fields){v.form.elements[name].disabled=locked;const button=v.form.querySelector('[data-choice-for="'+name+'"]');if(button)button.disabled=locked;}if(v.file)v.file.disabled=locked;v.review.disabled=locked;}
+  function lock(v,locked){for(const name of fields){v.form.elements[name].disabled=locked;const button=v.form.querySelector('[data-choice-for="'+name+'"]');if(button)button.disabled=locked;}if(v.file)v.file.disabled=locked;if(v.form.elements.audio?.value==='Silent')v.form.elements.sound.disabled=true;v.review.disabled=locked;}
   function alive(v){return active===v && v.root.isConnected;}
   async function api(v,path,options={}){
     const owner=await window.neneAuthGetUserId?.();
@@ -32,6 +32,8 @@
   }
   function draft(v){const data={};for(const name of fields)data[name]=v.form.elements[name].value.trim();return data;}
   function payload(v,d){
+    if(!v.audioSupported)throw new Error('Sound settings are updating. Check availability again before generating.');
+    if(!['AI scene sound','Silent'].includes(d.audio))throw new Error('Choose a supported sound setting.');
     if(!d.idea)throw new Error('Describe your scene or motion first.');
     let prompt=[d.idea,'Production preferences (the scene description takes priority):',
       `Style: ${d.style}. Shot: ${d.shot}. Camera: ${d.camera}. Lighting: ${d.lighting}. Motion: ${d.motion}.`,
@@ -41,7 +43,9 @@
       if(!v.imageData&&!v.sourceImageId)throw new Error('Choose a source image first.');
       prompt+='\nUse the supplied source image as the visual anchor. Preserve its subject and appearance while applying only the requested motion. Exact visual identity is not guaranteed.';
     }
-    return {type:v.mode==='image'?'image-to-video':'text-to-video',provider:'ltx',model:'ltx-2-5-fast',resolution:d.resolution,duration:Number(d.duration),aspect_ratio:d.ratio,prompt};
+    if(d.audio==='AI scene sound'&&d.sound)prompt+='\nSound direction: '+d.sound;
+    if(prompt.length>5000)throw new Error('Shorten the prompt and sound description to fit within 5,000 characters.');
+    return {generate_audio:d.audio==='AI scene sound',type:v.mode==='image'?'image-to-video':'text-to-video',provider:'ltx',model:'ltx-2-5-fast',resolution:d.resolution,duration:Number(d.duration),aspect_ratio:d.ratio,prompt};
   }
   async function checkAccount(v){
     if(v.busy)return;
@@ -51,11 +55,11 @@
       if(!owner){v.owner=null;say(v,'Sign in to review pricing and create a paid video.');return;}
       if(!alive(v))return;v.owner=owner;
       const state=await api(v,'/api/generation-availability');if(!alive(v))return;
-      v.accepting=state.accepting_requests===true;say(v,v.accepting?'Choose your options, then review the price.':'Video creation is temporarily unavailable. Your work has not been submitted and no credits were charged.');
+      v.accepting=state.accepting_requests===true;v.audioSupported=state.generate_audio_supported===true;say(v,v.accepting?'Choose your options, then review the price.':'Video creation is temporarily unavailable. Your work has not been submitted and no credits were charged.');
       v.pending=read(v,'pending',null);
       if(v.pending?.payload && v.pending?.key && v.pending?.draft){
         for(const name of fields)if(v.pending.draft[name]!==undefined){v.form.elements[name].value=v.pending.draft[name];const button=v.form.querySelector('[data-choice-for="'+name+'"]');if(button)button.textContent=displayValue(name,v.pending.draft[name]);}
-        lock(v,true);v.generate.textContent='Retry pending submission safely';v.generate.disabled=!v.accepting;
+        lock(v,true);v.generate.textContent='Retry pending submission safely';v.generate.disabled=!v.accepting||!v.audioSupported;
         say(v,'A pending submission is saved on this device. Retry it with the same request key to avoid duplicate charges. '+(v.accepting?'':'Video creation is temporarily unavailable.'));
       }else{v.pending=null;lock(v,false);v.generate.textContent='Generate video';}
       renderJobs(v);
@@ -73,7 +77,7 @@
       if(!alive(v))return;
       v.quote={draft:JSON.stringify(d),body,cost:String(q.recommended_credits)};
       v.generate.textContent=`Generate video · ${q.recommended_credits} paid credits`;
-      v.generate.disabled=!v.accepting;
+      v.generate.disabled=!v.accepting||!v.audioSupported;
       say(v,`${q.recommended_credits} paid credits for this video. Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate video.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
     }catch(error){say(v,error.message);}finally{v.busy=false;if(alive(v)&&!v.pending)v.review.disabled=false;}
   }
@@ -83,7 +87,7 @@
     write(v,'jobs',[{id,title},...jobs.filter(x=>x.id!==id)].slice(0,20));
   }
   async function submit(v){
-    if(v.busy || !v.accepting)return;
+    if(v.busy || !v.accepting || !v.audioSupported)return;
     if(!v.pending && (!v.quote || v.quote.draft!==JSON.stringify(draft(v)))){say(v,'Review the current price before generating.');return;}
     v.busy=true;v.generate.disabled=true;lock(v,true);
     let requestStarted=false;
@@ -123,7 +127,7 @@
       }
       say(v,error.message+(v.pending?' Your submission is saved. Retry this same request safely.':''));
     }finally{
-      v.busy=false;if(alive(v)){lock(v,!!v.pending);v.generate.disabled=!(v.pending&&v.accepting);}
+      v.busy=false;if(alive(v)){lock(v,!!v.pending);v.generate.disabled=!(v.pending&&v.accepting&&v.audioSupported);}
     }
   }
   function renderJobs(v){
@@ -186,13 +190,14 @@
     }
     const block=el('div',undefined,'block'),label=el('label',mode==='image'?'Describe the motion':'Your prompt','label'),input=el('textarea');input.id='prompt';input.name='idea';input.maxLength=10000;input.placeholder=mode==='image'?'What should move? Describe the action and camera direction…':'Describe the subject, action, setting and mood…';label.htmlFor=input.id;block.append(label,input);
     if(mode==='text'){const assist=el('button','✨ Enhance my prompt','btn');assist.type='button';assist.onclick=()=>window.enhanceNenePrompt?.();block.append(assist,el('small','Preview and edit your prompt before applying changes.','subtitle'));}v.form.append(block);
-    const idFor={style:'neneStyle',shot:'neneShot',camera:'neneCamera',lighting:'neneLighting',motion:'neneMotion',duration:'neneDuration',resolution:'neneResolution',ratio:'neneAspectRatio'};
+    const idFor={style:'neneStyle',shot:'neneShot',camera:'neneCamera',lighting:'neneLighting',motion:'neneMotion',duration:'neneDuration',resolution:'neneResolution',ratio:'neneAspectRatio',audio:'neneAudio'};
     const group=el('div',undefined,'video-options');
-    for(const [name,label,options] of [['style','Visual style',['Cinematic','Photorealistic','Animated','3D','Documentary']],['shot','Framing',['Medium shot','Close-up','Wide establishing shot','Tracking shot']],['camera','Camera',['Smooth cinematic camera','Static locked camera','Slow dolly-in','Gentle tracking shot','Slow orbit']],['lighting','Lighting',['Natural cinematic lighting','Golden-hour lighting','Soft diffused lighting','Dramatic high-contrast lighting']],['motion','Motion',['Natural, realistic movement','Slow, elegant movement','Subtle movement with stable framing','Energetic dynamic movement']],['duration','Duration',['6','8','10']],['resolution','Resolution',['720p','1080p']],['ratio','Format',['16:9','9:16','1:1']]]){
+    for(const [name,label,options] of [['style','Visual style',['Cinematic','Photorealistic','Animated','3D','Documentary']],['shot','Framing',['Medium shot','Close-up','Wide establishing shot','Tracking shot']],['camera','Camera',['Smooth cinematic camera','Static locked camera','Slow dolly-in','Gentle tracking shot','Slow orbit']],['lighting','Lighting',['Natural cinematic lighting','Golden-hour lighting','Soft diffused lighting','Dramatic high-contrast lighting']],['motion','Motion',['Natural, realistic movement','Slow, elegant movement','Subtle movement with stable framing','Energetic dynamic movement']],['duration','Duration',['6','8','10']],['resolution','Resolution',['720p','1080p']],['ratio','Format',['16:9','9:16','1:1']],['audio','Sound',['AI scene sound','Silent']]]){
       const block=el('div',undefined,'block'),caption=el('label',label,'label'),select=el('select');select.name=name;select.id=idFor[name];select.hidden=true;select.setAttribute('aria-hidden','true');select.tabIndex=-1;caption.htmlFor='choice-'+name;
       for(const value of options){const option=el('option',value);option.value=value;select.append(option);}
       const button=el('button',displayValue(name,options[0]),'video-choice');button.id='choice-'+name;button.type='button';button.dataset.choiceFor=name;button.setAttribute('aria-label',label+': '+options[0]);button.setAttribute('aria-haspopup','dialog');button.onclick=()=>choose(v,label,select,button);select.addEventListener('change',()=>{button.textContent=displayValue(name,select.value);button.setAttribute('aria-label',label+': '+select.value);select.dispatchEvent(new Event('input',{bubbles:true}));});block.append(caption,select,button);group.append(block);
     }v.form.append(group);
+    const soundBlock=el('div',undefined,'block'),soundLabel=el('label','Sound description (optional)','label'),sound=el('input');sound.name='sound';sound.id='video-sound';sound.className='field';sound.maxLength=500;sound.placeholder='e.g. birdsong, flowing water, soft wind';soundLabel.htmlFor=sound.id;soundBlock.append(soundLabel,sound,el('small','AI sound follows the scene and your description. Specific dialogue, music or voices are not guaranteed.','subtitle'));v.form.append(soundBlock);v.form.elements.audio.addEventListener('change',()=>{sound.disabled=v.form.elements.audio.value==='Silent';});
     v.form.addEventListener('input',()=>{if(!v.pending){v.quote=null;v.generate.disabled=true;v.generate.textContent='Review price before generating';}});
     v.message=el('p','Checking paid generation availability…','notice');v.message.id='video-message';v.message.setAttribute('role','status');v.message.setAttribute('aria-live','polite');
     v.review=el('button','Review price','btn');v.review.type='button';v.review.id='video-review';v.review.onclick=()=>review(v);
@@ -201,7 +206,7 @@
     const check=el('button','Check account and availability','btn');check.onclick=()=>checkAccount(v);
     v.refresh=el('button','Refresh saved video status / link','btn');v.refresh.disabled=true;v.refresh.onclick=()=>v.selected&&poll(v,v.selected,0);
     v.output=el('div');v.output.id='video-output';v.jobs=el('div',undefined,'list');v.jobs.id='video-jobs';
-    root.append(v.form,el('p','Review your credit price before generating. Captions and added sound are not included here. Watermark-free export is not guaranteed; exact text, logos and visual consistency may need editing.','notice'),v.message,v.review,v.generate,signin,check,v.refresh,v.output,el('h2','Your saved videos'),v.jobs,
+    root.append(v.form,el('p','Review your credit price before generating. AI scene sound is generated with the video when selected. Captions, separate music tracks and voice cloning are not included. Watermark-free export is not guaranteed; exact text, logos and visual consistency may need editing.','notice'),v.message,v.review,v.generate,signin,check,v.refresh,v.output,el('h2','Your saved videos'),v.jobs,
       el('p','Pending submissions and job IDs are saved on this device for this account. Finished videos are retrieved through your private account.','subtitle'));
     document.getElementById('screen').replaceChildren(root);await checkAccount(v);
   };
@@ -211,5 +216,6 @@
     say(v,'Account changed. Check your account and availability before continuing.');
   });
 })();
+
 
 
