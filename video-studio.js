@@ -317,7 +317,9 @@
     v.output=el('div');v.output.id='video-output';v.jobs=el('div',undefined,'list');v.jobs.id='video-jobs';
     root.append(v.form,el('p','Review your credit price before generating. AI scene sound is generated with the video when selected. Captions, separate music tracks and voice cloning are not included. Watermark-free export is not guaranteed; exact text, logos and visual consistency may need editing.','notice'),v.message,v.review,v.generate,signin,check,v.refresh,v.output,el('h2','Your saved videos'),v.jobs,
       el('p','Pending submissions and job IDs are saved on this device for this account. Finished videos are retrieved through your private account.','subtitle'));
-    document.getElementById('screen').replaceChildren(root);await checkAccount(v);
+    document.getElementById('screen').replaceChildren(root);
+    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,jobs:v.jobs,getState:()=>v,settings:false});
+    await checkAccount(v);
   };
   const oldFeature=window.openFeature;
   window.openFeature=function(type,...args){return type==='voice'?window.neneOpenVideoStudio('talking'):oldFeature.call(this,type,...args);};

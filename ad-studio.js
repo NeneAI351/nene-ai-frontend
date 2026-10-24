@@ -156,7 +156,7 @@
       el('p','Paid credits are required. Exact logos, written text, voiceovers and captions may need editing after generation.','notice'));
     v.form=el('form');v.form.onsubmit=e=>e.preventDefault();
     for(const [name,label,max] of [['product','Product or business',160],['audience','Target audience',300],['benefit','Product benefit and visual brief',2000],['offer','Offer (optional)',500],['cta','Call to action',300]]){
-      const block=el('div',undefined,'block'),caption=el('label',label,'label');const input=el(name==='benefit'?'textarea':'input');input.id='ad-'+name;input.name=name;input.maxLength=max;input.className='field';caption.htmlFor=input.id;block.append(caption,input);v.form.append(block);
+      const block=el('div',undefined,'block'),caption=el('label',label,'label');const input=el(name==='benefit'?'textarea':'input');input.id='ad-'+name;input.name=name;input.maxLength=max;input.className='field';input.placeholder=({product:'e.g. A bakery selling freshly baked bread',audience:'e.g. Local families and office workers',benefit:'What makes it useful? What should viewers see?',offer:'e.g. 10% off this weekend',cta:'e.g. Visit our shop today'}[name]);caption.htmlFor=input.id;block.append(caption,input);v.form.append(block);
     }
     for(const [name,label,options] of [['style','Visual style',['Cinematic','Product showcase','Luxury','Minimalist']],['duration','Video duration',['6','8','10']],['resolution','Resolution',['720p','1080p']],['ratio','Aspect ratio',['16:9','9:16','1:1']]]){
       const block=el('div',undefined,'block'),caption=el('label',label,'label'),select=el('select');select.name=name;select.id='ad-'+name;caption.htmlFor=select.id;
@@ -172,7 +172,9 @@
     v.output=el('div');v.output.id='ad-output';v.jobs=el('div',undefined,'list');v.jobs.id='ad-jobs';
     root.append(v.form,v.message,v.review,v.generate,signin,check,v.refresh,v.output,el('h2','Saved advertisements'),v.jobs,
       el('p','Pending submissions and job IDs are saved on this device for this account. Finished videos are retrieved through your private account.','subtitle'));
-    document.getElementById('screen').replaceChildren(root);await checkAccount(v);
+    document.getElementById('screen').replaceChildren(root);
+    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,jobs:v.jobs,getState:()=>v,settings:true});
+    await checkAccount(v);
   };
   window.addEventListener('nene-auth-changed',()=>{
     const v=active;if(!v||!alive(v))return;
@@ -180,3 +182,4 @@
     say(v,'Account changed. Check your account and availability before continuing.');
   });
 })();
+
