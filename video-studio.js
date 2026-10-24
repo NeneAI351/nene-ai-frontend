@@ -1,0 +1,215 @@
+/* Paid text and image video studio: no prototype grants or legacy submission. */
+(() => {
+  'use strict';
+  let active = null;
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const fields = ['idea','style','shot','camera','lighting','motion','duration','resolution','ratio'];
+  const el = (tag,text,cls) => {const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
+  const displayValue=(name,value)=>name==='duration'?value+' seconds':name==='ratio'?({'16:9':'16:9 · Landscape','9:16':'9:16 · Portrait','1:1':'1:1 · Square'}[value]||value):value;
+  function say(v,text){if(active===v && v.root.isConnected)v.message.textContent=text;}
+  function storageKey(v,suffix){return `nene_video_${v.mode}_${suffix}_v1:${v.owner}`;}
+  function read(v,suffix,fallback){try{return JSON.parse(localStorage.getItem(storageKey(v,suffix))||'null')||fallback;}catch(_){return fallback;}}
+  function write(v,suffix,value){localStorage.setItem(storageKey(v,suffix),JSON.stringify(value));}
+  function lock(v,locked){for(const name of fields){v.form.elements[name].disabled=locked;const button=v.form.querySelector('[data-choice-for="'+name+'"]');if(button)button.disabled=locked;}if(v.file)v.file.disabled=locked;v.review.disabled=locked;}
+  function alive(v){return active===v && v.root.isConnected;}
+  async function api(v,path,options={}){
+    const owner=await window.neneAuthGetUserId?.();
+    const token=await window.neneAuthGetAccessToken?.();
+    let subject;try{subject=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).sub;}catch(_){}
+    if(!owner || !token || subject!==owner || owner!==v.owner || owner!==await window.neneAuthGetUserId?.())throw new Error('Sign in to the same account, then check your account again.');
+    const base=new URL(window.NENE_DIRECTOR_CONFIG?.backendUrl||'');
+    if(base.protocol!=='https:')throw new Error('The secure video service is not configured.');
+    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),30000);
+    try{
+      const response=await fetch(base.href.replace(/\/$/,'')+path,{...options,cache:'no-store',signal:controller.signal,
+        headers:{Authorization:'Bearer '+token,...options.headers}});
+      const data=await response.json().catch(()=>({}));
+      if(await window.neneAuthGetUserId?.()!==owner || v.owner!==owner)throw new Error('The account changed. Reopen Video Studio.');
+      if(!response.ok){const raw=typeof data.detail==='string'?data.detail:'The video service could not complete this request.';const e=new Error(/LTX|Pixazo|Magic Hour|provider|durable|configuration|worker|database/i.test(raw)?'Video creation is temporarily unavailable. Please try again later.':raw);e.status=response.status;throw e;}
+      return data;
+    }catch(error){if(error.name==='AbortError')throw new Error('The request timed out. Retry the same pending submission safely; do not create another copy.');throw error;}
+    finally{clearTimeout(timer);}
+  }
+  function draft(v){const data={};for(const name of fields)data[name]=v.form.elements[name].value.trim();return data;}
+  function payload(v,d){
+    if(!d.idea)throw new Error('Describe your scene or motion first.');
+    let prompt=[d.idea,'Production preferences (the scene description takes priority):',
+      `Style: ${d.style}. Shot: ${d.shot}. Camera: ${d.camera}. Lighting: ${d.lighting}. Motion: ${d.motion}.`,
+      'Keep the main action clear and visual details consistent across frames.'].join('\n');
+    if(window.NENEPromptAssist){const prepared=window.NENEPromptAssist.forGeneration(v.form.elements.idea,prompt);if(prepared===null)throw new Error('Review the enhanced prompt again after changing production controls.');prompt=prepared;}
+    if(v.mode==='image'){
+      if(!v.imageData&&!v.sourceImageId)throw new Error('Choose a source image first.');
+      prompt+='\nUse the supplied source image as the visual anchor. Preserve its subject and appearance while applying only the requested motion. Exact visual identity is not guaranteed.';
+    }
+    return {type:v.mode==='image'?'image-to-video':'text-to-video',provider:'ltx',model:'ltx-2-5-fast',resolution:d.resolution,duration:Number(d.duration),aspect_ratio:d.ratio,prompt};
+  }
+  async function checkAccount(v){
+    if(v.busy)return;
+    v.generate.disabled=true;v.quote=null;clearTimeout(v.timer);
+    try{
+      const owner=await window.neneAuthGetUserId?.();
+      if(!owner){v.owner=null;say(v,'Sign in to review pricing and create a paid video.');return;}
+      if(!alive(v))return;v.owner=owner;
+      const state=await api(v,'/api/generation-availability');if(!alive(v))return;
+      v.accepting=state.accepting_requests===true;say(v,v.accepting?'Choose your options, then review the price.':'Video creation is temporarily unavailable. Your work has not been submitted and no credits were charged.');
+      v.pending=read(v,'pending',null);
+      if(v.pending?.payload && v.pending?.key && v.pending?.draft){
+        for(const name of fields)if(v.pending.draft[name]!==undefined){v.form.elements[name].value=v.pending.draft[name];const button=v.form.querySelector('[data-choice-for="'+name+'"]');if(button)button.textContent=displayValue(name,v.pending.draft[name]);}
+        lock(v,true);v.generate.textContent='Retry pending submission safely';v.generate.disabled=!v.accepting;
+        say(v,'A pending submission is saved on this device. Retry it with the same request key to avoid duplicate charges. '+(v.accepting?'':'Video creation is temporarily unavailable.'));
+      }else{v.pending=null;lock(v,false);v.generate.textContent='Generate video';}
+      renderJobs(v);
+    }catch(error){say(v,error.message);}
+  }
+  async function review(v){
+    if(v.busy || v.pending)return;
+    try{
+      if(!await window.neneRequireAccount?.('Sign in to review your video.'))return;
+      if(!v.owner)await checkAccount(v);
+      const d=draft(v),body=payload(v,d);v.busy=true;v.review.disabled=true;v.generate.disabled=true;
+      const q=await api(v,'/api/pricing/quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:body.provider,model:body.model,resolution:body.resolution,duration:body.duration})});
+      const amount=Number(q.recommended_credits);
+      if(!Number.isFinite(amount)||amount<=0)throw new Error('No valid paid price is available for this video.');
+      if(!alive(v))return;
+      v.quote={draft:JSON.stringify(d),body,cost:String(q.recommended_credits)};
+      v.generate.textContent=`Generate video · ${q.recommended_credits} paid credits`;
+      v.generate.disabled=!v.accepting;
+      say(v,`${q.recommended_credits} paid credits for this video. Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate video.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
+    }catch(error){say(v,error.message);}finally{v.busy=false;if(alive(v)&&!v.pending)v.review.disabled=false;}
+  }
+  function rememberJob(v,id,title){
+    if(!UUID.test(id))throw new Error('The server did not return a valid generation ID. Retry the saved submission safely.');
+    const old=read(v,'jobs',[]);const jobs=Array.isArray(old)?old:[];
+    write(v,'jobs',[{id,title},...jobs.filter(x=>x.id!==id)].slice(0,20));
+  }
+  async function submit(v){
+    if(v.busy || !v.accepting)return;
+    if(!v.pending && (!v.quote || v.quote.draft!==JSON.stringify(draft(v)))){say(v,'Review the current price before generating.');return;}
+    v.busy=true;v.generate.disabled=true;lock(v,true);
+    let requestStarted=false;
+    const hadPending=!!v.pending;
+    try{
+      if(!v.pending){
+        v.pending={key:crypto.randomUUID(),uncertain:true,draft:draft(v),payload:{...v.quote.body,credit_limit:v.quote.cost,...(v.mode==='image'&&v.sourceImageId?{source_image_id:v.sourceImageId}:{})}};
+        // Persist before the request: uncertain responses can reuse the same key
+        // after a page reload. Never persist tokens or signed video URLs.
+      }
+      if(v.mode==='image'&&!v.pending.payload.source_image_id){
+        const uploaded=await api(v,'/api/image-upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data_uri:v.imageData})});
+        if(uploaded.private!==true||!UUID.test(uploaded.source_image_id))throw new Error('A private image upload could not be confirmed. No video was submitted.');
+        v.sourceImageId=uploaded.source_image_id;v.pending.payload.source_image_id=uploaded.source_image_id;
+      }
+      write(v,'pending',v.pending);
+      requestStarted=true;
+      say(v,'Submitting your paid video once…');
+      const result=await api(v,'/api/generations',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':v.pending.key},body:JSON.stringify(v.pending.payload)});
+      if(!alive(v))return;
+      rememberJob(v,result.generation_id,v.pending.draft.idea.slice(0,100));
+      localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
+      v.generate.textContent='Review price before creating another video';renderJobs(v);
+      await poll(v,result.generation_id,0);
+      try{await window.neneRefreshPaidWallet?.();}catch(_){}
+    }catch(error){
+      if(!requestStarted){
+        v.pending=null;say(v,error.message+' No video was submitted. Review your settings before trying again.');return;
+      }
+      const definiteRejection=[400,401,402,403,422].includes(error.status)||(error.status===409 && /price increased/i.test(error.message));
+      if(definiteRejection && (!hadPending || (error.status===409 && /price increased/i.test(error.message)))){
+        localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
+        v.generate.textContent='Review price before generating';
+      }else {
+        if(v.pending){v.pending.uncertain=true;try{write(v,'pending',v.pending);}catch(_) {}}
+        v.generate.textContent='Retry pending submission safely';
+      }
+      say(v,error.message+(v.pending?' Your submission is saved. Retry this same request safely.':''));
+    }finally{
+      v.busy=false;if(alive(v)){lock(v,!!v.pending);v.generate.disabled=!(v.pending&&v.accepting);}
+    }
+  }
+  function renderJobs(v){
+    v.jobs.replaceChildren();const jobs=read(v,'jobs',[]);
+    if(!Array.isArray(jobs))return;
+    for(const job of jobs){if(!UUID.test(job.id))continue;const button=el('button',job.title||'Saved video','btn');button.type='button';button.onclick=()=>poll(v,job.id,0);v.jobs.append(button);}
+  }
+  async function media(v,id){
+    const data=await api(v,`/api/generations/${id}/media-url`);if(!alive(v)||v.selected!==id)return;
+    const url=new URL(data.url);if(url.protocol!=='https:')throw new Error('A secure video link is not available.');
+    v.output.replaceChildren();const video=el('video');video.controls=true;video.playsInline=true;video.preload='metadata';video.style.width='100%';video.src=url.href;
+    const download=el('a','Open / download video','btn');download.href=url.href;download.target='_blank';download.rel='noopener noreferrer';download.style.display='block';
+    v.output.append(video,download);
+  }
+  async function poll(v,id,attempt){
+    if(!alive(v)||!UUID.test(id))return;clearTimeout(v.timer);v.selected=id;v.refresh.disabled=false;
+    try{
+      const data=await api(v,`/api/generations/${id}`);if(!alive(v)||v.selected!==id)return;
+      const job=data.generation||{};v.output.replaceChildren();
+      if(job.status==='succeeded'){
+        say(v,'Your video is ready. The private viewing link expires; refresh it here when needed.');await media(v,id);
+        try{await window.neneRefreshPaidWallet?.();}catch(_){}return;
+      }
+      if(job.status==='failed'){
+        say(v,'Video generation failed. Check your wallet for restored credits. Creating another video is a separate paid request.');
+        try{await window.neneRefreshPaidWallet?.();}catch(_){}return;
+      }
+      say(v,`Video status: ${String(job.status||'pending')}. Keep this saved job; do not submit another copy.`);
+      if(attempt<120)v.timer=setTimeout(()=>poll(v,id,attempt+1),7000);
+    }catch(error){say(v,error.message+' Your job remains saved. Use Refresh saved video status.');}
+  }
+  function choose(v,title,select,trigger){
+    const overlay=el('div',undefined,'video-choice-overlay'),panel=el('section',undefined,'video-choice-panel');panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',title);
+    const heading=el('h2',title),group=el('div');group.setAttribute('role','radiogroup');group.setAttribute('aria-label',title);panel.append(heading,group);const buttons=[];
+    const close=()=>{overlay.remove();if(trigger.isConnected)trigger.focus();};
+    for(const option of select.options){const button=el('button',displayValue(select.name,option.value),'video-choice-option');button.type='button';button.setAttribute('role','radio');button.setAttribute('aria-checked',String(option.value===select.value));button.onclick=()=>{if(!alive(v)||select.disabled){close();return;}select.value=option.value;trigger.textContent=displayValue(select.name,option.value);trigger.setAttribute('aria-label',title+': '+option.value);select.dispatchEvent(new Event('input',{bubbles:true}));select.dispatchEvent(new Event('change',{bubbles:true}));close();};group.append(button);buttons.push(button);}
+    const cancel=el('button','Cancel','btn');cancel.type='button';cancel.onclick=close;panel.append(cancel);overlay.append(panel);document.body.append(overlay);overlay.onclick=e=>{if(e.target===overlay)close();};
+    overlay.onkeydown=e=>{const list=[...buttons,cancel],index=list.indexOf(document.activeElement);if(e.key==='Escape'){e.preventDefault();close();}else if(e.key==='Tab'){e.preventDefault();list[(index+(e.shiftKey?-1:1)+list.length)%list.length].focus();}else if(['ArrowDown','ArrowRight','ArrowUp','ArrowLeft','Home','End'].includes(e.key)){e.preventDefault();const current=buttons.indexOf(document.activeElement);buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:(current+(['ArrowUp','ArrowLeft'].includes(e.key)?-1:1)+buttons.length)%buttons.length].focus();}};
+    buttons[[...select.options].findIndex(o=>o.value===select.value)]?.focus();
+  }
+  window.neneOpenVideoStudio=async function(mode='text'){
+    if(!['text','image'].includes(mode))return;
+    if(active?.busy){toast('Please wait for the current video request.');return;}
+    if(active)clearTimeout(active.timer);
+    const root=el('main'),v={root,mode,owner:null,quote:null,pending:null,accepting:false,busy:false,imageData:null,sourceImageId:null};active=v;
+    setNav('create');const back=el('button','‹','back');back.type='button';back.setAttribute('aria-label','Back to Home');back.onclick=()=>{clearTimeout(v.timer);active=null;renderHome();};
+    const heading=el('div',undefined,'toolhead');heading.append(back,el('h1',mode==='image'?'Image → Video':'Text → Video'));root.append(heading,
+      el('p',mode==='image'?'Bring your image to life with a clear motion brief.':'Describe your scene. Choose your look. Create your video.','subtitle'));
+    v.form=el('form');v.form.onsubmit=e=>e.preventDefault();
+    if(mode==='image'){
+      const label=el('label','Source image','label');v.file=el('input');v.file.type='file';v.file.accept='image/png,image/jpeg,image/webp';v.file.id='video-source';label.htmlFor=v.file.id;
+      const hint=el('p','PNG, JPEG or WebP · up to 7 MB. Uploaded privately when you submit.','subtitle');const preview=el('img');preview.alt='Your source image';preview.style.cssText='display:none;max-height:200px;max-width:100%;border-radius:14px';
+      v.file.onchange=async()=>{v.imageData=null;v.sourceImageId=null;v.quote=null;v.generate.disabled=true;preview.style.display='none';const file=v.file.files?.[0];if(!file)return;
+        try{if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>7*1024*1024)throw Error('Choose a PNG, JPEG or WebP up to 7 MB.');
+          const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('The image could not be read.'));reader.readAsDataURL(file);});
+          await new Promise((resolve,reject)=>{const image=new Image();image.onload=resolve;image.onerror=()=>reject(Error('Choose an image your browser can open.'));image.src=data;});
+          if(!alive(v)||v.file.files?.[0]!==file)return;v.imageData=data;preview.src=data;preview.style.display='block';say(v,'Image ready. Review the price when your motion brief is complete.');
+        }catch(error){say(v,error.message);}
+      };v.form.append(label,v.file,hint,preview);v.preview=preview;
+    }
+    const block=el('div',undefined,'block'),label=el('label',mode==='image'?'Describe the motion':'Your prompt','label'),input=el('textarea');input.id='prompt';input.name='idea';input.maxLength=10000;input.placeholder=mode==='image'?'What should move? Describe the action and camera direction…':'Describe the subject, action, setting and mood…';label.htmlFor=input.id;block.append(label,input);
+    if(mode==='text'){const assist=el('button','✨ Enhance my prompt','btn');assist.type='button';assist.onclick=()=>window.enhanceNenePrompt?.();block.append(assist,el('small','Preview and edit your prompt before applying changes.','subtitle'));}v.form.append(block);
+    const idFor={style:'neneStyle',shot:'neneShot',camera:'neneCamera',lighting:'neneLighting',motion:'neneMotion',duration:'neneDuration',resolution:'neneResolution',ratio:'neneAspectRatio'};
+    const group=el('div',undefined,'video-options');
+    for(const [name,label,options] of [['style','Visual style',['Cinematic','Photorealistic','Animated','3D','Documentary']],['shot','Framing',['Medium shot','Close-up','Wide establishing shot','Tracking shot']],['camera','Camera',['Smooth cinematic camera','Static locked camera','Slow dolly-in','Gentle tracking shot','Slow orbit']],['lighting','Lighting',['Natural cinematic lighting','Golden-hour lighting','Soft diffused lighting','Dramatic high-contrast lighting']],['motion','Motion',['Natural, realistic movement','Slow, elegant movement','Subtle movement with stable framing','Energetic dynamic movement']],['duration','Duration',['6','8','10']],['resolution','Resolution',['720p','1080p']],['ratio','Format',['16:9','9:16','1:1']]]){
+      const block=el('div',undefined,'block'),caption=el('label',label,'label'),select=el('select');select.name=name;select.id=idFor[name];select.hidden=true;select.setAttribute('aria-hidden','true');select.tabIndex=-1;caption.htmlFor='choice-'+name;
+      for(const value of options){const option=el('option',value);option.value=value;select.append(option);}
+      const button=el('button',displayValue(name,options[0]),'video-choice');button.id='choice-'+name;button.type='button';button.dataset.choiceFor=name;button.setAttribute('aria-label',label+': '+options[0]);button.setAttribute('aria-haspopup','dialog');button.onclick=()=>choose(v,label,select,button);select.addEventListener('change',()=>{button.textContent=displayValue(name,select.value);button.setAttribute('aria-label',label+': '+select.value);select.dispatchEvent(new Event('input',{bubbles:true}));});block.append(caption,select,button);group.append(block);
+    }v.form.append(group);
+    v.form.addEventListener('input',()=>{if(!v.pending){v.quote=null;v.generate.disabled=true;v.generate.textContent='Review price before generating';}});
+    v.message=el('p','Checking paid generation availability…','notice');v.message.id='video-message';v.message.setAttribute('role','status');v.message.setAttribute('aria-live','polite');
+    v.review=el('button','Review price','btn');v.review.type='button';v.review.id='video-review';v.review.onclick=()=>review(v);
+    v.generate=el('button','Generate video','btn gold');v.generate.type='button';v.generate.id='video-generate';v.generate.disabled=true;v.generate.onclick=()=>submit(v);
+    const signin=el('button','Sign in / account','btn');signin.onclick=()=>window.neneOpenAuth?.();
+    const check=el('button','Check account and availability','btn');check.onclick=()=>checkAccount(v);
+    v.refresh=el('button','Refresh saved video status / link','btn');v.refresh.disabled=true;v.refresh.onclick=()=>v.selected&&poll(v,v.selected,0);
+    v.output=el('div');v.output.id='video-output';v.jobs=el('div',undefined,'list');v.jobs.id='video-jobs';
+    root.append(v.form,el('p','Review your credit price before generating. Captions and added sound are not included here. Watermark-free export is not guaranteed; exact text, logos and visual consistency may need editing.','notice'),v.message,v.review,v.generate,signin,check,v.refresh,v.output,el('h2','Your saved videos'),v.jobs,
+      el('p','Pending submissions and job IDs are saved on this device for this account. Finished videos are retrieved through your private account.','subtitle'));
+    document.getElementById('screen').replaceChildren(root);await checkAccount(v);
+  };
+  window.addEventListener('nene-auth-changed',()=>{
+    const v=active;if(!v||!alive(v))return;
+    document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();v.imageData=null;v.sourceImageId=null;if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
+    say(v,'Account changed. Check your account and availability before continuing.');
+  });
+})();
+
+

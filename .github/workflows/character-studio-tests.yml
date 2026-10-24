@@ -16,3 +16,5 @@ jobs:
       - run: NODE_PATH=tests/node_modules node scripts/check_social_content.cjs
 
       - run: node --test tests/prompt-assist.test.cjs
+
+      - run: node --test tests/video-studio.test.cjs

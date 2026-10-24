@@ -58,11 +58,12 @@
         card.append(node('strong', label), node('p', value || 'None', 'subtitle'));
       }
       const use = node('button', 'Use visual prompt in Text → Video', 'btn'); use.type = 'button';
-      use.onclick = () => {
+      use.onclick = async () => {
         if (busy) return;
-        openTool('text');
+        await openTool('text');
         const prompt = document.getElementById('prompt'); if (prompt) prompt.value = scene.visual_prompt;
-        const duration = document.getElementById('neneDuration'); if (duration) duration.value = String(record.brief.scene_seconds);
+        const duration = document.getElementById('neneDuration'); if (duration) { duration.value = String(record.brief.scene_seconds); duration.dispatchEvent(new Event('change',{bubbles:true})); }
+        const ratio = document.getElementById('neneAspectRatio'); if (ratio) { ratio.value = record.brief.aspect_ratio; ratio.dispatchEvent(new Event('change',{bubbles:true})); }
       };
       card.append(use); result.append(card);
     });
@@ -152,3 +153,4 @@
     document.getElementById('screen').replaceChildren(view); await refresh();
   };
 })();
+
