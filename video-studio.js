@@ -3,14 +3,14 @@
   'use strict';
   let active = null;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const fields = ['idea','style','shot','camera','lighting','motion','duration','resolution','ratio','audio','sound'];
+  const fields = ['idea','style','shot','camera','lighting','motion','duration','resolution','ratio','audio','sound','dialogue','speechMode'];
   const el = (tag,text,cls) => {const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
   const displayValue=(name,value)=>name==='duration'?value+' seconds':name==='ratio'?({'16:9':'16:9 · Landscape','9:16':'9:16 · Portrait','1:1':'1:1 · Square'}[value]||value):value;
   function say(v,text){if(active===v && v.root.isConnected)v.message.textContent=text;}
   function storageKey(v,suffix){return `nene_video_${v.mode}_${suffix}_v1:${v.owner}`;}
   function read(v,suffix,fallback){try{return JSON.parse(localStorage.getItem(storageKey(v,suffix))||'null')||fallback;}catch(_){return fallback;}}
   function write(v,suffix,value){localStorage.setItem(storageKey(v,suffix),JSON.stringify(value));}
-  function lock(v,locked){for(const name of fields){v.form.elements[name].disabled=locked;const button=v.form.querySelector('[data-choice-for="'+name+'"]');if(button)button.disabled=locked;}if(v.file)v.file.disabled=locked;if(v.form.elements.audio?.value==='Silent')v.form.elements.sound.disabled=true;v.review.disabled=locked;}
+  function lock(v,locked){for(const name of fields){v.form.elements[name].disabled=locked;const button=v.form.querySelector('[data-choice-for="'+name+'"]');if(button)button.disabled=locked;}if(v.file)v.file.disabled=locked;if(v.audioFile)v.audioFile.disabled=locked;if(v.form.elements.audio?.value==='Silent')v.form.elements.sound.disabled=true;v.review.disabled=locked;}
   function alive(v){return active===v && v.root.isConnected;}
   async function api(v,path,options={}){
     const owner=await window.neneAuthGetUserId?.();
@@ -30,7 +30,7 @@
     }catch(error){if(error.name==='AbortError')throw new Error('The request timed out. Retry the same pending submission safely; do not create another copy.');throw error;}
     finally{clearTimeout(timer);}
   }
-  function draft(v){const data={};for(const name of fields)data[name]=v.form.elements[name].value.trim();return data;}
+  function draft(v){const data={};for(const name of fields)data[name]=v.form.elements[name].value.trim();if(v.mode==='talking'){data.audioId=v.audioAsset?.source_audio_id||null;data.imageRevision=v.imageRevision||null;}return data;}
   function payload(v,d){
     if(!v.audioSupported)throw new Error('Sound settings are updating. Check availability again before generating.');
     if(!['AI scene sound','Silent'].includes(d.audio))throw new Error('Choose a supported sound setting.');
@@ -39,13 +39,25 @@
       `Style: ${d.style}. Shot: ${d.shot}. Camera: ${d.camera}. Lighting: ${d.lighting}. Motion: ${d.motion}.`,
       'Keep the main action clear and visual details consistent across frames.'].join('\n');
     if(window.NENEPromptAssist){const prepared=window.NENEPromptAssist.forGeneration(v.form.elements.idea,prompt);if(prepared===null)throw new Error('Review the enhanced prompt again after changing production controls.');prompt=prepared;}
-    if(v.mode==='image'){
+    if(['image','talking'].includes(v.mode)){
       if(!v.imageData&&!v.sourceImageId)throw new Error('Choose a source image first.');
       prompt+='\nUse the supplied source image as the visual anchor. Preserve its subject and appearance while applying only the requested motion. Exact visual identity is not guaranteed.';
     }
     if(d.audio==='AI scene sound'&&d.sound)prompt+='\nSound direction: '+d.sound;
+    if(v.mode==='talking'){
+      if(d.audio!=='AI scene sound')throw Error('Talking characters require sound.');
+      prompt+='\nA single character faces the camera. Keep the mouth visible and synchronize natural lip movements to the speech. No subtitles or other speakers.';
+      if(d.speechMode==='Upload voice recording'){
+        if(!v.audioAsset?.source_audio_id)throw Error('Choose a voice recording, then review its price.');
+        if(d.dialogue)prompt+='\nSpeech transcript for context only: '+d.dialogue;
+      }else{
+        if(!d.dialogue)throw Error('Write the dialogue you want the character to say.');
+        if(d.dialogue.split(/\s+/).length>Math.floor(Number(d.duration)*2.5))throw Error('Shorten the dialogue or choose a longer clip. Use about two words per second.');
+        prompt+='\nThe character says the following dialogue, word for word, in a natural speaking voice: '+JSON.stringify(d.dialogue)+'. Do not add other words.';
+      }
+    }
     if(prompt.length>5000)throw new Error('Shorten the prompt and sound description to fit within 5,000 characters.');
-    return {generate_audio:d.audio==='AI scene sound',type:v.mode==='image'?'image-to-video':'text-to-video',provider:'ltx',model:'ltx-2-5-fast',resolution:d.resolution,duration:Number(d.duration),aspect_ratio:d.ratio,prompt};
+    return {...(v.mode==='talking'&&d.speechMode==='Upload voice recording'?{source_audio_id:v.audioAsset.source_audio_id}:{}),generate_audio:d.audio==='AI scene sound',type:v.mode==='talking'?(d.speechMode==='Upload voice recording'?'audio-to-video':'image-to-video'):v.mode==='image'?'image-to-video':'text-to-video',provider:'ltx',model:'ltx-2-5-fast',resolution:d.resolution,duration:v.mode==='talking'&&d.speechMode==='Upload voice recording'?v.audioAsset.billable_seconds:Number(d.duration),aspect_ratio:d.ratio,prompt};
   }
   async function checkAccount(v){
     if(v.busy)return;
@@ -55,11 +67,11 @@
       if(!owner){v.owner=null;say(v,'Sign in to review pricing and create a paid video.');return;}
       if(!alive(v))return;v.owner=owner;
       const state=await api(v,'/api/generation-availability');if(!alive(v))return;
-      v.accepting=state.accepting_requests===true;v.audioSupported=state.generate_audio_supported===true;say(v,v.accepting?'Choose your options, then review the price.':'Video creation is temporarily unavailable. Your work has not been submitted and no credits were charged.');
+      v.accepting=state.accepting_requests===true;v.audioSupported=state.generate_audio_supported===true&&(v.mode!=='talking'||state.talking_character_supported===true);say(v,v.accepting?'Choose your options, then review the price.':'Video creation is temporarily unavailable. Your work has not been submitted and no credits were charged.');
       v.pending=read(v,'pending',null);
       if(v.pending?.payload && v.pending?.key && v.pending?.draft){
         for(const name of fields)if(v.pending.draft[name]!==undefined){v.form.elements[name].value=v.pending.draft[name];const button=v.form.querySelector('[data-choice-for="'+name+'"]');if(button)button.textContent=displayValue(name,v.pending.draft[name]);}
-        lock(v,true);v.generate.textContent='Retry pending submission safely';v.generate.disabled=!v.accepting||!v.audioSupported;
+        v.updateSpeechUI?.();lock(v,true);v.generate.textContent='Retry pending submission safely';v.generate.disabled=!v.accepting||!v.audioSupported;
         say(v,'A pending submission is saved on this device. Retry it with the same request key to avoid duplicate charges. '+(v.accepting?'':'Video creation is temporarily unavailable.'));
       }else{v.pending=null;lock(v,false);v.generate.textContent='Generate video';}
       renderJobs(v);
@@ -70,15 +82,25 @@
     try{
       if(!await window.neneRequireAccount?.('Sign in to review your video.'))return;
       if(!v.owner)await checkAccount(v);
+      v.busy=true;v.review.disabled=true;
+      const recordingData=v.audioData;
+      if(v.mode==='talking'&&v.form.elements.speechMode.value==='Upload voice recording'&&!v.audioAsset){
+        if(!v.audioData)throw Error('Choose a voice recording first.');
+        const data=await api(v,'/api/speech-assets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data_uri:v.audioData})});
+        if(data.private!==true||!UUID.test(data.source_audio_id)||!Number.isInteger(data.billable_seconds)||data.billable_seconds<2||data.billable_seconds>10)throw Error('A private voice upload could not be confirmed.');
+        if(recordingData!==v.audioData)throw Error('The recording changed. Review its price again.');
+        v.audioAsset=data;
+      }
       const d=draft(v),body=payload(v,d);v.busy=true;v.review.disabled=true;v.generate.disabled=true;
       const q=await api(v,'/api/pricing/quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:body.provider,model:body.model,resolution:body.resolution,duration:body.duration})});
       const amount=Number(q.recommended_credits);
       if(!Number.isFinite(amount)||amount<=0)throw new Error('No valid paid price is available for this video.');
       if(!alive(v))return;
+      if(JSON.stringify(d)!==JSON.stringify(draft(v)))throw Error('Your settings changed. Review the current price again.');
       v.quote={draft:JSON.stringify(d),body,cost:String(q.recommended_credits)};
       v.generate.textContent=`Generate video · ${q.recommended_credits} paid credits`;
       v.generate.disabled=!v.accepting||!v.audioSupported;
-      say(v,`${q.recommended_credits} paid credits for this video. Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate video.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
+      say(v,`${q.recommended_credits} paid credits for this video.${body.type==='audio-to-video'?' Recording: '+v.audioAsset.duration_seconds+' seconds; priced for '+body.duration+' whole seconds.':''} Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate video.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
     }catch(error){say(v,error.message);}finally{v.busy=false;if(alive(v)&&!v.pending)v.review.disabled=false;}
   }
   function rememberJob(v,id,title){
@@ -94,11 +116,11 @@
     const hadPending=!!v.pending;
     try{
       if(!v.pending){
-        v.pending={key:crypto.randomUUID(),uncertain:true,draft:draft(v),payload:{...v.quote.body,credit_limit:v.quote.cost,...(v.mode==='image'&&v.sourceImageId?{source_image_id:v.sourceImageId}:{})}};
+        v.pending={key:crypto.randomUUID(),uncertain:true,draft:draft(v),payload:{...v.quote.body,credit_limit:v.quote.cost,...(['image','talking'].includes(v.mode)&&v.sourceImageId?{source_image_id:v.sourceImageId}:{})}};
         // Persist before the request: uncertain responses can reuse the same key
         // after a page reload. Never persist tokens or signed video URLs.
       }
-      if(v.mode==='image'&&!v.pending.payload.source_image_id){
+      if(['image','talking'].includes(v.mode)&&!v.pending.payload.source_image_id){
         const uploaded=await api(v,'/api/image-upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data_uri:v.imageData})});
         if(uploaded.private!==true||!UUID.test(uploaded.source_image_id))throw new Error('A private image upload could not be confirmed. No video was submitted.');
         v.sourceImageId=uploaded.source_image_id;v.pending.payload.source_image_id=uploaded.source_image_id;
@@ -169,18 +191,18 @@
     buttons[[...select.options].findIndex(o=>o.value===select.value)]?.focus();
   }
   window.neneOpenVideoStudio=async function(mode='text'){
-    if(!['text','image'].includes(mode))return;
+    if(!['text','image','talking'].includes(mode))return;
     if(active?.busy){toast('Please wait for the current video request.');return;}
     if(active)clearTimeout(active.timer);
     const root=el('main'),v={root,mode,owner:null,quote:null,pending:null,accepting:false,busy:false,imageData:null,sourceImageId:null};active=v;
     setNav('create');const back=el('button','‹','back');back.type='button';back.setAttribute('aria-label','Back to Home');back.onclick=()=>{clearTimeout(v.timer);active=null;renderHome();};
-    const heading=el('div',undefined,'toolhead');heading.append(back,el('h1',mode==='image'?'Image → Video':'Text → Video'));root.append(heading,
-      el('p',mode==='image'?'Bring your image to life with a clear motion brief.':'Describe your scene. Choose your look. Create your video.','subtitle'));
+    const heading=el('div',undefined,'toolhead');heading.append(back,el('h1',mode==='talking'?'Talking Character':mode==='image'?'Image → Video':'Text → Video'));root.append(heading,
+      el('p',mode==='talking'?'Give your character dialogue or a voice recording.':mode==='image'?'Bring your image to life with a clear motion brief.':'Describe your scene. Choose your look. Create your video.','subtitle'));
     v.form=el('form');v.form.onsubmit=e=>e.preventDefault();
-    if(mode==='image'){
+    if(['image','talking'].includes(mode)){
       const label=el('label','Source image','label');v.file=el('input');v.file.type='file';v.file.accept='image/png,image/jpeg,image/webp';v.file.id='video-source';label.htmlFor=v.file.id;
       const hint=el('p','PNG, JPEG or WebP · up to 7 MB. Uploaded privately when you submit.','subtitle');const preview=el('img');preview.alt='Your source image';preview.style.cssText='display:none;max-height:200px;max-width:100%;border-radius:14px';
-      v.file.onchange=async()=>{v.imageData=null;v.sourceImageId=null;v.quote=null;v.generate.disabled=true;preview.style.display='none';const file=v.file.files?.[0];if(!file)return;
+      v.file.onchange=async()=>{v.imageRevision=crypto.randomUUID();v.imageData=null;v.sourceImageId=null;v.quote=null;v.generate.disabled=true;preview.style.display='none';const file=v.file.files?.[0];if(!file)return;
         try{if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>7*1024*1024)throw Error('Choose a PNG, JPEG or WebP up to 7 MB.');
           const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('The image could not be read.'));reader.readAsDataURL(file);});
           await new Promise((resolve,reject)=>{const image=new Image();image.onload=resolve;image.onerror=()=>reject(Error('Choose an image your browser can open.'));image.src=data;});
@@ -188,6 +210,18 @@
         }catch(error){say(v,error.message);}
       };v.form.append(label,v.file,hint,preview);v.preview=preview;
     }
+    const dialogue=el('textarea');dialogue.name='dialogue';dialogue.id='talking-dialogue';dialogue.maxLength=600;
+    const speechMode=el('select');speechMode.name='speechMode';speechMode.hidden=true;
+    for(const value of ['Write dialogue','Upload voice recording']){const option=el('option',value);option.value=value;speechMode.append(option);}
+    if(mode==='talking'){
+      const label=el('label','What should your character say?','label');label.htmlFor=dialogue.id;dialogue.placeholder='Write a short line, or add a transcript for your recording…';
+      const choice=el('button','Write dialogue','video-choice');choice.type='button';choice.dataset.choiceFor='speechMode';choice.setAttribute('aria-label','Speech input');choice.onclick=()=>choose(v,'Speech input',speechMode,choice);
+      const hint=el('p','Typed dialogue generates an AI voice and may vary. For exact words and your chosen voice, upload a recording of the script. Lip-sync quality must be checked in the result.','notice');
+      v.audioFile=el('input');v.audioFile.id='talking-recording';v.audioFile.type='file';v.audioFile.accept='audio/wav,audio/mpeg,audio/mp4,audio/ogg,.m4a';
+      const recordingLabel=el('label','Voice recording · WAV, MP3, M4A or OGG · 2–10 seconds · up to 8 MB','label');recordingLabel.htmlFor=v.audioFile.id;
+      v.audioFile.onchange=async()=>{v.audioAsset=null;v.audioData=null;v.quote=null;v.generate.disabled=true;const file=v.audioFile.files?.[0];if(!file)return;try{if(file.size>8*1024*1024)throw Error('Choose audio up to 8 MB.');const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('The recording could not be read.'));reader.readAsDataURL(file);});if(!alive(v)||v.audioFile.files?.[0]!==file)return;v.audioData=String(data).replace(/^data:[^;]*/, 'data:audio/wav');say(v,'Recording ready. Review price to validate its length and upload it privately.');}catch(e){say(v,e.message);}};
+      v.form.append(choice,label,dialogue,speechMode,hint,recordingLabel,v.audioFile);v.recordingLabel=recordingLabel;
+    }else{dialogue.hidden=true;v.form.append(dialogue,speechMode);}
     const block=el('div',undefined,'block'),label=el('label',mode==='image'?'Describe the motion':'Your prompt','label'),input=el('textarea');input.id='prompt';input.name='idea';input.maxLength=10000;input.placeholder=mode==='image'?'What should move? Describe the action and camera direction…':'Describe the subject, action, setting and mood…';label.htmlFor=input.id;block.append(label,input);
     if(mode==='text'){const assist=el('button','✨ Enhance my prompt','btn');assist.type='button';assist.onclick=()=>window.enhanceNenePrompt?.();block.append(assist,el('small','Preview and edit your prompt before applying changes.','subtitle'));}v.form.append(block);
     const idFor={style:'neneStyle',shot:'neneShot',camera:'neneCamera',lighting:'neneLighting',motion:'neneMotion',duration:'neneDuration',resolution:'neneResolution',ratio:'neneAspectRatio',audio:'neneAudio'};
@@ -198,6 +232,11 @@
       const button=el('button',displayValue(name,options[0]),'video-choice');button.id='choice-'+name;button.type='button';button.dataset.choiceFor=name;button.setAttribute('aria-label',label+': '+options[0]);button.setAttribute('aria-haspopup','dialog');button.onclick=()=>choose(v,label,select,button);select.addEventListener('change',()=>{button.textContent=displayValue(name,select.value);button.setAttribute('aria-label',label+': '+select.value);select.dispatchEvent(new Event('input',{bubbles:true}));});block.append(caption,select,button);group.append(block);
     }v.form.append(group);
     const soundBlock=el('div',undefined,'block'),soundLabel=el('label','Sound description (optional)','label'),sound=el('input');sound.name='sound';sound.id='video-sound';sound.className='field';sound.maxLength=500;sound.placeholder='e.g. birdsong, flowing water, soft wind';soundLabel.htmlFor=sound.id;soundBlock.append(soundLabel,sound,el('small','AI sound follows the scene and your description. Specific dialogue, music or voices are not guaranteed.','subtitle'));v.form.append(soundBlock);v.form.elements.audio.addEventListener('change',()=>{sound.disabled=v.form.elements.audio.value==='Silent';});
+    if(mode==='talking'){
+      v.form.elements.audio.value='AI scene sound';v.form.elements.audio.closest('.block').hidden=true;
+      v.updateSpeechUI=()=>{const recorded=speechMode.value==='Upload voice recording';v.audioFile.hidden=!recorded;v.recordingLabel.hidden=!recorded;v.form.elements.duration.closest('.block').hidden=recorded;v.form.elements.sound.closest('.block').hidden=recorded;};
+      speechMode.addEventListener('change',v.updateSpeechUI);v.updateSpeechUI();
+    }
     v.form.addEventListener('input',()=>{if(!v.pending){v.quote=null;v.generate.disabled=true;v.generate.textContent='Review price before generating';}});
     v.message=el('p','Checking paid generation availability…','notice');v.message.id='video-message';v.message.setAttribute('role','status');v.message.setAttribute('aria-live','polite');
     v.review=el('button','Review price','btn');v.review.type='button';v.review.id='video-review';v.review.onclick=()=>review(v);
@@ -210,9 +249,11 @@
       el('p','Pending submissions and job IDs are saved on this device for this account. Finished videos are retrieved through your private account.','subtitle'));
     document.getElementById('screen').replaceChildren(root);await checkAccount(v);
   };
+  const oldFeature=window.openFeature;
+  window.openFeature=function(type,...args){return type==='voice'?window.neneOpenVideoStudio('talking'):oldFeature.call(this,type,...args);};
   window.addEventListener('nene-auth-changed',()=>{
     const v=active;if(!v||!alive(v))return;
-    document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();v.imageData=null;v.sourceImageId=null;if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
+    document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();v.updateSpeechUI?.();v.imageData=null;v.sourceImageId=null;v.audioData=null;v.audioAsset=null;if(v.audioFile)v.audioFile.value='';if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
     say(v,'Account changed. Check your account and availability before continuing.');
   });
 })();
