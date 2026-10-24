@@ -3,13 +3,13 @@ const {JSDOM}=require('jsdom'),fs=require('node:fs'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../video-studio.js'),'utf8');
 const USER='11111111-1111-4111-8111-111111111111',JOB='22222222-2222-4222-8222-222222222222',ASSET='33333333-3333-4333-8333-333333333333';
 async function settle(){for(let i=0;i<20;i++)await new Promise(r=>setImmediate(r));}
-async function setup({mode='text',enabled=true,fail=false,pending=null,privateImage=true,speechPending=null}={}){
+async function setup({mode='text',enabled=true,fail=false,pending=null,privateImage=true,speechPending=null,voiceOnly=false}={}){
  const dom=new JSDOM('<div id="screen"></div>',{url:'https://nene.test',runScripts:'outside-only'}),w=dom.window;let owner=USER;const calls=[];
  w.setNav=()=>{};w.renderHome=()=>{};w.toast=()=>{};w.neneOpenAuth=()=>{};w.neneRequireAccount=async()=>!!owner;w.neneAuthGetUserId=async()=>owner;w.neneAuthGetAccessToken=async()=>owner?'x.'+Buffer.from(JSON.stringify({sub:owner})).toString('base64url')+'.x':null;w.NENE_DIRECTOR_CONFIG={backendUrl:'https://api.test'};w.credits=800;
  if(speechPending)w.localStorage.setItem(`nene_video_talking_speech_pending_v1:${USER}`,JSON.stringify(speechPending));
  if(pending)w.localStorage.setItem(`nene_video_${mode}_pending_v1:${USER}`,JSON.stringify(pending));
  w.fetch=async(url,options={})=>{calls.push({url,options});let data;if(url.endsWith('/api/speech/availability'))data={accepting_requests:enabled};else if(url.endsWith('/api/speech/quote'))data={recommended_credits:5};else if(url.endsWith('/api/speech/generations')){if(fail)throw Error('Connection lost');data={generation_id:JOB};}else if(url.includes('/api/speech/generations/'))data={status:'succeeded',audio:{private:true,source_audio_id:ASSET,duration_seconds:6.4,billable_seconds:7,can_animate:true,url:'https://private.test/voice.wav?temporary-link'}};else if(url.endsWith('/api/generation-availability'))data={accepting_requests:enabled,generate_audio_supported:true,talking_character_supported:true};else if(url.endsWith('/api/pricing/quote'))data={recommended_credits:120};else if(url.endsWith('/api/speech-assets'))data={private:true,source_audio_id:ASSET,duration_seconds:6.4,billable_seconds:7};else if(url.endsWith('/api/image-upload'))data={private:privateImage,source_image_id:ASSET,image_url:'https://public.test/image.png'};else if(url.endsWith('/api/generations')){if(fail)throw Error('Connection lost');data={generation_id:JOB};}else if(url.endsWith('/media-url'))data={url:'https://private.test/video.mp4?temporary-link'};else data={generation:{status:'succeeded'}};return {ok:true,status:200,json:async()=>data};};
- w.eval(source);await w.neneOpenVideoStudio(mode);
+ w.eval(source);await w.neneOpenVideoStudio(mode,{voiceOnly});
  return {dom,w,calls,setOwner:id=>{owner=id;w.dispatchEvent(new w.Event('nene-auth-changed'));}};
 }
 const submissions=s=>s.calls.filter(c=>c.url.endsWith('/api/generations'));
@@ -59,3 +59,26 @@ test('voice and video have separate reviewed prices and approval does not genera
 
 test('lost voice responses recover the same script, voice, spending limit and request key',async()=>{const first=await setup({mode:'talking',fail:true});const d=first.w.document;d.getElementById('talking-dialogue').value='Welcome home.';d.querySelector('[data-choice-for="ttsVoice"]').click();[...d.querySelectorAll('[role=radio]')].find(n=>n.textContent==='Anne Hathaway').click();d.getElementById('voice-review').click();await settle();d.getElementById('voice-generate').click();await settle();const pending=JSON.parse(first.w.localStorage.getItem(`nene_video_talking_speech_pending_v1:${USER}`));assert.ok(pending.key);first.dom.window.close();const next=await setup({mode:'talking',speechPending:pending});next.w.document.getElementById('voice-review').click();await settle();next.w.document.getElementById('voice-generate').click();await settle();const call=next.calls.find(c=>c.url.endsWith('/api/speech/generations'));assert.equal(call.options.headers['Idempotency-Key'],pending.key);assert.deepEqual(JSON.parse(call.options.body),pending.body);assert.equal(submissions(next).length,0);next.dom.window.close();});
 test('editing approved dialogue blocks video until the new speech is generated and approved',async()=>{const s=await setup({mode:'talking'});await image(s);const d=s.w.document;d.getElementById('talking-dialogue').value='Welcome home.';await voiceTrack(s);d.getElementById('talking-dialogue').value='A different sentence.';d.getElementById('talking-dialogue').dispatchEvent(new s.w.Event('input',{bubbles:true}));await review(s);assert.equal(d.getElementById('video-generate').disabled,true);assert.equal(submissions(s).length,0);s.dom.window.close();});
+
+test('AI Voice card opens a voice-first screen with no required image or automatic generation',async()=>{
+ const s=await setup();await s.w.openFeature('voice');await settle();const d=s.w.document;
+ assert.equal(d.querySelector('h1').textContent,'AI Voice');assert.equal(d.getElementById('voice-animation').open,false);assert.ok(d.getElementById('video-source').closest('#voice-animation'));
+ assert.equal(d.getElementById('talking-dialogue').closest('#voice-animation'),null);assert.equal(d.getElementById('voice-review').closest('#voice-animation'),null);
+ assert.equal(s.calls.filter(c=>c.options.method==='POST').length,0);s.dom.window.close();
+});
+test('standalone voice creates previews and download links without an image, and refresh never buys another track',async()=>{
+ const s=await setup({mode:'talking',voiceOnly:true}),d=s.w.document;d.getElementById('talking-dialogue').value='Welcome to NENE AI.';await voiceTrack(s);
+ assert.equal(s.calls.filter(c=>c.url.endsWith('/api/image-upload')).length,0);assert.equal(submissions(s).length,0);assert.ok(d.querySelector('#voice-output audio'));
+ const download=d.getElementById('voice-download');assert.equal(download.protocol,'https:');assert.equal(download.rel,'noopener noreferrer');assert.equal(download.download,'nene-ai-voice.wav');
+ assert.equal(d.getElementById('voice-animation').open,true);const count=s.calls.filter(c=>c.url.endsWith('/api/speech/generations')).length;
+ [...d.querySelectorAll('#voice-output button')].find(b=>b.textContent==='Refresh voice link').click();await settle();assert.equal(s.calls.filter(c=>c.url.endsWith('/api/speech/generations')).length,count);assert.equal(submissions(s).length,0);s.dom.window.close();
+});
+test('voice launch lock is visible on opening and review cannot bypass it',async()=>{
+ const s=await setup({mode:'talking',voiceOnly:true,enabled:false}),d=s.w.document;assert.match(d.getElementById('voice-message').textContent,/not enabled/);
+ d.getElementById('talking-dialogue').value='Hello there';d.querySelector('[data-choice-for="ttsVoice"]').click();[...d.querySelectorAll('[role=radio]')].find(b=>b.textContent==='Anne Hathaway').click();
+ d.getElementById('voice-review').click();await settle();assert.equal(d.getElementById('voice-generate').disabled,true);d.getElementById('voice-generate').click();await settle();assert.equal(s.calls.filter(c=>c.url.endsWith('/api/speech/generations')).length,0);s.dom.window.close();
+});
+test('voice preview errors explain how to reopen the saved track without another paid submission',async()=>{
+ const s=await setup({mode:'talking',voiceOnly:true}),d=s.w.document;d.getElementById('talking-dialogue').value='Hello there';await voiceTrack(s);const count=s.calls.filter(c=>c.options.method==='POST').length;
+ d.querySelector('#voice-output audio').onerror();assert.match(d.getElementById('voice-message').textContent,/no new voice/);assert.equal(s.calls.filter(c=>c.options.method==='POST').length,count);s.dom.window.close();
+});

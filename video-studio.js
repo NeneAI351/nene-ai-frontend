@@ -72,6 +72,7 @@
       }else{v.pending=null;lock(v,false);v.generate.textContent='Generate video';}
       renderJobs(v);if(v.mode==='talking')renderSpeechJobs(v);
     }catch(error){say(v,error.message);}
+    finally{if(v.mode==='talking'&&v.owner&&alive(v)){renderSpeechJobs(v);try{const state=await api(v,'/api/speech/availability');if(!alive(v))return;v.speechAccepting=state.accepting_requests===true;if(!v.speechPending&&!v.approvedSpeech)speechSay(v,state.message||(v.speechAccepting?'Write your script and review the voice price.':'Voice generation is not enabled yet. No credits have been charged.'));}catch(e){speechSay(v,e.message);}}}
   }
   async function review(v){
     if(v.busy || v.pending)return;
@@ -237,8 +238,12 @@
         const data=result.audio;if(data?.private!==true||!UUID.test(data.source_audio_id))throw Error('A private voice track could not be confirmed.');
         const url=new URL(data.url);if(url.protocol!=='https:')throw Error('A secure voice preview is unavailable.');
         v.voiceOutput.replaceChildren();const preview=el('audio');preview.controls=true;preview.src=url.href;preview.style.width='100%';v.voiceOutput.append(el('p',job.text),preview);
-        const approve=el('button','Use this voice and script for video','btn gold');approve.type='button';approve.id='voice-approve';approve.disabled=data.can_animate!==true;
-        approve.onclick=()=>{if(!alive(v)||v.speechSelected!==job.id)return;v.form.elements.dialogue.value=job.text;v.form.elements.ttsVoice.value=job.voice;v.form.querySelector('[data-choice-for="ttsVoice"]').textContent=job.voice;v.audioAsset=data;v.approvedSpeech={script:job.text,voice:job.voice,id:data.source_audio_id};v.quote=null;v.generate.disabled=true;speechSay(v,'Voice approved. Review the video price below; the saved voice will be used without another voice-generation charge.');};v.voiceOutput.append(approve);
+        const download=el('a','Open / download voice track','btn');download.id='voice-download';download.href=url.href;download.target='_blank';download.rel='noopener noreferrer';download.download='nene-ai-voice.wav';
+        const refresh=el('button','Refresh voice link','btn');refresh.type='button';refresh.onclick=()=>pollSpeech(v,job,0);
+        preview.onerror=()=>speechSay(v,'The voice preview could not load. Refresh the voice link to reopen this saved track; no new voice will be generated.');
+        v.voiceOutput.append(download,refresh);
+        const approve=el('button',v.voiceOnly?'Animate a character with this voice':'Use this voice and script for video','btn gold');approve.type='button';approve.id='voice-approve';approve.disabled=data.can_animate!==true;
+        approve.onclick=()=>{if(!alive(v)||v.speechSelected!==job.id)return;v.form.elements.dialogue.value=job.text;v.form.elements.ttsVoice.value=job.voice;v.form.querySelector('[data-choice-for="ttsVoice"]').textContent=job.voice;if(v.animationDetails)v.animationDetails.open=true;v.audioAsset=data;v.approvedSpeech={script:job.text,voice:job.voice,id:data.source_audio_id};v.quote=null;v.generate.disabled=true;speechSay(v,'Voice approved. Review the video price below; the saved voice will be used without another voice-generation charge.');};v.voiceOutput.append(approve);
         speechSay(v,data.can_animate?`Voice ready · ${data.duration_seconds} seconds. Listen, approve it, then review the video price.`:'Voice ready. This track is outside the 2–10 second video limit. Shorten or split the script before creating another paid voice track.');
         try{await window.neneRefreshPaidWallet?.();}catch(_){}return;
       }
@@ -247,14 +252,14 @@
       if(attempt<120)v.speechTimer=setTimeout(()=>pollSpeech(v,job,attempt+1),5000);
     }catch(e){speechSay(v,e.message+' Use Saved voice tracks to check the same job again.');}
   }
-  window.neneOpenVideoStudio=async function(mode='text'){
+  window.neneOpenVideoStudio=async function(mode='text',options={}){
     if(!['text','image','talking'].includes(mode))return;
     if(active?.busy){toast('Please wait for the current video request.');return;}
     if(active){clearTimeout(active.timer);clearTimeout(active.speechTimer);}
-    const root=el('main'),v={root,mode,owner:null,quote:null,pending:null,accepting:false,busy:false,imageData:null,sourceImageId:null};active=v;
+    const root=el('main'),v={root,mode,voiceOnly:mode==='talking'&&options.voiceOnly===true,owner:null,quote:null,pending:null,accepting:false,busy:false,imageData:null,sourceImageId:null};active=v;
     setNav('create');const back=el('button','‹','back');back.type='button';back.setAttribute('aria-label','Back to Home');back.onclick=()=>{clearTimeout(v.timer);clearTimeout(v.speechTimer);active=null;renderHome();};
-    const heading=el('div',undefined,'toolhead');heading.append(back,el('h1',mode==='talking'?'Talking Character':mode==='image'?'Image → Video':'Text → Video'));root.append(heading,
-      el('p',mode==='talking'?'Give your character dialogue or a voice recording.':mode==='image'?'Bring your image to life with a clear motion brief.':'Describe your scene. Choose your look. Create your video.','subtitle'));
+    const heading=el('div',undefined,'toolhead');heading.append(back,el('h1',mode==='talking'?(v.voiceOnly?'AI Voice':'Talking Character'):mode==='image'?'Image → Video':'Text → Video'));root.append(heading,
+      el('p',mode==='talking'?(v.voiceOnly?'Turn a short script into a voice track. Preview and download it, then optionally animate a character.':'Give your character dialogue or a voice recording.'):mode==='image'?'Bring your image to life with a clear motion brief.':'Describe your scene. Choose your look. Create your video.','subtitle'));
     v.form=el('form');v.form.onsubmit=e=>e.preventDefault();
     if(['image','talking'].includes(mode)){
       const label=el('label','Source image','label');v.file=el('input');v.file.type='file';v.file.accept='image/png,image/jpeg,image/webp';v.file.id='video-source';label.htmlFor=v.file.id;
@@ -271,13 +276,13 @@
     const speechMode=el('select');speechMode.name='speechMode';speechMode.hidden=true;
     for(const value of ['Write dialogue','Upload voice recording']){const option=el('option',value);option.value=value;speechMode.append(option);}
     if(mode==='talking'){
-      const label=el('label','What should your character say?','label');label.htmlFor=dialogue.id;dialogue.placeholder='Write a short line, or add a transcript for your recording…';
+      const label=el('label','What should your character say?','label');label.htmlFor=dialogue.id;v.dialogueLabel=label;dialogue.placeholder='Write a short line, or add a transcript for your recording…';
       const choice=el('button','Write dialogue','video-choice');choice.type='button';choice.dataset.choiceFor='speechMode';choice.setAttribute('aria-label','Speech input');choice.onclick=()=>choose(v,'Speech input',speechMode,choice);
       const hint=el('p','Your script becomes a separate AI-generated voice track. Listen and approve the speech before animating your character. Voice creation and video generation have separate paid credit reviews.','notice');
       v.audioFile=el('input');v.audioFile.id='talking-recording';v.audioFile.type='file';v.audioFile.accept='audio/wav,audio/mpeg,audio/mp4,audio/ogg,.m4a';
       const recordingLabel=el('label','Voice recording · WAV, MP3, M4A or OGG · 2–10 seconds · up to 8 MB','label');recordingLabel.htmlFor=v.audioFile.id;
       v.audioFile.onchange=async()=>{v.audioAsset=null;v.audioData=null;v.quote=null;v.generate.disabled=true;const file=v.audioFile.files?.[0];if(!file)return;try{if(file.size>8*1024*1024)throw Error('Choose audio up to 8 MB.');const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('The recording could not be read.'));reader.readAsDataURL(file);});if(!alive(v)||v.audioFile.files?.[0]!==file)return;v.audioData=String(data).replace(/^data:[^;]*/, 'data:audio/wav');say(v,'Recording ready. Review price to validate its length and upload it privately.');}catch(e){say(v,e.message);}};
-      v.form.append(choice,label,dialogue,speechMode,hint,recordingLabel,v.audioFile);v.recordingLabel=recordingLabel;
+      v.speechHint=hint;v.form.append(choice,label,dialogue,speechMode,hint,recordingLabel,v.audioFile);v.recordingLabel=recordingLabel;
     }else{dialogue.hidden=true;v.form.append(dialogue,speechMode);}
     const ttsVoice=el('select');ttsVoice.name='ttsVoice';ttsVoice.hidden=true;
     for(const value of ['', 'Anne Hathaway','Morgan Freeman','David Attenborough']){const option=el('option',value||'Choose an AI voice preset');option.value=value;ttsVoice.append(option);}
@@ -289,7 +294,8 @@
       v.voiceGenerate=el('button','Generate voice track','btn gold');v.voiceGenerate.type='button';v.voiceGenerate.id='voice-generate';v.voiceGenerate.disabled=true;v.voiceGenerate.onclick=()=>submitSpeech(v);
       v.voiceMessage=el('p','AI voice presets are synthetic voices. Voice creation is paid separately from animation.','notice');v.voiceMessage.id='voice-message';v.voiceMessage.setAttribute('role','status');
       v.voiceOutput=el('div');v.voiceOutput.id='voice-output';v.voiceJobs=el('div');v.voiceJobs.id='voice-jobs';
-      v.speechBox.append(voiceChoice,v.voiceMessage,v.voiceReview,v.voiceGenerate,v.voiceOutput,el('h3','Saved voice tracks'),v.voiceJobs);v.form.append(v.speechBox);
+      const count=el('p','0 / 120 characters · short scripts help control cost.','subtitle');count.id='voice-script-count';dialogue.addEventListener('input',()=>{count.textContent=dialogue.value.length+' / 120 characters · short scripts help control cost.';});
+      v.speechBox.append(count,voiceChoice,v.voiceMessage,v.voiceReview,v.voiceGenerate,v.voiceOutput,el('h3','Saved voice tracks'),v.voiceJobs);v.form.append(v.speechBox);
       for(const input of [dialogue,ttsVoice]){input.addEventListener('input',()=>{v.speechQuote=null;v.approvedSpeech=null;v.audioAsset=null;v.voiceGenerate.disabled=true;v.voiceGenerate.textContent='Review voice price before generating';});}
     }
     const block=el('div',undefined,'block'),label=el('label',mode==='image'?'Describe the motion':'Your prompt','label'),input=el('textarea');input.id='prompt';input.name='idea';input.maxLength=10000;input.placeholder=mode==='image'?'What should move? Describe the action and camera direction…':'Describe the subject, action, setting and mood…';label.htmlFor=input.id;block.append(label,input);
@@ -317,12 +323,21 @@
     v.output=el('div');v.output.id='video-output';v.jobs=el('div',undefined,'list');v.jobs.id='video-jobs';
     root.append(v.form,el('p','Review your credit price before generating. AI scene sound is generated with the video when selected. Captions, separate music tracks and voice cloning are not included. Watermark-free export is not guaranteed; exact text, logos and visual consistency may need editing.','notice'),v.message,v.review,v.generate,signin,check,v.refresh,v.output,el('h2','Your saved videos'),v.jobs,
       el('p','Pending submissions and job IDs are saved on this device for this account. Finished videos are retrieved through your private account.','subtitle'));
+    if(v.voiceOnly){
+      v.dialogueLabel.textContent='Your voice script';dialogue.placeholder='Write the words you want the AI voice to say…';
+      v.speechHint.textContent='Voice generation uses paid credits. Review the cost before submitting, then listen to your saved track. No photo is needed for audio. Animation is optional and charged separately.';
+      const details=el('details',undefined,'voice-animation');details.id='voice-animation';details.append(el('summary','Optional: animate a character with your voice'));v.animationDetails=details;
+      const keep=new Set([v.dialogueLabel,dialogue,speechMode,ttsVoice,v.speechHint,v.speechBox]);
+      for(const child of [...v.form.children])if(!keep.has(child))details.append(child);
+      v.form.append(details);
+      let afterForm=false;for(const child of [...root.children]){if(child===v.form){afterForm=true;continue;}if(afterForm&&child!==signin&&child!==check)details.append(child);}
+    }
     document.getElementById('screen').replaceChildren(root);
     window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,jobs:v.jobs,getState:()=>v,settings:false});
     await checkAccount(v);
   };
   const oldFeature=window.openFeature;
-  window.openFeature=function(type,...args){return type==='voice'?window.neneOpenVideoStudio('talking'):oldFeature.call(this,type,...args);};
+  window.openFeature=function(type,...args){return type==='voice'?window.neneOpenVideoStudio('talking',{voiceOnly:true}):oldFeature.call(this,type,...args);};
   window.addEventListener('nene-auth-changed',()=>{
     const v=active;if(!v||!alive(v))return;
     document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();v.updateSpeechUI?.();v.imageData=null;v.sourceImageId=null;v.audioData=null;v.audioAsset=null;v.approvedSpeech=null;v.speechQuote=null;v.speechSelected=null;clearTimeout(v.speechTimer);if(v.voiceOutput)v.voiceOutput.replaceChildren();if(v.voiceJobs)v.voiceJobs.replaceChildren();if(v.voiceGenerate)v.voiceGenerate.disabled=true;if(v.audioFile)v.audioFile.value='';if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
