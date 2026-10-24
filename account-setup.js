@@ -4,7 +4,7 @@
   const version = '2026-10-23-account-v1';
   const acceptedUsers = new Set();
   const pending = new Map();
-  const link = '<a href="./terms.html" target="_blank" rel="noopener" style="color:#ffe7a1">Terms of Service and Refund Policy</a>';
+  const link = '<a href="./terms.html" target="_blank" rel="noopener" style="color:#ffe7a1">Terms of Service and Refund Policy</a> · <a href="./privacy.html" target="_blank" rel="noopener" style="color:#ffe7a1">Privacy Policy</a>';
   async function api(session, method = 'GET') {
     const base = window.NENE_DIRECTOR_CONFIG?.backendUrl;
     if (!base || !session?.access_token) throw new Error('Sign in to finish account setup.');
