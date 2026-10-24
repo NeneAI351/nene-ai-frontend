@@ -93,6 +93,10 @@
     return data.session?.access_token || null;
   };
 
+  // Account erasure must not require accepting terms or opening a creative tool.
+  window.neneAuthGetAccountToken = async function(){const auth=initClient();if(!auth)return null;const {data,error}=await auth.auth.getSession();if(error)throw error;return data.session?.access_token||null;};
+  window.nenePrivacyLocalSignOut = async function(){const auth=initClient();if(auth){try{await auth.auth.signOut({scope:'local'});}finally{updateAuthUi(null);}}};
+
   window.neneAuthHeaders = async function (headers) {
     const output = Object.assign({}, headers || {});
     const token = await window.neneAuthGetAccessToken();

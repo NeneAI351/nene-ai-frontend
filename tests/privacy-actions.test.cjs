@@ -1,0 +1,24 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM,VirtualConsole}=require('jsdom');
+const source=fs.readFileSync(__dirname+'/../privacy-actions.js','utf8');
+const OWNER='11111111-1111-4111-8111-111111111111',OTHER='22222222-2222-4222-8222-222222222222',RECEIPT='33333333-3333-4333-8333-333333333333';
+async function settle(){for(let i=0;i<15;i++)await new Promise(r=>setImmediate(r));}
+async function setup({signed=true,fail=false,help=false,receipt=false}={}){
+ const html=fs.readFileSync(__dirname+(help?'/../privacy-help.html':'/../delete-account.html'),'utf8');const dom=new JSDOM(html,{url:'https://nene.test/'+(help?'privacy-help.html':'delete-account.html')+(receipt?'?receipt='+RECEIPT:''),runScripts:'outside-only',virtualConsole:new VirtualConsole()}),w=dom.window,calls=[];let owner=signed?OWNER:null,signouts=0;
+ w.NENE_DIRECTOR_CONFIG={backendUrl:'https://api.test'};w.neneAuthGetUserId=async()=>owner;w.neneAuthGetAccountToken=async()=>owner?'x.'+Buffer.from(JSON.stringify({sub:owner})).toString('base64url')+'.x':null;w.nenePrivacyLocalSignOut=async()=>{signouts++;owner=null;};
+ w.fetch=async(url,options={})=>{calls.push({url,options});if(fail)throw Error('Connection lost');return {ok:true,json:async()=>url.includes('/enquiries')?{received:true,receipt_id:RECEIPT}:url.includes('/deletions/')?{status:'completed',provider_follow_up_pending:false}:{receipt_id:RECEIPT,status:'queued'}};};
+ w.eval(source);await settle();return {w,dom,calls,getSignouts:()=>signouts,setOwner:id=>owner=id};
+}
+test('deletion requires sign-in and explicit permanent-deletion confirmation',async()=>{
+ const s=await setup({signed:false});assert.equal(s.w.document.getElementById('delete-submit').disabled,true);assert.equal(s.calls.length,0);s.dom.window.close();
+ const signed=await setup();signed.w.document.getElementById('delete-form').dispatchEvent(new signed.w.Event('submit',{cancelable:true}));await settle();assert.equal(signed.calls.length,0);assert.match(signed.w.document.getElementById('privacy-status').textContent,/Confirm/);signed.dom.window.close();
+});
+test('confirmed self-service deletion sends no selectable owner and clears only the owner scoped data',async()=>{
+ const s=await setup(),d=s.w.document;s.w.localStorage.setItem('nene_video_text_pending_v1:'+OWNER,'sensitive');s.w.localStorage.setItem('nene_profile_v1:'+OTHER,'keep');s.w.localStorage.setItem('nene_ai_state_v1','legacy');d.getElementById('delete-confirm').checked=true;d.getElementById('delete-form').dispatchEvent(new s.w.Event('submit',{cancelable:true}));await settle();assert.equal(s.calls.length,1);const body=JSON.parse(s.calls[0].options.body);assert.equal(body.confirm_delete,true);assert.equal(body.user_id,undefined);assert.ok(body.request_id);assert.match(s.calls[0].options.headers.Authorization,/^Bearer /);assert.equal(s.w.localStorage.getItem('nene_video_text_pending_v1:'+OWNER),null);assert.equal(s.w.localStorage.getItem('nene_profile_v1:'+OTHER),'keep');assert.equal(s.w.localStorage.getItem('nene_ai_state_v1'),null);assert.equal(s.getSignouts(),1);assert.equal(s.w.localStorage.getItem('nene_privacy_deletion_receipt'),RECEIPT);s.dom.window.close();
+});
+test('a lost response retains the same deletion request ID for safe retry',async()=>{
+ const s=await setup({fail:true}),d=s.w.document;d.getElementById('delete-confirm').checked=true;for(let i=0;i<2;i++){d.getElementById('delete-form').dispatchEvent(new s.w.Event('submit',{cancelable:true}));await settle();}assert.equal(s.calls.length,2);assert.equal(JSON.parse(s.calls[0].options.body).request_id,JSON.parse(s.calls[1].options.body).request_id);assert.equal(s.getSignouts(),0);s.dom.window.close();
+});
+test('public privacy help works without a session and does not claim it deleted an account',async()=>{
+ const s=await setup({signed:false,help:true}),d=s.w.document,f=d.getElementById('privacy-contact-form');f.elements.email.value='user@example.test';f.elements.kind.value='deletion_access_help';f.elements.message.value='Please help me recover access to request deletion.';f.dispatchEvent(new s.w.Event('submit',{cancelable:true}));await settle();assert.equal(s.calls.length,1);assert.equal(s.calls[0].options.headers.Authorization,undefined);assert.match(d.getElementById('privacy-status').textContent,/not completed account deletion/);s.dom.window.close();
+});
+test('receipt status reveals progress without requiring a new account or login',async()=>{const s=await setup({signed:false,receipt:true});assert.ok(s.calls[0].url.endsWith('/deletions/'+RECEIPT));assert.equal(s.calls[0].options.headers.Authorization,undefined);assert.match(s.w.document.getElementById('privacy-status').textContent,/have been deleted/);assert.equal(s.w.document.getElementById('delete-form').hidden,true);s.dom.window.close();});
