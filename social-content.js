@@ -167,7 +167,7 @@
       el('p','Paid credits are required. This creates a 6–10 second video clip. Captions, voiceovers, added music and automatic posting are not connected here; add them separately before publishing.','notice'));
     v.form=el('form');v.form.onsubmit=e=>e.preventDefault();
     for(const [name,label,max] of [['idea','Content idea',2000],['audience','Target audience',300],['hook','Opening visual hook (optional)',500],['cta','Ending / call to action (optional)',300]]){
-      const block=el('div',undefined,'block'),caption=el('label',label,'label');const input=el(name==='idea'?'textarea':'input');input.id='social-'+name;input.name=name;input.maxLength=max;input.className='field';caption.htmlFor=input.id;block.append(caption,input);v.form.append(block);
+      const block=el('div',undefined,'block'),caption=el('label',label,'label');const input=el(name==='idea'?'textarea':'input');input.id='social-'+name;input.name=name;input.maxLength=max;input.className='field';input.placeholder=({idea:'Describe one clear idea, moment or useful tip…',audience:'e.g. New business owners',hook:'e.g. A warm loaf coming out of the oven',cta:'e.g. Save this tip for later'}[name]);caption.htmlFor=input.id;block.append(caption,input);v.form.append(block);
     }
     for(const [name,label,options] of [['platform','Platform guidance',['TikTok','Instagram Reels','YouTube Shorts','Facebook','LinkedIn','X']],['template','Content template',['Hook + value','Story moment','Product showcase','Educational tip']],['style','Visual style',['Cinematic','Photorealistic','Minimalist','Documentary']],['duration','Video duration',['6','8','10']],['resolution','Resolution',['720p','1080p']],['ratio','Aspect ratio',['9:16','16:9','1:1']]]){
       const block=el('div',undefined,'block'),caption=el('label',label,'label'),select=el('select');select.name=name;select.id='social-'+name;caption.htmlFor=select.id;
@@ -184,7 +184,9 @@
     v.output=el('div');v.output.id='social-output';v.jobs=el('div',undefined,'list');v.jobs.id='social-jobs';
     root.append(v.form,v.message,v.review,v.generate,signin,check,v.refresh,v.output,el('h2','Saved social videos on this device'),v.jobs,
       el('p','Pending submissions and job IDs are saved on this device for this account. Finished videos are retrieved through your private account.','subtitle'));
-    document.getElementById('screen').replaceChildren(root);await checkAccount(v);
+    document.getElementById('screen').replaceChildren(root);
+    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,jobs:v.jobs,getState:()=>v,settings:true});
+    await checkAccount(v);
   };
   window.addEventListener('nene-auth-changed',()=>{
     const v=active;if(!v||!alive(v))return;
@@ -192,4 +194,5 @@
     say(v,'Account changed. Check your account and availability before continuing.');
   });
 })();
+
 

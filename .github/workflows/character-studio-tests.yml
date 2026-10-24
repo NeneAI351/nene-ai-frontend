@@ -23,3 +23,7 @@ jobs:
       - run: node --test tests/story-studio.test.cjs
 
       - run: node --test tests/privacy-actions.test.cjs
+
+      - run: node --test tests/studio-ui.test.cjs
+
+      - run: NODE_PATH=tests/node_modules node scripts/check_ad_studio.cjs

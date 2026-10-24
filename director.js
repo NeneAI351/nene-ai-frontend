@@ -11,13 +11,16 @@
     if (className) el.className = className;
     return el;
   }
-  async function api(path, options = {}) {
+  async function api(view, path, options = {}) {
+    const owner=view.owner;
+    if(!owner || owner!==await window.neneAuthGetUserId?.())throw new Error('Sign in to use AI Director.');
     const configured = window.NENE_DIRECTOR_CONFIG?.backendUrl || window.NENEBackend?.getUrl?.();
     if (!configured) throw new Error('AI Director is not connected yet. Your idea has not been sent.');
     const origin = new URL(configured);
     if (origin.protocol !== 'https:') throw new Error('AI Director requires a secure connection.');
     const token = await window.neneAuthGetAccessToken?.();
-    if (!token) throw new Error('Please sign in to use AI Director.');
+    let subject;try{subject=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).sub;}catch(_){}
+    if (!token || subject!==owner || owner!==await window.neneAuthGetUserId?.() || owner!==view.owner) throw new Error('Please sign in to the same account to use AI Director.');
     const headers = { Authorization: 'Bearer ' + token, ...options.headers };
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 65000);
@@ -25,6 +28,7 @@
       const response = await fetch(origin.href.replace(/\/$/, '') + '/api/director' + path,
         { ...options, headers, signal: controller.signal, cache: 'no-store' });
       const body = await response.json().catch(() => ({}));
+      if(owner!==view.owner || owner!==await window.neneAuthGetUserId?.())throw new Error('Account changed. Your previous account’s plans are hidden.');
       if (!response.ok) {
         if (response.status === 401) throw new Error('Your sign-in expired. Sign in again; your idea remains here.');
         throw new Error(typeof body.detail === 'string' ? body.detail : 'AI Director could not complete this request. Your idea remains here.');
@@ -77,7 +81,7 @@
     result.append(download);
   }
   async function loadPlans(view) {
-    const data = await api('/plans');
+    const data = await api(view, '/plans');
     if (activeView !== view || !view.isConnected) return;
     const list = view.querySelector('#directorSaved'); list.replaceChildren();
     const items = Array.isArray(data.items) ? data.items : [];
@@ -89,7 +93,8 @@
     }
   }
   window.neneBuildDirectorPlan = async function () {
-    const view = activeView; if (!view?.isConnected || busy) return;
+    const view = activeView; if (!view?.isConnected || busy || !view.available) return;
+    const owner=view.owner;
     const idea = view.querySelector('#directorIdea').value.trim();
     if (idea.length < 10) { message(view, 'Describe your idea in at least 10 characters.'); return; }
     const brief = { idea, goal: view.querySelector('#directorGoal').value,
@@ -101,7 +106,7 @@
     const button = view.querySelector('#directorGenerate'); busy = true; button.disabled = true;
     message(view, 'Planning your script and scenes… Please keep this screen open.');
     try {
-      const record = await api('/plans', { method: 'POST', headers: { 'Content-Type': 'application/json',
+      const record = await api(view, '/plans', { method: 'POST', headers: { 'Content-Type': 'application/json',
         'Idempotency-Key': retryRequest.key }, body: serialized });
       showPlan(view, record);
       message(view, 'Your production plan is ready. Review the scenes before choosing any video generation.');
@@ -110,12 +115,12 @@
       await loadPlans(view);
       await window.neneRefreshPaidWallet?.();
     } catch (error) { if (activeView === view) message(view, error.message); }
-    finally { busy = false; if (view.isConnected) button.disabled = false; }
+    finally { busy = false; if (view.isConnected) button.disabled = !view.available || owner!==view.owner; }
   };
   window.neneOpenDirector = async function () {
     if (busy) { toast('Please wait for the current planning request.'); return; }
     setNav('create');
-    const view = node('main'); activeView = view;
+    const view = node('main'); view.owner=null;view.available=false;activeView = view;
     const header = node('div', undefined, 'toolhead');
     const back = node('button', '‹', 'back'); back.setAttribute('aria-label', 'Back to Create');
     back.onclick = () => { if (!busy) { activeView = null; renderCreateHub(); } };
@@ -136,21 +141,35 @@
     const signIn = node('button', 'Sign in', 'btn'); signIn.type = 'button'; signIn.onclick = () => window.neneOpenAuth?.();
     const check = node('button', 'Check connection / refresh saved plans', 'btn'); check.type = 'button';
     async function refresh() {
-      check.disabled = true;
+      const ticket=(view.refreshTicket||0)+1;view.refreshTicket=ticket;
+      check.disabled = true;generate.disabled=true;
+      view.owner=await window.neneAuthGetUserId?.();
+      if(!view.owner){view.available=false;message(view,'Sign in to view your plans and check planning availability.');check.disabled=false;return;}
       try {
-        const state = await api('/status');
+        const state = await api(view, '/status');
         if (activeView !== view || !view.isConnected) return;
-        generate.disabled = !state.available; message(view, state.message);
+        if(ticket!==view.refreshTicket)return;
+        view.available=state.available===true;generate.disabled = !view.available; message(view, state.message);
         generate.textContent = state.available && state.credit_cost ? `Create production plan · ${state.credit_cost} paid credits` : 'Create production plan';
         await loadPlans(view);
-      } catch (error) { if (activeView === view) { generate.disabled = true; message(view, error.message); } }
+      } catch (error) { if (activeView === view && ticket===view.refreshTicket) { generate.disabled = true; message(view, error.message); } }
       finally { check.disabled = false; }
     }
     check.onclick = () => { if (!busy) refresh(); };
     const results = node('div'); results.id = 'directorResult';
     const saved = node('div', undefined, 'list'); saved.id = 'directorSaved';
     view.append(generate, signIn, check, results, node('h2', 'Saved production plans'), saved);
-    document.getElementById('screen').replaceChildren(view); await refresh();
+    document.getElementById('screen').replaceChildren(view);view.refresh=refresh;
+    window.NENEStudioUI?.enhance({root:view,signin:signIn,check,generate,jobs:saved,settings:true});
+    await refresh();
   };
+  window.addEventListener('nene-auth-changed',()=>{
+    const view=activeView;if(!view?.isConnected)return;
+    view.owner=null;view.available=false;view.refreshTicket=(view.refreshTicket||0)+1;retryRequest=null;
+    view.querySelector('#directorGenerate').disabled=true;view.querySelector('#directorSaved').replaceChildren();view.querySelector('#directorResult').replaceChildren();
+    view.querySelector('#directorIdea').value='';
+    message(view,'Account changed. Refresh to load this account’s saved plans.');
+    if(!busy)view.refresh?.();
+  });
 })();
 
