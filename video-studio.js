@@ -193,7 +193,12 @@
     v.voiceJobs.replaceChildren();const jobs=read(v,'speech_jobs',[]);
     for(const job of Array.isArray(jobs)?jobs:[]){if(!UUID.test(job.id))continue;const b=el('button',job.text||'Saved voice track','btn');b.type='button';b.onclick=()=>pollSpeech(v,job,0);v.voiceJobs.append(b);}
     const pending=read(v,'speech_pending',null);
-    if(pending?.key&&pending?.body){v.speechPending=pending;v.voiceGenerate.textContent='Review availability to retry saved voice';v.voiceGenerate.disabled=true;speechSay(v,'A voice submission is pending. Review availability, then retry the same request safely.');}
+    if(pending?.key&&pending?.body){
+      v.speechPending=pending;v.form.elements.dialogue.value=pending.body.text;v.form.elements.ttsVoice.value=pending.body.voice;
+      v.form.querySelector('[data-choice-for="ttsVoice"]').textContent=pending.body.voice;
+      const count=v.root.querySelector('#voice-script-count');if(count)count.textContent=String(pending.body.text||'').length+' / 120 characters · saved request';
+      v.voiceGenerate.textContent='Review availability to retry saved voice';v.voiceGenerate.disabled=true;speechSay(v,'A voice submission is pending. The saved script and voice shown here will be retried with the same spending limit and request key.');
+    }
   }
   async function reviewSpeech(v){
     if(v.busy)return;

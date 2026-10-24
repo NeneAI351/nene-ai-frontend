@@ -82,3 +82,9 @@ test('voice preview errors explain how to reopen the saved track without another
  const s=await setup({mode:'talking',voiceOnly:true}),d=s.w.document;d.getElementById('talking-dialogue').value='Hello there';await voiceTrack(s);const count=s.calls.filter(c=>c.options.method==='POST').length;
  d.querySelector('#voice-output audio').onerror();assert.match(d.getElementById('voice-message').textContent,/no new voice/);assert.equal(s.calls.filter(c=>c.options.method==='POST').length,count);s.dom.window.close();
 });
+
+test('a restored voice retry shows its exact saved script and preset before the user confirms it',async()=>{
+ const pending={key:'saved-voice-key',body:{text:'Keep this exact script.',voice:'Morgan Freeman',credit_limit:'5'}};
+ const s=await setup({mode:'talking',voiceOnly:true,speechPending:pending}),d=s.w.document;
+ assert.equal(d.getElementById('talking-dialogue').value,pending.body.text);assert.equal(d.querySelector('[data-choice-for="ttsVoice"]').textContent,pending.body.voice);assert.match(d.getElementById('voice-script-count').textContent,/saved request/);assert.equal(s.calls.filter(c=>c.options.method==='POST').length,0);s.dom.window.close();
+});
