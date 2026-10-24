@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
- <link rel="manifest" href="./manifest.webmanifest?v=24">
+ <link rel="manifest" href="./manifest.webmanifest?v=25">
 <meta name="theme-color" content="#070707">
 <link rel="icon" href="./nene-icon-192-v2.png" type="image/png"> 
 <link rel="apple-touch-icon" href="./nene-icon-192-v2.png">
@@ -121,12 +121,12 @@ window.NENEBackend={
 };
 </script>
 
-<link rel="stylesheet" href="./layout.css?v=24">
+<link rel="stylesheet" href="./layout.css?v=25">
 </head>
 <body>
 <div class="app">
 <header>
-  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=24" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
+  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=25" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
   <div class="credits">Paid Credits<br><b id="credits">0</b></div>
   <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
   <button id="neneFullscreenButton" class="fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
@@ -364,6 +364,7 @@ function renderCreateHub(){
 }
 
 function openFeature(type){
+ if(type==='social'){if(window.neneOpenSocialContent)return window.neneOpenSocialContent();toast('Social Content could not load. Refresh the app.');return;}
  if(type==='script'){if(window.neneOpenScriptWriter)return window.neneOpenScriptWriter();toast('AI Script Writer could not load. Refresh the app.');return;}
  if(type==='characters'){if(window.NENECharacters)return window.NENECharacters.render();toast('Character Studio could not load. Refresh the app.');return;}
  if(type==="ad"){window.neneOpenAdvertisement();return;}
@@ -464,6 +465,7 @@ function previewCharacterReference(e){
 }
 
 function openTool(type){
+ if(type==='social'){if(window.neneOpenSocialContent)return window.neneOpenSocialContent();toast('Social Content could not load. Refresh the app.');return;}
  if(type==="ad"){window.neneOpenAdvertisement();return;}
  if(type==="director"){window.neneOpenDirector();return;}
  setNav('create');
@@ -474,11 +476,9 @@ function openTool(type){
  if(type==="text") extra=`<div class="block"><div class="label">Your prompt</div><textarea id="prompt" placeholder="Describe the scene, subject, action and mood. NENE AI will turn it into a production-ready video prompt."></textarea><button type="button" class="btn" style="margin-top:8px" onclick="enhanceNenePrompt()">✨ Enhance my prompt</button><small style="display:block;color:var(--muted);margin-top:7px">Prompt Assist adds cinematic detail while keeping your original idea.</small></div>`;
  if(type==="image") extra+=`<div class="block"><div class="label">Describe the motion</div><textarea id="prompt" placeholder="Example: Make the subject smile, move naturally, let the hair move in the breeze, cinematic camera movement..."></textarea></div>`;
  if(type==="ad") extra=`<div class="block"><div class="label">What are you selling?</div><input class="field" id="product" placeholder="e.g. Luxury skincare brand"></div><div class="block"><div class="label">Ad template</div><div class="chips">${chips(["Product Launch","UGC Style","Luxury","Testimonial","Problem → Solution","Promo Offer"])}</div></div><div class="block"><div class="label">Ad brief</div><textarea id="prompt" placeholder="Describe your audience, offer, message and call to action..."></textarea></div>`;
- if(type==="social") extra=`<div class="block"><div class="label">Content idea</div><textarea id="prompt" placeholder="Example: Create a 30-second motivational Reel about small steps and big dreams..."></textarea></div><div class="block"><div class="label">Platform</div><div class="chips">${chips(["TikTok","Instagram Reels","YouTube Shorts","Facebook","LinkedIn","X"])}</div></div><div class="block"><div class="label">Template</div><div class="chips">${chips(["Hook + Value","Storytime","Listicle","Talking Head","Product Showcase","Trend"])}</div></div>`;
  if(type==="story") extra=`<div class="block"><div class="label">Story idea</div><textarea id="prompt" placeholder="Tell NENE AI the story, setting, conflict, important moments and ending..."></textarea></div><div class="block"><div class="label">Characters in this story</div><div id="storyCharacterList" class="list">${characters.map((c,i)=>`<label class="creation" style="cursor:pointer"><input type="checkbox" class="storyCharacterCheck" value="${i}" style="width:20px;height:20px;margin-right:10px"><div class="thumb">${c.icon||'🎭'}</div><div><b>${escapeNeneText(c.name)}</b><small>${escapeNeneText(c.desc||'Saved character profile')}</small></div></label>`).join('')}</div><small style="display:block;color:var(--muted);margin-top:7px">Select one or more saved characters. Character guidance reuses each selected character’s description. Exact visual identity is not guaranteed.</small></div><div class="block"><div class="label">Additional character direction</div><textarea id="storyCharacter" placeholder="Optional: what this character is doing or wearing in this story..."></textarea></div><div class="block"><div class="label">Number of scenes</div><select id="storyScenes" onchange="renderStoryCharacterAssignments()"><option value="3">3 scenes</option><option value="5" selected>5 scenes</option><option value="8">8 scenes</option><option value="10">10 scenes</option></select></div><div class="block"><div class="label">Scene character assignments</div><div id="storySceneCharacters"></div><small style="display:block;color:var(--muted);margin-top:7px">Choose exactly which locked characters appear in each scene. The same character can appear in multiple scenes.</small></div><div class="notice">🎭 <b>Character Lock:</b> NENE AI reuses character descriptions in each assigned scene. A single-character scene can use its reference image; multiple-character scenes use descriptions. Exact visual identity is not guaranteed.</div>`;
  let options = type==="story" ? `<div class="block"><div class="label">Genre</div><div class="chips">${chips(["Life Journey","Drama","Comedy","Love Story","Fantasy","Thriller"])}</div></div><div class="block"><div class="label">Character guidance</div><div class="notice">Saved descriptions guide each assigned scene. Single-character reference images can guide appearance; results may vary.</div></div>` :
  type==="ad" ? `<div class="block"><div class="label">Ad style</div><div class="chips">${chips(["Realistic","Cinematic","Luxury","Modern","Minimalist"])}</div></div>` :
- type==="social" ? `<div class="block"><div class="label">Platform</div><div class="chips">${chips(["TikTok","Instagram Reels","YouTube Shorts","Facebook"])}</div></div><div class="block"><div class="label">Add-ons</div><div class="chips">${chips(["Captions","AI Voice","Music"])}</div></div>` :
  type==="image" ? `<div class="block"><div class="label">Motion controls</div><div class="row"><select id="neneImageMotion"><option>Natural, realistic movement</option><option>Slow, elegant movement</option><option>Gentle camera movement</option><option>Dynamic commercial movement</option><option>Subtle movement with stable framing</option></select><select id="neneImageCamera"><option>Smooth cinematic camera</option><option>Slow dolly-in</option><option>Gentle tracking shot</option><option>Slow orbit</option><option>Static locked camera</option></select></div><div class="row" style="margin-top:8px"><select id="neneImageStyle"><option>Photorealistic</option><option>Cinematic</option><option>Luxury commercial</option><option>Editorial</option><option>Documentary</option></select><select id="neneImageLighting"><option>Natural cinematic lighting</option><option>Golden-hour lighting</option><option>Soft diffused lighting</option><option>Luxury studio lighting</option><option>Dramatic high-contrast lighting</option></select></div><div class="notice" style="margin-top:10px">🔒 Identity protection: NENE AI will instruct the video model to preserve the source subject's face, clothing and overall appearance while adding motion.</div></div>` :
  type==="text" ? `<div class="block"><div class="label">Production controls</div><div class="row"><select id="neneStyle"><option>Cinematic</option><option>Photorealistic</option><option>Luxury commercial</option><option>Documentary</option><option>Editorial</option><option>Dynamic</option></select><select id="neneShot"><option>Medium shot</option><option>Close-up</option><option>Wide establishing shot</option><option>Aerial shot</option><option>Tracking shot</option></select></div><div class="row" style="margin-top:8px"><select id="neneCamera"><option>Smooth cinematic camera</option><option>Slow dolly-in</option><option>Gentle tracking shot</option><option>Slow orbit</option><option>Static locked camera</option><option>Handheld documentary camera</option></select><select id="neneLighting"><option>Natural cinematic lighting</option><option>Golden-hour lighting</option><option>Luxury studio lighting</option><option>Dramatic high-contrast lighting</option><option>Soft diffused lighting</option><option>Neon night lighting</option></select></div><div class="block"><div class="label">Motion</div><select id="neneMotion" class="field"><option>Natural, realistic movement</option><option>Slow, elegant movement</option><option>Energetic dynamic movement</option><option>Subtle movement with stable framing</option><option>Fast commercial-style movement</option></select></div></div>` :
  `<div class="block"><div class="label">Visual style</div><div class="chips">${chips(["Cinematic","Realistic","Animated","3D","Vintage","Dynamic"])}</div></div>`;
@@ -822,6 +822,7 @@ function neneCreationName(prompt,label){
 }
 
 window.generate = async function generate(type) {
+  if(type==='social'){if(window.neneOpenSocialContent)return window.neneOpenSocialContent();toast('Social Content could not load. Refresh the app.');return;}
   const promptEl = document.getElementById('nenePrompt') || document.getElementById('prompt') || document.querySelector('textarea');
   let prompt = promptEl ? promptEl.value.trim() : '';
   if (!prompt) {
@@ -1180,21 +1181,23 @@ resumeActiveNeneJobs();
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=24', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=25', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=24"></script>
-<script src="./account-setup.js?v=24"></script>
-<script src="./profile.js?v=24"></script>
-<script src="./characters.js?v=24"></script>
-<script src="./script-writer.js?v=24"></script>
-<script src="./auth.js?v=24"></script>
-<script src="./director.js?v=24"></script>
-<script src="./paid-access.js?v=24"></script>
-<script src="./ad-studio.js?v=24"></script>
-<script src="./layout.js?v=24"></script>
+<script src="./auth-config.js?v=25"></script>
+<script src="./account-setup.js?v=25"></script>
+<script src="./profile.js?v=25"></script>
+<script src="./characters.js?v=25"></script>
+<script src="./script-writer.js?v=25"></script>
+<script src="./auth.js?v=25"></script>
+<script src="./director.js?v=25"></script>
+<script src="./paid-access.js?v=25"></script>
+<script src="./ad-studio.js?v=25"></script>
+<script src="./social-content.js?v=25"></script>
+<script src="./layout.js?v=25"></script>
 </body>
 </html>
+
 
