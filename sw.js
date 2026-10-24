@@ -1,29 +1,30 @@
-const CACHE = 'nene-ai-shell-v28';
+const CACHE = 'nene-ai-shell-v29';
 
 const SHELL = [
   './',
   './index.html',
-  './auth-config.js?v=28',
-  './account-setup.js?v=28',
+  './auth-config.js?v=29',
+  './account-setup.js?v=29',
   './terms.html',
   './privacy.html',
-  './profile.js?v=28',
-  './auth.js?v=28',
-  './characters.js?v=28',
-  './script-writer.js?v=28',
-  './paid-access.js?v=28',
-  './ad-studio.js?v=28',
-  './social-content.js?v=28',
-  './prompt-assist.js?v=28',
-  './video-studio.js?v=28',
-  './video-studio.css?v=28',
-  './layout.js?v=28',
-  './layout.css?v=28',
-  './director.js?v=28',
+  './profile.js?v=29',
+  './auth.js?v=29',
+  './characters.js?v=29',
+  './script-writer.js?v=29',
+  './paid-access.js?v=29',
+  './ad-studio.js?v=29',
+  './social-content.js?v=29',
+  './prompt-assist.js?v=29',
+  './video-studio.js?v=29',
+  './story-studio.js?v=29',
+  './video-studio.css?v=29',
+  './layout.js?v=29',
+  './layout.css?v=29',
+  './director.js?v=29',
   './manifest.webmanifest',
-  './manifest.webmanifest?v=28',
+  './manifest.webmanifest?v=29',
   './brand-logo.svg',
-  './brand-mark.svg?v=28',
+  './brand-mark.svg?v=29',
   './nene-icon-192-v2.png',
   './nene-icon-512-v2.png',
   './icon-192.png',
@@ -81,6 +82,7 @@ self.addEventListener('fetch', event => {
       )
   );
 });
+
 
 
 
