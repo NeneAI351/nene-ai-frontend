@@ -88,3 +88,5 @@ test('a restored voice retry shows its exact saved script and preset before the 
  const s=await setup({mode:'talking',voiceOnly:true,speechPending:pending}),d=s.w.document;
  assert.equal(d.getElementById('talking-dialogue').value,pending.body.text);assert.equal(d.querySelector('[data-choice-for="ttsVoice"]').textContent,pending.body.voice);assert.match(d.getElementById('voice-script-count').textContent,/saved request/);assert.equal(s.calls.filter(c=>c.options.method==='POST').length,0);s.dom.window.close();
 });
+
+test('voice preset picker excludes the empty placeholder and focuses a valid preset',async()=>{const s=await setup({mode:'talking',voiceOnly:true}),d=s.w.document;d.querySelector('[data-choice-for="ttsVoice"]').click();const options=[...d.querySelectorAll('[role=radio]')];assert.deepEqual(options.map(n=>n.textContent),['Anne Hathaway','Morgan Freeman','David Attenborough']);assert.equal(d.activeElement,options[0]);s.dom.window.close();});
