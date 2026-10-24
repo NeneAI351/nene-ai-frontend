@@ -121,14 +121,14 @@ window.NENEBackend={
 };
 </script>
 
-<link rel="stylesheet" href="./layout.css?v=37">
-<link rel="stylesheet" href="./video-studio.css?v=37">
-<link rel="stylesheet" href="./studio-ui.css?v=37">
+<link rel="stylesheet" href="./layout.css?v=38">
+<link rel="stylesheet" href="./video-studio.css?v=38">
+<link rel="stylesheet" href="./studio-ui.css?v=38">
 </head>
 <body>
 <div class="app">
 <header>
-  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=37" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
+  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=38" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
   <div class="credits">Paid Credits<br><b id="credits">0</b></div>
   <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
   <button id="neneFullscreenButton" class="fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
@@ -368,6 +368,7 @@ function renderCreateHub(){
 function openFeature(type){
  if(type==='text'||type==='image'){if(window.neneOpenVideoStudio)return window.neneOpenVideoStudio(type);toast('Video Studio could not load. Refresh the app.');return;}
  if(type==='social'){if(window.neneOpenSocialContent)return window.neneOpenSocialContent();toast('Social Content could not load. Refresh the app.');return;}
+ if(type==='editor'){if(window.neneOpenVideoEditor)return window.neneOpenVideoEditor();toast('Video Editor could not load. Refresh the app.');return;}
  if(type==='script'){if(window.neneOpenScriptWriter)return window.neneOpenScriptWriter();toast('AI Script Writer could not load. Refresh the app.');return;}
  if(type==='characters'){if(window.NENECharacters)return window.NENECharacters.render();toast('Character Studio could not load. Refresh the app.');return;}
  if(type==="ad"){window.neneOpenAdvertisement();return;}
@@ -444,11 +445,8 @@ function runFeature(type){
    toast('Character Studio could not load. Refresh the app.');return;
  }
  if(type==="script"){if(window.neneOpenScriptWriter)return window.neneOpenScriptWriter();toast('AI Script Writer could not load. Refresh the app.');return;}
- if(type==="editor"){
-   toast("Prototype workflow saved");
-   projects.unshift({name:"New NENE AI Project",type:type, status:"Draft",icon:"✨"});
- } else toast("Prototype workflow saved");
- if(type==="editor") setTimeout(renderHome,450);
+ if(type==="editor"){window.neneOpenVideoEditor?.();return;}
+ toast("Prototype workflow saved");
 }
 
 function chips(arr){
@@ -1007,27 +1005,28 @@ resumeActiveNeneJobs();
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=37', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=38', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=37"></script>
-<script src="./account-setup.js?v=37"></script>
-<script src="./profile.js?v=37"></script>
-<script src="./characters.js?v=37"></script>
-<script src="./script-writer.js?v=37"></script>
-<script src="./auth.js?v=37"></script>
-<script src="./studio-ui.js?v=37"></script>
-<script src="./director.js?v=37"></script>
-<script src="./paid-access.js?v=37"></script>
-<script src="./ad-studio.js?v=37"></script>
-<script src="./social-content.js?v=37"></script>
-<script src="./prompt-assist.js?v=37"></script>
-<script src="./video-studio.js?v=37"></script>
-<script src="./story-studio.js?v=37"></script>
-<script src="./privacy-actions.js?v=37"></script>
-<script src="./layout.js?v=37"></script>
+<script src="./auth-config.js?v=38"></script>
+<script src="./account-setup.js?v=38"></script>
+<script src="./profile.js?v=38"></script>
+<script src="./characters.js?v=38"></script>
+<script src="./script-writer.js?v=38"></script>
+<script src="./video-editor.js?v=38"></script>
+<script src="./auth.js?v=38"></script>
+<script src="./studio-ui.js?v=38"></script>
+<script src="./director.js?v=38"></script>
+<script src="./paid-access.js?v=38"></script>
+<script src="./ad-studio.js?v=38"></script>
+<script src="./social-content.js?v=38"></script>
+<script src="./prompt-assist.js?v=38"></script>
+<script src="./video-studio.js?v=38"></script>
+<script src="./story-studio.js?v=38"></script>
+<script src="./privacy-actions.js?v=38"></script>
+<script src="./layout.js?v=38"></script>
 </body>
 </html>
 

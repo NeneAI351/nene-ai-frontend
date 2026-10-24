@@ -8,7 +8,7 @@
     ['🎵','Music + SFX','Generate or select music and sound effects.','audio'],
     ['💬','Captions','Caption styles and SRT workflow.','captions'],
     ['🌍','Translate & Dub','Localize videos for global audiences.','translate'],
-    ['✂️','AI Video Editor','Timeline, scenes, trims and AI edits.','editor'],
+    ['✂️','AI Video Editor','Trim a clip, preview and download.','editor'],
     ['🏷️','Brand Kit','Logo, fonts, colors and brand-safe outputs.','brand'],
     ['🧩','Model Lab','Compare models for your next scene.','models'],
     ['📐','Formats & Reframe','Reframe videos for different platforms.','formats'],
