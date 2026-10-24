@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
 const source = fs.readFileSync('director.js', 'utf8');
-const plan = { id:'plan-1', status:'succeeded', brief:{scene_seconds:6}, plan:{title:'<img src=x onerror=alert(1)>',summary:'A real plan',continuity_notes:'Same apron',scenes:[{title:'Opening',visual_prompt:'A baker opens her shop.',narration:'Welcome',on_screen_text:'Open',sound_direction:'Quiet'}]} };
+const plan = { id:'plan-1', status:'succeeded', brief:{scene_seconds:6,aspect_ratio:'9:16'}, plan:{title:'<img src=x onerror=alert(1)>',summary:'A real plan',continuity_notes:'Same apron',scenes:[{title:'Opening',visual_prompt:'A baker opens her shop.',narration:'Welcome',on_screen_text:'Open',sound_direction:'Quiet'}]} };
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 async function setup({ signedIn=true, available=true, fail=false }={}) {
   const dom = new JSDOM('<div id="screen"></div>', { url:'https://neneai351.github.io/nene-ai-frontend/', runScripts:'outside-only' });
@@ -10,7 +10,7 @@ async function setup({ signedIn=true, available=true, fail=false }={}) {
   w.setNav=()=>{};w.renderCreateHub=()=>{};w.toast=()=>{};
   w.neneAuthGetAccessToken=async()=>signedIn?'test-token':null;
   w.NENE_DIRECTOR_CONFIG={backendUrl:'https://staging.example'};
-  w.openTool=()=>{w.document.getElementById('screen').innerHTML='<textarea id="prompt"></textarea><select id="neneDuration"><option value="6">6</option></select>';};
+  w.openTool=async()=>{await tick();w.document.getElementById('screen').innerHTML='<textarea id="prompt"></textarea><select id="neneDuration"><option value="6">6</option></select><select id="neneAspectRatio"><option>16:9</option><option>9:16</option></select>';};
   w.fetch=async(url, options)=>{
     calls.push({url,options});
     let data;
@@ -35,8 +35,10 @@ async function setup({ signedIn=true, available=true, fail=false }={}) {
     assert.equal(JSON.parse(submits[0].options.body).idea,'A baker opens a shop.');
     assert.ok(w.document.getElementById('directorResult').textContent.includes(plan.plan.title));
     assert.equal(w.document.querySelector('#directorResult img'),null,'Model text must not execute as HTML');
-    [...w.document.querySelectorAll('button')].find(x=>x.textContent==='Use visual prompt in Text → Video').click();
+    [...w.document.querySelectorAll('button')].find(x=>x.textContent==='Use visual prompt in Text → Video').click();await tick();
     assert.equal(w.document.getElementById('prompt').value,'A baker opens her shop.');
+    assert.equal(w.document.getElementById('neneDuration').value,'6');
+    assert.equal(w.document.getElementById('neneAspectRatio').value,'9:16');
     assert.equal(submits.length,2,'Opening a scene must not generate a video');
     dom.window.close();
   }
