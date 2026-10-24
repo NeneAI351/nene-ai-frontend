@@ -14,3 +14,5 @@ jobs:
       - run: node --test tests/character-studio.test.cjs tests/script-writer.test.cjs
 
       - run: NODE_PATH=tests/node_modules node scripts/check_social_content.cjs
+
+      - run: node --test tests/prompt-assist.test.cjs
