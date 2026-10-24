@@ -8,7 +8,10 @@ async function setup({ signedIn=true, available=true, fail=false }={}) {
   const dom = new JSDOM('<div id="screen"></div>', { url:'https://neneai351.github.io/nene-ai-frontend/', runScripts:'outside-only' });
   const w=dom.window, calls=[];
   w.setNav=()=>{};w.renderCreateHub=()=>{};w.toast=()=>{};
-  w.neneAuthGetAccessToken=async()=>signedIn?'test-token':null;
+  const owner='11111111-1111-4111-8111-111111111111';
+  const token='x.'+Buffer.from(JSON.stringify({sub:owner})).toString('base64url')+'.x';
+  w.neneAuthGetUserId=async()=>signedIn?owner:null;
+  w.neneAuthGetAccessToken=async()=>signedIn?token:null;
   w.NENE_DIRECTOR_CONFIG={backendUrl:'https://staging.example'};
   w.openTool=async()=>{await tick();w.document.getElementById('screen').innerHTML='<textarea id="prompt"></textarea><select id="neneDuration"><option value="6">6</option></select><select id="neneAspectRatio"><option>16:9</option><option>9:16</option></select>';};
   w.fetch=async(url, options)=>{
@@ -31,7 +34,7 @@ async function setup({ signedIn=true, available=true, fail=false }={}) {
     const submits=calls.filter(x=>x.options.method==='POST');
     assert.equal(submits.length,2);
     assert.equal(submits[0].options.headers['Idempotency-Key'],submits[1].options.headers['Idempotency-Key']);
-    assert.equal(submits[0].options.headers.Authorization,'Bearer test-token');
+    assert.match(submits[0].options.headers.Authorization,/^Bearer x\./);
     assert.equal(JSON.parse(submits[0].options.body).idea,'A baker opens a shop.');
     assert.ok(w.document.getElementById('directorResult').textContent.includes(plan.plan.title));
     assert.equal(w.document.querySelector('#directorResult img'),null,'Model text must not execute as HTML');
@@ -86,3 +89,4 @@ async function setup({ signedIn=true, available=true, fail=false }={}) {
   }
   console.log('Director UI verified: auth, availability, real request, stable retry key, safe output, scene transfer and preserved input on failure.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
