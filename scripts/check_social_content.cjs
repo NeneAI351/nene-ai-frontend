@@ -126,7 +126,7 @@ const posts=calls=>calls.filter(x=>x.url.endsWith('/api/generations'));
  {
   const {dom,w,calls}=await setup();fill(w);
   w.document.getElementById('social-review').click();await flush();
-  Object.defineProperty(w.localStorage,'setItem',{value:()=>{throw Error('Storage full');}});
+  Object.defineProperty(Object.getPrototypeOf(w.localStorage),'setItem',{value:()=>{throw Error('Storage full');}});
   w.document.getElementById('social-generate').click();await flush();
   assert.equal(posts(calls).length,0,'Storage failure must stop before a paid request');
   assert.match(w.document.getElementById('social-message').textContent,/No generation was submitted/);dom.window.close();
@@ -145,8 +145,7 @@ const posts=calls=>calls.filter(x=>x.url.endsWith('/api/generations'));
   let opens=0;w.neneOpenSocialContent=()=>{opens++;};
   const ad=[...w.document.querySelectorAll('button')].find(x=>x.textContent.includes('Social Content'));
   assert.ok(ad);w.eval(ad.getAttribute('onclick'));assert.equal(opens,1,'Actual home card must open the working social studio');
-  w.openFeature('social');assert.equal(opens,2);dom.window.close();
+  w.openFeature('social');assert.equal(opens,2);w.generate('social');assert.equal(opens,3,'Legacy social actions must open the paid studio too');dom.window.close();
  }
  console.log('Social Content verified: real card wiring, auth, reviewed credit limit, no free wallet changes, duplicate-click safety, restart-safe retries, failure handling, private playback and account isolation.');
 })().catch(e=>{console.error(e);process.exit(1);});
-
