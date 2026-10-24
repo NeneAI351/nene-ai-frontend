@@ -135,7 +135,7 @@
     }
 
     const title = mode === "signup" ? "Create your account" :
-      mode === "reset" ? "Reset your password" :
+      mode === "reset" ? "Reset your NENE AI password" :
       mode === "update" ? "Choose a new password" : "Welcome back";
     const submit = mode === "signup" ? "Create account" :
       mode === "reset" ? "Send reset link" :
@@ -157,7 +157,7 @@
       '<form id="neneAuthForm" novalidate>' +
       emailField +
       passwordField +
-      (mode === "signup" ? '<label class="notice" style="display:block;margin:12px 0"><input type="checkbox" id="neneSignupAgreement" required> I agree to the <a href="./terms.html" target="_blank" rel="noopener" style="color:#ffe7a1">Terms of Service and Refund Policy</a>.</label><p class="subtitle" style="font-size:12px">Generation requires paid credits. No change-of-mind cash refunds after credits are delivered; required legal/store refunds and failed-generation credit restoration remain.</p>' : '') +
+      (mode === "signup" ? '<label class="notice" style="display:block;margin:12px 0"><input type="checkbox" id="neneSignupAgreement" required> I agree to the <a href="./terms.html" target="_blank" rel="noopener" style="color:#ffe7a1">Terms of Service and Refund Policy</a>. <a href="./privacy.html" target="_blank" rel="noopener" style="color:#ffe7a1">Privacy Policy</a></label><p class="subtitle" style="font-size:12px">Generation requires paid credits. No change-of-mind cash refunds after credits are delivered; required legal/store refunds and failed-generation credit restoration remain.</p>' : '') +
       '<button class="btn gold" id="neneAuthSubmit" type="submit">' + submit + '</button>' +
       '</form>' +
       '<div id="neneAuthMessage" role="status" aria-live="polite" style="font-size:12px;line-height:1.5;margin-top:12px"></div>' +
@@ -222,7 +222,7 @@
             redirectTo: config.redirectTo || window.location.origin
           });
           if (!result.error) {
-            setMessage("If an account exists for that email, a password-reset message will be sent.", false);
+            setMessage("If an account exists for that email, a NENE AI password-reset message will be sent. Never share the reset link.", false);
             return;
           }
         } else if (mode === "update") {
@@ -235,7 +235,7 @@
         if (result.data?.session && window.neneAccountSetup) {
           try { await window.neneAccountSetup.sync(result.data.session); } catch (_) { /* Backend retries later; no repeat acceptance. */ }
         }
-        setMessage("You are signed in. NENE AI will send your verified access token with protected backend requests.", false);
+        setMessage(mode === "update" ? "Your NENE AI password has been updated." : "You are signed in to NENE AI.", false);
         window.setTimeout(() => closeModal(), 900);
       } catch (error) {
         const raw = String(error?.message || "");
