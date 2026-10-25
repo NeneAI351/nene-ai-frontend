@@ -52,6 +52,7 @@
    const data=await api('/account-deletion',{method:'POST',body:JSON.stringify({request_id:id,confirm_delete:true})},owner);
    if(!UUID.test(data.receipt_id))throw Error('A deletion receipt could not be confirmed. Retry this same request.');
    const stillOwner=owner===await window.neneAuthGetUserId?.();clearOwnerData(owner,stillOwner);
+   try{await window.NENEEditorStore?.clearOwner(owner);}catch(_){localStorage.setItem('nene_editor_cleanup_v1:'+owner,'pending');}
    localStorage.setItem('nene_privacy_deletion_receipt',data.receipt_id);
    if(stillOwner)try{await window.nenePrivacyLocalSignOut?.();}catch(_){}
    window.location.replace('./delete-account.html?receipt='+data.receipt_id);
