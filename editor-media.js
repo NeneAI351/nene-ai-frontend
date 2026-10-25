@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const M=window.NENEEditorModel;
-  function supportedTypes(){if(!window.MediaRecorder)return [];return ['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1.4D401F,mp4a.40.2','video/webm;codecs=vp8,opus'].filter(type=>MediaRecorder.isTypeSupported(type));}
+  function supportedTypes(){if(!window.MediaRecorder)return [];return ['video/mp4;codecs=avc1.42E01F,mp4a.40.2','video/mp4;codecs=avc1.4D401F,mp4a.40.2','video/webm;codecs=vp8,opus'].filter(type=>MediaRecorder.isTypeSupported(type));}
   const audioContext=()=>new (window.AudioContext||window.webkitAudioContext)();
   async function bounded(promise,message){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(message)),12000);})]);}finally{clearTimeout(timer);}}
   function wait(element,event,timeout=12000,signal){return new Promise((resolve,reject)=>{

@@ -47,7 +47,7 @@
     const out=[];for(const paragraph of text.split('\n')){let line='';for(const char of paragraph){if(line&&ctx.measureText(line+char).width>width){out.push(line.trim());line=char;}else line+=char;}out.push(line.trim());}return out;
   }
   function overlay(ctx,text,w,h,top){
-    const size=Math.round(w*.055);ctx.font=`bold ${size}px Arial, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    const size=Math.round(Math.min(w,h)*.055);ctx.font=`bold ${size}px Arial, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
     const words=lines(ctx,text,w*.86).slice(0,top?2:3);const lineHeight=size*1.28;const y=top?h*.10:h*.84-(words.length-1)*lineHeight/2;
     ctx.fillStyle='rgba(0,0,0,.72)';ctx.fillRect(w*.04,y-lineHeight*.6,w*.92,lineHeight*words.length+size*.15);ctx.fillStyle='#fff';words.forEach((line,i)=>ctx.fillText(line,w/2,y+i*lineHeight,w*.88));
   }
