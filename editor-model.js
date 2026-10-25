@@ -18,7 +18,7 @@
     if(duration>60.001)throw Error('Trim the timeline to 60 seconds or less for this mobile editor.');
     const title=String(project.title||'').trim();if(title.length>80)throw Error('Keep the title within 80 characters.');
     if((project.captions||[]).length>100)throw Error('Use no more than 100 captions.');
-    const captions=(project.captions||[]).map(c=>{
+    const captions=(project.captions||[]).filter(c=>String(c.text||'').trim()).map(c=>{
       const start=finite(c.start,0,duration,'Caption start must be inside the timeline.'),end=finite(c.end,0,duration,'Caption end must be inside the timeline.'),text=String(c.text||'').trim();
       if(end<=start||!text||text.length>120)throw Error('Each caption needs text up to 120 characters and a valid time range.');
       return {start,end,text};
