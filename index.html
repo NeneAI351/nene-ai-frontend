@@ -16,7 +16,7 @@
 }
 *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 50% -10%,#251b08 0,#070707 38%);color:var(--cream);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
 button,input,textarea,select{font:inherit} button{cursor:pointer}
-.app{max-width:430px;min-height:100vh;margin:auto;background:linear-gradient(180deg,#080808,#0b0a09 70%,#080808);position:relative;overflow:hidden}
+.app{width:100%;max-width:1100px;min-height:100vh;margin:auto;background:linear-gradient(180deg,#080808,#0b0a09 70%,#080808);position:relative;overflow:hidden}
 header{position:sticky;top:0;z-index:10;padding:14px 16px 12px;border-bottom:1px solid #5a4318;background:rgba(7,7,7,.93);backdrop-filter:blur(12px);display:flex;align-items:center;gap:10px}
 .logo{font-family:Georgia,serif;font-size:25px;letter-spacing:1px;font-weight:700;color:var(--gold2)} .tag{font-size:9px;color:var(--gold);margin-top:1px}
 .avatar{margin-left:auto;width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--gold)}
@@ -38,7 +38,7 @@ textarea{min-height:130px;resize:vertical}.label{font-size:12px;color:#cfc8bb;ma
 .chips{display:flex;flex-wrap:wrap;gap:7px}.chip{border:1px solid #493716;border-radius:999px;padding:9px 11px;background:#0f0e0c;color:#cfc8bb;font-size:12px}.chip.active{border-color:var(--gold);color:var(--gold2);box-shadow:0 0 14px rgba(244,201,93,.12)}
 .preview{height:210px;border:1px dashed #72571d;border-radius:18px;background:linear-gradient(135deg,#17120a,#090909);display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);overflow:hidden}.preview img{width:100%;height:100%;object-fit:cover;filter:brightness(.65)}
 .upload{position:relative}.upload input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(430px,100%);height:76px;background:rgba(7,7,7,.96);border-top:1px solid #4d3b17;display:grid;grid-template-columns:repeat(4,1fr);z-index:20}
+.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(1100px,100%);height:76px;background:rgba(7,7,7,.96);border-top:1px solid #4d3b17;display:grid;grid-template-columns:repeat(4,1fr);z-index:20}
 .nav{border:0;background:none;color:#aaa49a;font-size:10px}.nav span{display:block;font-size:20px;margin-bottom:3px}.nav.active{color:var(--gold2)} .create{font-size:28px;color:var(--gold);text-shadow:0 0 14px rgba(244,201,93,.5)}
 .back{border:0;background:none;color:var(--gold);font-size:22px}.toolhead{display:flex;align-items:center;gap:8px;margin-bottom:15px}
 .badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#20180b;border:1px solid #644a17;color:var(--gold);font-size:10px}
@@ -121,15 +121,15 @@ window.NENEBackend={
 };
 </script>
 
-<link rel="stylesheet" href="./layout.css?v=39">
-<link rel="stylesheet" href="./video-studio.css?v=39">
-<link rel="stylesheet" href="./studio-ui.css?v=39">
-<link rel="stylesheet" href="./video-editor.css?v=39">
+<link rel="stylesheet" href="./layout.css?v=40">
+<link rel="stylesheet" href="./video-studio.css?v=40">
+<link rel="stylesheet" href="./studio-ui.css?v=40">
+<link rel="stylesheet" href="./video-editor.css?v=40">
 </head>
 <body>
 <div class="app">
 <header>
-  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=39" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
+  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=40" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
   <div class="credits">Paid Credits<br><b id="credits">0</b></div>
   <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
   <button id="neneFullscreenButton" class="fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
@@ -1006,32 +1006,32 @@ resumeActiveNeneJobs();
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=39', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=40', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=39"></script>
-<script src="./account-setup.js?v=39"></script>
-<script src="./profile.js?v=39"></script>
-<script src="./characters.js?v=39"></script>
-<script src="./script-writer.js?v=39"></script>
-<script src="./editor-model.js?v=39"></script>
-<script src="./editor-store.js?v=39"></script>
-<script src="./editor-media.js?v=39"></script>
-<script src="./editor-billing.js?v=39"></script>
-<script src="./video-editor.js?v=39"></script>
-<script src="./auth.js?v=39"></script>
-<script src="./studio-ui.js?v=39"></script>
-<script src="./director.js?v=39"></script>
-<script src="./paid-access.js?v=39"></script>
-<script src="./ad-studio.js?v=39"></script>
-<script src="./social-content.js?v=39"></script>
-<script src="./prompt-assist.js?v=39"></script>
-<script src="./video-studio.js?v=39"></script>
-<script src="./story-studio.js?v=39"></script>
-<script src="./privacy-actions.js?v=39"></script>
-<script src="./layout.js?v=39"></script>
+<script src="./auth-config.js?v=40"></script>
+<script src="./account-setup.js?v=40"></script>
+<script src="./profile.js?v=40"></script>
+<script src="./characters.js?v=40"></script>
+<script src="./script-writer.js?v=40"></script>
+<script src="./editor-model.js?v=40"></script>
+<script src="./editor-store.js?v=40"></script>
+<script src="./editor-media.js?v=40"></script>
+<script src="./editor-billing.js?v=40"></script>
+<script src="./video-editor.js?v=40"></script>
+<script src="./auth.js?v=40"></script>
+<script src="./studio-ui.js?v=40"></script>
+<script src="./director.js?v=40"></script>
+<script src="./paid-access.js?v=40"></script>
+<script src="./ad-studio.js?v=40"></script>
+<script src="./social-content.js?v=40"></script>
+<script src="./prompt-assist.js?v=40"></script>
+<script src="./video-studio.js?v=40"></script>
+<script src="./story-studio.js?v=40"></script>
+<script src="./privacy-actions.js?v=40"></script>
+<script src="./layout.js?v=40"></script>
 </body>
 </html>
 
