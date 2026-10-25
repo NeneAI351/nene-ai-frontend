@@ -5,7 +5,7 @@
   function supportedTypes(){if(!window.MediaRecorder)return [];return ['video/mp4;codecs=avc1.42E01F,mp4a.40.2','video/mp4;codecs=avc1.4D401F,mp4a.40.2','video/webm;codecs=vp8,opus'].filter(type=>MediaRecorder.isTypeSupported(type));}
   const audioContext=()=>new (window.AudioContext||window.webkitAudioContext)();
   function unlock(){const context=audioContext();let ready;try{ready=context.resume();}catch(e){ready=Promise.reject(e);}ready=Promise.resolve(ready);ready.catch(()=>{});return {context,ready};}
-  async function bounded(promise,message,signal){let timer,abort;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(message)),12000);abort=()=>reject(Error('Export or preview cancelled. No fee was charged.'));signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();})]);}finally{clearTimeout(timer);if(abort)signal?.removeEventListener('abort',abort);}}
+  async function bounded(promise,message,signal,timeout=12000){let timer,abort;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(message)),timeout);abort=()=>reject(Error('Export or preview cancelled. No fee was charged.'));signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();})]);}finally{clearTimeout(timer);if(abort)signal?.removeEventListener('abort',abort);}}
   function wait(element,event,timeout=12000,signal){return new Promise((resolve,reject)=>{
     const cleanup=()=>{clearTimeout(timer);element.removeEventListener(event,success);element.removeEventListener('error',failure);signal?.removeEventListener('abort',abort);};
     const success=()=>{cleanup();resolve();},failure=()=>{cleanup();reject(Error('This media file could not be decoded. Try a standard MP4, MP3 or WAV file.'));},abort=()=>{cleanup();reject(Error('Export or preview cancelled.'));};
@@ -20,7 +20,7 @@
   }
   async function loadAudio(file){
     if(file.size>20*1024*1024)throw Error('Choose an audio file under 20 MB.');const context=audioContext();
-    try{const raw=await file.arrayBuffer(),buffer=await context.decodeAudioData(raw.slice(0));if(buffer.duration>180||buffer.duration<.1)throw Error('Use an audio track between 0.1 seconds and three minutes.');return {source:await M.hash(raw),file,buffer,duration:buffer.duration};}catch(e){throw Error(e.message?.startsWith('Use an audio')?e.message:'This audio file could not be decoded. Try MP3 or WAV.');}finally{await context.close();}
+    try{const raw=await bounded(file.arrayBuffer(),'The audio file could not be read. Save it on your phone and try again.'),buffer=await bounded(context.decodeAudioData(raw.slice(0)),'Audio decoding timed out. Try a shorter MP3 or WAV file.',undefined,30000);if(buffer.duration>180||buffer.duration<.1)throw Error('Use an audio track between 0.1 seconds and three minutes.');return {source:await M.hash(raw),file,buffer,duration:buffer.duration};}catch(e){throw Error(/^(Use an audio|The audio file|Audio decoding)/.test(e.message||'')?e.message:'This audio file could not be decoded. Try MP3 or WAV.');}finally{await context.close();}
   }
   async function validateBlob(blob,expected,signal){
     if(blob.size<100)throw Error('The video export was empty. No fee was charged.');
