@@ -2,16 +2,17 @@
 (() => {
   'use strict';
   const FORMATS = {'9:16':[720,1280], '16:9':[1280,720], '1:1':[720,720], '4:5':[720,900]};
-  const finite = (v,min,max,label) => {const n=Number(v);if(!Number.isFinite(n)||n<min||n>max)throw Error(label);return Math.round(n*1000)/1000;};
+  const finite = (v,min,max,label,tolerance=0) => {const n=Number(v);if(!Number.isFinite(n)||n<min-tolerance||n>max+tolerance)throw Error(label);return Math.round(Math.min(max,Math.max(min,n))*1000)/1000;};
+  function position(value){if(!value)return null;return {x:finite(value.x,0,1,'Choose a valid text horizontal position.'),y:finite(value.y,0,1,'Choose a valid text vertical position.')};}
   function validate(project, resources) {
     if(!project.clips?.length||project.clips.length>6)throw Error('Add between one and six video clips.');
     if(!FORMATS[project.format]||!['contain','cover'].includes(project.fit))throw Error('Choose a supported video format and crop.');
     let duration=0;
     const clips=project.clips.map(clip=>{
       const source=resources.get(clip.source);if(!source)throw Error('A source file is missing. Add it again.');
-      const start=finite(clip.start,0,source.duration,'Choose a valid clip start.');
-      const end=finite(clip.end,0,source.duration,'Choose a valid clip end.');
-      if(end-start<.2)throw Error('Each clip must be at least 0.2 seconds long.');
+      const start=finite(clip.start,0,source.duration,'Choose a valid clip start.',.001);
+      const end=finite(clip.end,0,source.duration,'Choose a valid clip end.',.001);
+      if(Math.round((end-start)*1000)<200)throw Error('Each clip must be at least 0.2 seconds long.');
       duration+=end-start;
       return {source:clip.source,start,end,volume:finite(clip.volume,0,1,'Set clip volume between 0 and 100%.')};
     });
@@ -21,9 +22,9 @@
     const captions=(project.captions||[]).filter(c=>String(c.text||'').trim()).map(c=>{
       const start=finite(c.start,0,duration,'Caption start must be inside the timeline.'),end=finite(c.end,0,duration,'Caption end must be inside the timeline.'),text=String(c.text||'').trim();
       if(end<=start||!text||text.length>120)throw Error('Each caption needs text up to 120 characters and a valid time range.');
-      return {start,end,text};
+      const item={start,end,text},p=position(c.position);if(p&&(p.x!==.5||p.y!==.84))item.position=p;return item;
     }).sort((a,b)=>a.start-b.start||a.end-b.end||a.text.localeCompare(b.text));
-    const result={version:2,clips,format:project.format,fit:project.fit,title,captions};
+    const result={version:2,clips,format:project.format,fit:project.fit,title,captions};const tp=position(project.titlePosition);if(title&&tp&&(tp.x!==.5||tp.y!==.1))result.titlePosition=tp;
     for(const key of ['music','voice']){
       const audio=project[key];if(!audio){result[key]=null;continue;}
       if(!resources.get(audio.source)?.buffer)throw Error('An audio file is missing. Add it again.');
@@ -46,11 +47,11 @@
   function lines(ctx,text,width){
     const out=[];for(const paragraph of text.split('\n')){let line='';for(const char of paragraph){if(line&&ctx.measureText(line+char).width>width){out.push(line.trim());line=char;}else line+=char;}out.push(line.trim());}return out;
   }
-  function overlay(ctx,text,w,h,top){
+  function overlay(ctx,text,w,h,top,p){
     const size=Math.round(Math.min(w,h)*.055);ctx.font=`bold ${size}px Arial, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
-    const words=lines(ctx,text,w*.86).slice(0,top?2:3);const lineHeight=size*1.28;const y=top?h*.10:h*.84-(words.length-1)*lineHeight/2;
-    ctx.fillStyle='rgba(0,0,0,.72)';ctx.fillRect(w*.04,y-lineHeight*.6,w*.92,lineHeight*words.length+size*.15);ctx.fillStyle='#fff';words.forEach((line,i)=>ctx.fillText(line,w/2,y+i*lineHeight,w*.88));
+    const words=lines(ctx,text,w*.86).slice(0,top?2:3);const lineHeight=size*1.28;let y=top?h*.10:h*.84-(words.length-1)*lineHeight/2;let x=w/2;let boxX=w*.04;let boxWidth=w*.92;if(p){boxWidth=Math.min(w*.92,Math.max(size*2,...words.map(line=>ctx.measureText(line).width))+size);x=Math.min(w-boxWidth/2,Math.max(boxWidth/2,p.x*w));boxX=x-boxWidth/2;y=Math.min(h-lineHeight*(words.length-.4),Math.max(lineHeight*.6,p.y*h-(words.length-1)*lineHeight/2));}
+    ctx.fillStyle='rgba(0,0,0,.72)';ctx.fillRect(boxX,y-lineHeight*.6,boxWidth,lineHeight*words.length+size*.15);ctx.fillStyle='#fff';words.forEach((line,i)=>ctx.fillText(line,x,y+i*lineHeight,w*.88));
   }
-  function draw(ctx,video,project,time,w,h){ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);const r=frameRect(video.videoWidth,video.videoHeight,w,h,project.fit);ctx.drawImage(video,r.x,r.y,r.w,r.h);if(project.title)overlay(ctx,project.title,w,h,true);const active=project.captions.filter(c=>time>=c.start&&time<c.end).map(c=>c.text).join('\n');if(active)overlay(ctx,active,w,h,false);}
+  function draw(ctx,video,project,time,w,h){ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);const r=frameRect(video.videoWidth,video.videoHeight,w,h,project.fit);ctx.drawImage(video,r.x,r.y,r.w,r.h);if(project.title){const p=project.titlePosition;overlay(ctx,project.title,w,h,true,p&&(p.x!==.5||p.y!==.1)?p:undefined);}const active=project.captions.filter(c=>time>=c.start&&time<c.end).map(c=>({...c,position:c.position&&(c.position.x!==.5||c.position.y!==.84)?c.position:undefined}));if(active.some(c=>c.position)){for(const c of active)if(c.text)overlay(ctx,c.text,w,h,false,c.position);}else{const text=active.map(c=>c.text).join('\n');if(text)overlay(ctx,text,w,h,false);}}
   window.NENEEditorModel=Object.freeze({FORMATS,validate,hash,digest,parseSrt,srt,frameRect,draw});
 })();
