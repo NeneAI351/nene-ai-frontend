@@ -76,3 +76,5 @@ body.nene-editing>.app>header,body.nene-editing .bottom{visibility:hidden;pointe
 @media(max-height:480px){#screen>main.nene-editor.editor-workspace{grid-template-rows:40px minmax(0,1fr) 70px minmax(70px,1fr) 46px}.editor-workspace .editor-ruler{display:none}.nene-editor.editor-workspace .editor-filmstrip{max-height:36px;min-height:32px}.nene-editor.editor-workspace .editor-clip-tile{height:30px;min-height:30px}.editor-workspace .editor-lane{min-height:15px;margin-top:1px}.editor-workspace .editor-lane-content{max-height:15px}.nene-editor.editor-workspace .editor-track-segment,.nene-editor.editor-workspace .editor-empty-track{min-height:15px;height:15px;padding:0 4px}.editor-workspace .editor-preview-dock .notice{display:none}}
 
 .nene-editor.editor-workspace .editor-clip-tile .editor-thumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:3px;opacity:.7;pointer-events:none}
+
+.nene-editor.editor-workspace .editor-sheet audio{display:block;width:100%;height:44px;margin:8px 0;color-scheme:dark}
