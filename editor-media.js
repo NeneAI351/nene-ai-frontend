@@ -4,6 +4,7 @@
   const M=window.NENEEditorModel;
   function supportedTypes(){if(!window.MediaRecorder)return [];return ['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1.4D401F,mp4a.40.2','video/webm;codecs=vp8,opus'].filter(type=>MediaRecorder.isTypeSupported(type));}
   const audioContext=()=>new (window.AudioContext||window.webkitAudioContext)();
+  async function bounded(promise,message){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(message)),12000);})]);}finally{clearTimeout(timer);}}
   function wait(element,event,timeout=12000,signal){return new Promise((resolve,reject)=>{
     const cleanup=()=>{clearTimeout(timer);element.removeEventListener(event,success);element.removeEventListener('error',failure);signal?.removeEventListener('abort',abort);};
     const success=()=>{cleanup();resolve();},failure=()=>{cleanup();reject(Error('This media file could not be decoded. Try a standard MP4, MP3 or WAV file.'));},abort=()=>{cleanup();reject(Error('Export or preview cancelled.'));};
@@ -37,7 +38,7 @@
     const abort=()=>{recordingError=Error(document.hidden?'Keep NENE AI visible during export. No fee was charged.':'Export or preview cancelled. No new fee was charged.');resources.forEach(r=>r.video?.pause());nodes.forEach(n=>n.player.pause());failClip?.(recordingError);if(recorder?.state!=='inactive'&&recorder)recorder.stop();};
     const hidden=()=>{if(document.hidden)abort();};signal?.addEventListener('abort',abort,{once:true});document.addEventListener('visibilitychange',hidden);
     try{
-      await context.resume();if(signal?.aborted)throw Error('Export cancelled.');
+      await bounded(context.resume(),'Audio playback could not start. Tap Preview again or try another browser. No fee was charged.');if(signal?.aborted)throw Error('Export cancelled.');
       if(record){stream=canvas.captureStream(30);destination.stream.getAudioTracks().forEach(t=>stream.addTrack(t));recorder=new MediaRecorder(stream,{mimeType,videoBitsPerSecond:4000000,audioBitsPerSecond:128000});recorder.ondataavailable=event=>{if(event.data.size){bytes+=event.data.size;if(bytes>64*1024*1024){recordingError=Error('The export is too large for this mobile editor. Shorten the timeline.');recorder.stop();}else chunks.push(event.data);}};recorder.onstop=resolveDone;recorder.onerror=()=>{recordingError=Error('The browser could not finish recording. No fee was charged.');rejectDone(recordingError);};}
       let offset=0;
       for(const clip of project.clips){
@@ -52,7 +53,7 @@
         const original=context.createMediaElementSource(player),gain=context.createGain();gain.gain.value=clip.volume;original.connect(gain);gain.connect(mixer);nodes.push({player,original,gain});
         M.draw(ctx,player,project,offset,w,h);
         if(recordingError||signal?.aborted)throw recordingError||Error('Export cancelled.');
-        await player.play();if(recorder){if(recorder.state==='inactive')recorder.start(250);else if(recorder.state==='paused')recorder.resume();}
+        await bounded(player.play(),'Video playback could not start. Try another browser. No fee was charged.');if(recorder){if(recorder.state==='inactive')recorder.start(250);else if(recorder.state==='paused')recorder.resume();}
         const clipLength=clip.end-clip.start;
         for(const name of ['music','voice']){
           const track=project[name];if(!track)continue;const resource=resources.get(track.source),elapsed=offset-track.start;
