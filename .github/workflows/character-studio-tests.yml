@@ -29,3 +29,5 @@ jobs:
       - run: NODE_PATH=tests/node_modules node scripts/check_ad_studio.cjs
 
       - run: node --check video-editor.js && node --test tests/video-editor*.test.cjs
+
+      - run: node --test tests/studio-routes.test.cjs

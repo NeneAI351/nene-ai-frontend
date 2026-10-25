@@ -5,15 +5,15 @@
     ['🎭','Character Studio','Create reusable characters, outfits and reference looks.','characters'],
     ['✍️','AI Script Writer','Hooks, scripts, scenes, dialogue and CTAs.','script'],
     ['🎙️','AI Voice','Narration, voices and lip-sync workflow.','voice'],
-    ['🎵','Music + SFX','Generate or select music and sound effects.','audio'],
-    ['💬','Captions','Caption styles and SRT workflow.','captions'],
-    ['🌍','Translate & Dub','Localize videos for global audiences.','translate'],
+    ['🎵','Music + SFX','Import music and sound effects into your film.','audio'],
+    ['💬','Captions','Add timed text and import or export SRT.','captions'],
+    ['🌍','Translate & Dub','Import translated text and voiceovers.','translate'],
     ['✂️','AI Video Editor','Join clips, add captions and sound, then export.','editor'],
     ['🏷️','Brand Kit','Logo, fonts, colors and brand-safe outputs.','brand'],
-    ['🧩','Model Lab','Compare models for your next scene.','models'],
+    ['🧩','Model Lab','View current video options and availability.','models'],
     ['📐','Formats & Reframe','Reframe videos for different platforms.','formats'],
-    ['🪄','AI Image Studio','Reference images, scenes and product visuals.','images'],
-    ['✨','Enhance & Upscale','Refine finished visuals.','enhance']
+    ['🪄','AI Image Studio','Image generation availability and image animation.','images'],
+    ['✨','Enhance & Upscale','Enhancement availability and video reframing.','enhance']
   ];
   const node=(tag,text,cls)=>{const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el;};
   const card = ([icon,title,description,key]) => {

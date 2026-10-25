@@ -121,15 +121,15 @@ window.NENEBackend={
 };
 </script>
 
-<link rel="stylesheet" href="./layout.css?v=42">
-<link rel="stylesheet" href="./video-studio.css?v=42">
-<link rel="stylesheet" href="./studio-ui.css?v=42">
-<link rel="stylesheet" href="./video-editor.css?v=42">
+<link rel="stylesheet" href="./layout.css?v=43">
+<link rel="stylesheet" href="./video-studio.css?v=43">
+<link rel="stylesheet" href="./studio-ui.css?v=43">
+<link rel="stylesheet" href="./video-editor.css?v=43">
 </head>
 <body>
 <div class="app">
 <header>
-  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=42" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
+  <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=43" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
   <div class="credits">Paid Credits<br><b id="credits">0</b></div>
   <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
   <button id="neneFullscreenButton" class="fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
@@ -367,6 +367,10 @@ function renderCreateHub(){
 }
 
 function openFeature(type){
+ const editingTools={audio:'Audio',captions:'Captions',formats:'Format'};
+ if(editingTools[type]){if(window.neneOpenVideoEditor)return window.neneOpenVideoEditor({tool:editingTools[type]});toast('Video Editor could not load. Refresh the app.');return;}
+ if(['models','images','enhance','translate'].includes(type))return openStudioAvailability(type);
+
  if(type==='text'||type==='image'){if(window.neneOpenVideoStudio)return window.neneOpenVideoStudio(type);toast('Video Studio could not load. Refresh the app.');return;}
  if(type==='social'){if(window.neneOpenSocialContent)return window.neneOpenSocialContent();toast('Social Content could not load. Refresh the app.');return;}
  if(type==='editor'){if(window.neneOpenVideoEditor)return window.neneOpenVideoEditor();toast('Video Editor could not load. Refresh the app.');return;}
@@ -433,6 +437,16 @@ function openFeature(type){
  <div class="notice" style="margin-top:12px">Prototype mode: this screen maps the real product experience. Actual AI generation, voice, payments, storage and publishing will be connected later.</div>
  </main>`;
 }
+
+function openStudioAvailability(type){
+ const info={
+  models:['Model Lab','Side-by-side model comparisons are not available yet. Video Studio shows the supported video settings and reviews the server price before generation.','Open Video Studio',()=>openFeature('text')],
+  images:['AI Image Studio','New image generation is not connected yet. You can upload an image you already have and animate it with Image → Video.','Animate an image',()=>openFeature('image')],
+  enhance:['Enhance & Upscale','AI upscaling, background removal and stabilization are not connected yet. The editor can crop and fit your existing video, with exports up to 720p.','Crop or reframe a video',()=>openFeature('formats')],
+  translate:['Translate & Dub','Automatic translation and dubbing are not connected yet. You can add translated text and import a voiceover you already have in the editor.','Add text and subtitles',()=>openFeature('captions')]
+ }[type];if(!info)return;setNav('create');const main=document.createElement('main'),head=document.createElement('div');head.className='toolhead';const back=document.createElement('button');back.className='back';back.textContent='‹';back.setAttribute('aria-label','Back to AI Studio');back.onclick=()=>renderCreateHub();const title=document.createElement('h1');title.textContent=info[0];head.append(back,title);const note=document.createElement('p');note.className='notice';note.textContent=info[1];const action=document.createElement('button');action.className='btn gold';action.textContent=info[2];action.onclick=info[3];main.append(head,note,action);if(type==='translate'){const voice=document.createElement('button');voice.className='btn';voice.textContent='Import a voiceover';voice.style.marginTop='10px';voice.onclick=()=>openFeature('audio');main.append(voice);}screen.replaceChildren(main);
+}
+
 function toggleRow(label,key){
  return `<div class="toggle"><span>${label}</span><button class="switch ${settings[key]?'on':''}" onclick="settings['${key}']=!settings['${key}'];this.classList.toggle('on');this.querySelector('i').style.marginLeft=settings['${key}']?'21px':'0'"><i></i></button></div>`;
 }
@@ -1006,32 +1020,32 @@ resumeActiveNeneJobs();
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=42', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=43', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
-<script src="./auth-config.js?v=42"></script>
-<script src="./account-setup.js?v=42"></script>
-<script src="./profile.js?v=42"></script>
-<script src="./characters.js?v=42"></script>
-<script src="./script-writer.js?v=42"></script>
-<script src="./editor-model.js?v=42"></script>
-<script src="./editor-store.js?v=42"></script>
-<script src="./editor-media.js?v=42"></script>
-<script src="./editor-billing.js?v=42"></script>
-<script src="./video-editor.js?v=42"></script>
-<script src="./auth.js?v=42"></script>
-<script src="./studio-ui.js?v=42"></script>
-<script src="./director.js?v=42"></script>
-<script src="./paid-access.js?v=42"></script>
-<script src="./ad-studio.js?v=42"></script>
-<script src="./social-content.js?v=42"></script>
-<script src="./prompt-assist.js?v=42"></script>
-<script src="./video-studio.js?v=42"></script>
-<script src="./story-studio.js?v=42"></script>
-<script src="./privacy-actions.js?v=42"></script>
-<script src="./layout.js?v=42"></script>
+<script src="./auth-config.js?v=43"></script>
+<script src="./account-setup.js?v=43"></script>
+<script src="./profile.js?v=43"></script>
+<script src="./characters.js?v=43"></script>
+<script src="./script-writer.js?v=43"></script>
+<script src="./editor-model.js?v=43"></script>
+<script src="./editor-store.js?v=43"></script>
+<script src="./editor-media.js?v=43"></script>
+<script src="./editor-billing.js?v=43"></script>
+<script src="./video-editor.js?v=43"></script>
+<script src="./auth.js?v=43"></script>
+<script src="./studio-ui.js?v=43"></script>
+<script src="./director.js?v=43"></script>
+<script src="./paid-access.js?v=43"></script>
+<script src="./ad-studio.js?v=43"></script>
+<script src="./social-content.js?v=43"></script>
+<script src="./prompt-assist.js?v=43"></script>
+<script src="./video-studio.js?v=43"></script>
+<script src="./story-studio.js?v=43"></script>
+<script src="./privacy-actions.js?v=43"></script>
+<script src="./layout.js?v=43"></script>
 </body>
 </html>
 
