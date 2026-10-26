@@ -20,7 +20,7 @@
     const title=String(project.title||'').trim();if(title.length>80)throw Error('Keep the title within 80 characters.');
     if((project.captions||[]).length>100)throw Error('Use no more than 100 captions.');
     const captions=(project.captions||[]).filter(c=>String(c.text||'').trim()).map(c=>{
-      const start=finite(c.start,0,duration,'Caption start must be inside the timeline.'),end=finite(c.end,0,duration,'Caption end must be inside the timeline.'),text=String(c.text||'').trim();
+      const start=finite(c.start,0,duration,'Caption start must be inside the timeline.',.001),end=finite(c.end,0,duration,'Caption end must be inside the timeline.',.001),text=String(c.text||'').trim();
       if(end<=start||!text||text.length>120)throw Error('Each caption needs text up to 120 characters and a valid time range.');
       const item={start,end,text},p=position(c.position);if(p&&(p.x!==.5||p.y!==.84))item.position=p;return item;
     }).sort((a,b)=>a.start-b.start||a.end-b.end||a.text.localeCompare(b.text));

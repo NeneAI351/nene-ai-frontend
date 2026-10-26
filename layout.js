@@ -9,7 +9,7 @@
     ['💬','Captions','Add timed text and import or export SRT.','captions'],
     ['🌍','Translate & Dub','Import translated text and voiceovers.','translate'],
     ['✂️','AI Video Editor','Join clips, add captions and sound, then export.','editor'],
-    ['🏷️','Brand Kit','Logo, fonts, colors and brand-safe outputs.','brand'],
+    ['🏷️','Brand Kit','Save your brand name, colors, fonts and guidelines.','brand'],
     ['🧩','Model Lab','View current video options and availability.','models'],
     ['📐','Formats & Reframe','Reframe videos for different platforms.','formats'],
     ['🪄','AI Image Studio','Image generation availability and image animation.','images'],
