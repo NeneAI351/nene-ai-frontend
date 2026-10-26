@@ -31,3 +31,5 @@ jobs:
       - run: node --check video-editor.js && node --test tests/video-editor*.test.cjs
 
       - run: node --test tests/studio-routes.test.cjs
+
+      - run: node --check sw.js && node --test tests/service-worker.test.cjs

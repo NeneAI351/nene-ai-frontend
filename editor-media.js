@@ -13,15 +13,16 @@
     element.addEventListener(event,success,{once:true});element.addEventListener('error',failure,{once:true});signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
   });}
   async function seek(video,time,signal){if(video.readyState>=2&&Math.abs(video.currentTime-time)<.002)return;const ready=wait(video,'seeked',12000,signal);video.currentTime=time;await ready;}
-  async function loadVideo(file){
+  async function loadVideo(file,{signal}={}){
     if(file.size>80*1024*1024)throw Error('Choose a video file under 80 MB.');
     const video=document.createElement('video'),url=URL.createObjectURL(file);video.preload='auto';video.playsInline=true;video.src=url;
-    try{const ready=wait(video,'loadeddata');video.load();await ready;if(!Number.isFinite(video.duration)||video.duration<.2||video.duration>180||!video.videoWidth||!video.videoHeight)throw Error('Use a video between 0.2 seconds and three minutes. Trim the finished timeline to 60 seconds.');const source=await M.hash(await file.arrayBuffer());return {source,video,url,file,duration:video.duration};}catch(e){URL.revokeObjectURL(url);throw e;}
+    try{const ready=wait(video,'loadeddata',12000,signal);video.load();await ready;if(!Number.isFinite(video.duration)||video.duration<.2||video.duration>180||!video.videoWidth||!video.videoHeight)throw Error('Use a video between 0.2 seconds and three minutes. Trim the finished timeline to 60 seconds.');const source=await M.hash(await file.arrayBuffer());return {source,video,url,file,duration:video.duration};}catch(e){URL.revokeObjectURL(url);throw e;}
   }
-  async function loadAudio(file){
+  async function loadAudio(file,{signal}={}){
     if(file.size>20*1024*1024)throw Error('Choose an audio file under 20 MB.');const context=audioContext();
-    try{const raw=await bounded(file.arrayBuffer(),'The audio file could not be read. Save it on your phone and try again.'),buffer=await bounded(context.decodeAudioData(raw.slice(0)),'Audio decoding timed out. Try a shorter MP3 or WAV file.',undefined,30000);if(buffer.duration>180||buffer.duration<.1)throw Error('Use an audio track between 0.1 seconds and three minutes.');return {source:await M.hash(raw),file,buffer,duration:buffer.duration};}catch(e){throw Error(/^(Use an audio|The audio file|Audio decoding)/.test(e.message||'')?e.message:'This audio file could not be decoded. Try MP3 or WAV.');}finally{await context.close();}
+    try{const raw=await bounded(file.arrayBuffer(),'The audio file could not be read. Save it on your phone and try again.',signal),buffer=await bounded(context.decodeAudioData(raw.slice(0)),'Audio decoding timed out. Try a shorter MP3 or WAV file.',signal,30000);if(buffer.duration>180||buffer.duration<.1)throw Error('Use an audio track between 0.1 seconds and three minutes.');return {source:await M.hash(raw),file,buffer,duration:buffer.duration};}catch(e){throw Error(/^(Use an audio|The audio file|Audio decoding|Export or preview cancelled)/.test(e.message||'')?e.message:'This audio file could not be decoded. Try MP3 or WAV.');}finally{await context.close();}
   }
+  async function loadSubtitles(file,{signal}={}){if(file.size>64000)throw Error('Use an SRT file under 64 KB.');const text=await bounded(file.text(),'Subtitle reading timed out. Save the file on your phone and retry.',signal);return M.parseSrt(text);}
   async function validateBlob(blob,expected,signal){
     if(blob.size<100)throw Error('The video export was empty. No fee was charged.');
     const video=document.createElement('video'),url=URL.createObjectURL(blob);video.preload='auto';video.muted=true;video.playsInline=true;video.src=url;
@@ -67,7 +68,7 @@
           const finish=error=>{if(completed)return;completed=true;failClip=null;clearTimeout(deadline);cancelAnimationFrame(raf);player.removeEventListener('error',failure);signal?.removeEventListener('abort',cancel);if(error)reject(error);else resolve();};failClip=finish;
           const failure=()=>finish(Error('A clip stopped playing. No export fee was charged.')),cancel=()=>finish(Error('Export or preview cancelled.'));
           const deadline=setTimeout(()=>finish(Error('Playback stalled. No export fee was charged.')),clipLength*1000+20000);
-          const tick=()=>{if(recordingError||signal?.aborted)return finish(recordingError||Error('Export cancelled.'));if(document.hidden)return finish(Error('Keep the app visible during export. No fee was charged.'));const progress=Math.min(clipLength,Math.max(0,player.currentTime-clip.start));M.draw(ctx,player,project,offset+progress,w,h);onProgress(offset+progress,valid.duration);if(player.currentTime>=clip.end-.015||(player.ended&&player.currentTime>=clip.end-.1))return finish();if(player.ended||performance.now()-started>(clipLength+18)*1000)return failure();raf=requestAnimationFrame(tick);};
+          const tick=()=>{try{if(recordingError||signal?.aborted)return finish(recordingError||Error('Export cancelled.'));if(document.hidden)return finish(Error('Keep the app visible during export. No fee was charged.'));const progress=Math.min(clipLength,Math.max(0,player.currentTime-clip.start));M.draw(ctx,player,project,offset+progress,w,h);onProgress(offset+progress,valid.duration);if(player.currentTime>=clip.end-.015||(player.ended&&player.currentTime>=clip.end-.1))return finish();if(player.ended||performance.now()-started>(clipLength+18)*1000)return failure();raf=requestAnimationFrame(tick);}catch(_){finish(Error('The video frame could not be rendered. Try a standard MP4 or a shorter clip. No export fee was charged.'));}};
           player.addEventListener('error',failure,{once:true});signal?.addEventListener('abort',cancel,{once:true});tick();
         });
         player.pause();stopAudio();original.disconnect();gain.disconnect();player.removeAttribute('src');player.load();offset+=clipLength;
@@ -81,5 +82,5 @@
       signal?.removeEventListener('abort',abort);document.removeEventListener('visibilitychange',hidden);cancelAnimationFrame(raf);stopAudio();for(const {player,original,gain} of nodes){player.pause();player.removeAttribute('src');player.load();player.remove();try{original?.disconnect();gain?.disconnect();}catch(_){}}if(recorder&&recorder.state!=='inactive')recorder.stop();stream?.getTracks().forEach(t=>t.stop());mixer.disconnect();await context.close();if(!finished)resolveDone?.();
     }
   }
-  window.NENEEditorMedia=Object.freeze({supportedTypes,loadVideo,loadAudio,run,validateBlob,unlock});
+  window.NENEEditorMedia=Object.freeze({supportedTypes,loadVideo,loadAudio,run,validateBlob,unlock,loadSubtitles});
 })();
