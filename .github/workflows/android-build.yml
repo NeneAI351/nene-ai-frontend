@@ -1,0 +1,35 @@
+name: Android internal build
+on:
+  pull_request:
+  push:
+    branches: [main, 'build/android-*', 'fix/release-integration-20261030']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Install required Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - name: Build and lint Android package
+        working-directory: android
+        run: gradle --no-daemon :app:lintDebug :app:assembleDebug :app:bundleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nene-ai-internal-apk-and-unsigned-aab
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/reports/lint-results-debug.html
+          if-no-files-found: error
+          retention-days: 30

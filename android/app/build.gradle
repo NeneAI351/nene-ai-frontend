@@ -1,0 +1,31 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.neneai.app'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'com.neneai.app'
+        minSdk 28
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.0'
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix '.internal'
+            versionNameSuffix '-internal'
+            resValue 'string', 'app_name', 'NENE AI Internal'
+        }
+        release {
+            // Intentionally unsigned. Use the owner's permanent upload key only
+            // after billing, origin verification and real-device release gates.
+            minifyEnabled false
+            resValue 'string', 'app_name', 'NENE AI'
+        }
+    }
+    lint { abortOnError true }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.4'
+}

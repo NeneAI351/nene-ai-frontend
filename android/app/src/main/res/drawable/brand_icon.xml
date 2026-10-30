@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same NENE monogram geometry as brand-mark.svg, with an opaque background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="512" android:viewportHeight="512">
+    <path android:fillColor="#070707" android:pathData="M0,0h512v512h-512Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#E6BD6A" android:strokeWidth="3"
+        android:pathData="M400,256a144,144 0,1 1,-288,0a144,144 0,1 1,288,0" />
+    <path android:fillColor="#E6BD6A" android:pathData="M156,186h37v140h-37Z M307,186h37v140h-37Z M174,186h42l110,140h-42Z" />
+    <path android:fillColor="#070707" android:pathData="M242,239l30,18l-30,18Z" />
+</vector>
