@@ -22,11 +22,11 @@
 <a id="testCheckoutLink" hidden target="_blank" rel="noopener noreferrer">Open Paystack test checkout ↗</a>
 <p id="testReference"></p>
 <div class="row"><button id="testVerify" type="button" disabled>Check payment &amp; wallet</button><button id="testNew" type="button" disabled>Start another test</button></div>
-<p id="testStatus" role="status" aria-live="polite">Checking test configuration…</p><p id="testBalance"></p>
+<p id="testStatus" role="status" aria-live="polite">Checking test configuration…</p><p id="testBalance" style="white-space:pre-line"></p><p id="testReceipt"></p>
 </section></main>
 <dialog id="accountDialog" aria-label="NENE AI account"><div id="accountContent"></div></dialog>
 <script>function showModal(html){document.getElementById('accountContent').innerHTML=html;const d=document.getElementById('accountDialog');if(!d.open)d.showModal()}function closeModal(){document.getElementById('accountDialog').close()}function toast(message){document.getElementById('testStatus').textContent=message}</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
 <script src="./auth-config.js?v=48"></script><script src="./account-setup.js?v=48"></script><script src="./auth.js?v=48"></script>
-<script src="./payment-test.js?v=2"></script>
+<script src="./payment-test.js?v=3"></script>
 </body></html>

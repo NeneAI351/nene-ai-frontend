@@ -41,7 +41,7 @@
   async function sync() {
     const version = ++epoch;
     owner = null; order = null; ready = false; busy = false;
-    $('testBalance').textContent = ''; draw();
+    $('testBalance').textContent = ''; $('testReceipt').textContent = ''; draw();
     try {
       if (base !== 'https://nene-ai-staging.onrender.com') throw Error('This test screen only connects to NENE AI staging.');
       const id = await window.neneAuthGetUserId?.();
@@ -97,7 +97,7 @@
       return;
     }
     const version = epoch, id = owner, reference = order.reference;
-    busy = true; draw(); status('Checking this payment with Paystack…');
+    busy = true; $('testBalance').textContent = ''; $('testReceipt').textContent = ''; draw(); status('Checking this payment with Paystack…');
     try {
       const headers = await session(version);
       const result = await api('/api/payments/verify', {method:'POST', headers, body:JSON.stringify({reference})});
@@ -112,11 +112,23 @@
         };
         status(messages[result.status] || 'Payment is not confirmed as delivered for this reference. The wallet balance below is checked separately.');
       } else status(result.duplicate ? 'Payment was already delivered. No additional credits were added.' : 'Test payment verified and credits delivered.');
-      const wallet = await api('/api/wallet/paid', {headers});
+      const [wallet, total, ledger] = await Promise.all([
+        api('/api/wallet/paid', {headers}), api('/api/wallet', {headers}), api('/api/wallet/ledger?limit=100', {headers})
+      ]);
       if (version !== epoch || owner !== id) return;
       const balance = Number(wallet.paid_available_credits);
-      if (wallet.free_generation !== false || !Number.isFinite(balance) || balance < 0) throw Error('Wallet balance could not be confirmed. Keep this reference and retry.');
-      $('testBalance').textContent = 'Server wallet balance: ' + balance.toLocaleString() + ' paid credits.';
+      const totalBalance = Number(total.wallet?.available_credits);
+      if (wallet.free_generation !== false || !Number.isFinite(balance) || balance < 0 || !Number.isFinite(totalBalance) || totalBalance < 0)
+        throw Error('Wallet balance could not be confirmed. Keep this reference and retry.');
+      $('testBalance').textContent = 'Wallet total (includes test credits): ' + totalBalance.toLocaleString() + ' credits.\n' +
+        'Spendable credits from live payments: ' + balance.toLocaleString() + '. Test credits cannot fund real AI generation.';
+      if (!Array.isArray(ledger.items)) throw Error('Payment status checked, but its ledger entry could not be confirmed.');
+      const entries = ledger.items.filter(item => item.entry_type === 'purchase' && item.metadata?.provider === 'paystack' && item.metadata?.reference === reference);
+      const amount = Number(entries[0]?.amount);
+      if (entries.length === 1 && Number.isFinite(amount) && amount > 0)
+        $('testReceipt').textContent = 'Ledger confirms ' + amount.toLocaleString() + ' test credits for this reference: one purchase entry.';
+      else if (entries.length > 1) status('Multiple purchase entries match this reference. Stop testing and report this result.');
+      else $('testReceipt').textContent = 'No purchase entry for this reference was found in the latest 100 ledger entries. Keep the reference for investigation.';
     } catch (error) { if (version === epoch) status(error.message); }
     finally { if (version === epoch) { busy = false; draw(); } }
   };
@@ -124,7 +136,7 @@
     if (busy || !order || !owner) return;
     if (!window.confirm('Keep the reference if you still need to check this payment. Start a separate test checkout?')) return;
     try { localStorage.removeItem(storageKey(owner)); } catch (_) { /* In-memory state still resets. */ }
-    order = null; $('testBalance').textContent = ''; status('Ready for another test checkout.'); draw();
+    order = null; $('testBalance').textContent = ''; $('testReceipt').textContent = ''; status('Ready for another test checkout.'); draw();
   };
   window.addEventListener('nene-auth-changed', sync);
   window.addEventListener('focus', () => { if (!busy) sync(); });
