@@ -3,9 +3,9 @@
   'use strict';
   let active = null;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const fields = ['idea','style','shot','camera','lighting','motion','duration','resolution','ratio','audio','sound','dialogue','speechMode','ttsVoice'];
+  const fields = ['idea','style','shot','camera','lighting','motion','duration','resolution','ratio','audio','sound','dialogue','speechMode','ttsVoice','provider'];
   const el = (tag,text,cls) => {const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-  const displayValue=(name,value)=>name==='duration'?value+' seconds':name==='ratio'?({'16:9':'16:9 · Landscape','9:16':'9:16 · Portrait','1:1':'1:1 · Square'}[value]||value):value;
+  const displayValue=(name,value)=>name==='duration'?value+' seconds':name==='ratio'?({'16:9':'16:9 · Landscape','9:16':'9:16 · Portrait','1:1':'1:1 · Square','source':'Match source image'}[value]||value):value;
   function say(v,text){if(active===v && v.root.isConnected)v.message.textContent=text;}
   function storageKey(v,suffix){return `nene_video_${v.mode}_${suffix}_v1:${v.owner}`;}
   function read(v,suffix,fallback){try{return JSON.parse(localStorage.getItem(storageKey(v,suffix))||'null')||fallback;}catch(_){return fallback;}}
@@ -53,7 +53,9 @@
 
     }
     if(prompt.length>5000)throw new Error('Shorten the prompt and sound description to fit within 5,000 characters.');
-    return {...(v.mode==='talking'?{source_audio_id:v.audioAsset.source_audio_id}:{}),generate_audio:d.audio==='AI scene sound',type:v.mode==='talking'?'audio-to-video':v.mode==='image'?'image-to-video':'text-to-video',provider:'ltx',model:'ltx-2-5-fast',resolution:d.resolution,duration:v.mode==='talking'?v.audioAsset.billable_seconds:Number(d.duration),aspect_ratio:d.ratio,prompt};
+    const backup=d.provider==='magic-hour';
+    if(backup && (!v.backupAvailable || v.mode==='talking'))throw Error('The video backup is not available for these settings. No video was submitted.');
+    return {...(v.mode==='talking'?{source_audio_id:v.audioAsset.source_audio_id}:{}),generate_audio:d.audio==='AI scene sound',type:v.mode==='talking'?'audio-to-video':v.mode==='image'?'image-to-video':'text-to-video',provider:backup?'magic-hour':'ltx',model:backup?'minimax-h3':'ltx-2-5-fast',resolution:d.resolution,duration:v.mode==='talking'?v.audioAsset.billable_seconds:Number(d.duration),aspect_ratio:d.ratio==='source'?null:d.ratio,prompt};
   }
   async function checkAccount(v){
     if(v.busy)return;
@@ -63,9 +65,13 @@
       if(!owner){v.owner=null;say(v,'Sign in to review pricing and create a paid video.');return;}
       if(!alive(v))return;v.owner=owner;
       const state=await api(v,'/api/generation-availability');if(!alive(v))return;
+      v.backupAvailable=false;
+      try{const catalog=await api(v,'/api/providers');if(!alive(v))return;v.backupAvailable=Array.isArray(catalog.providers)&&catalog.providers.some(p=>p.id==='magic-hour'&&p.available===true);}catch(_){}
+      v.backupOption.disabled=!v.backupAvailable||v.mode==='talking';
       v.accepting=state.accepting_requests===true;v.audioSupported=state.generate_audio_supported===true&&(v.mode!=='talking'||state.talking_character_supported===true);say(v,v.accepting?'Choose your options, then review the price.':'Video creation is temporarily unavailable. Your work has not been submitted and no credits were charged.');
       v.pending=read(v,'pending',null);
       if(v.pending?.payload && v.pending?.key && v.pending?.draft){
+        v.form.elements.provider.value=v.pending.payload.provider==='magic-hour'?'magic-hour':'ltx';v.updateProvider();
         for(const name of fields)if(v.pending.draft[name]!==undefined){v.form.elements[name].value=v.pending.draft[name];const button=v.form.querySelector('[data-choice-for="'+name+'"]');if(button)button.textContent=displayValue(name,v.pending.draft[name]);}
         v.updateSpeechUI?.();lock(v,true);v.generate.textContent='Retry pending submission safely';v.generate.disabled=!v.accepting||!v.audioSupported;
         say(v,'A pending submission is saved on this device. Retry it with the same request key to avoid duplicate charges. '+(v.accepting?'':'Video creation is temporarily unavailable.'));
@@ -97,7 +103,7 @@
       v.quote={draft:JSON.stringify(d),body,cost:String(q.recommended_credits)};
       v.generate.textContent=`Generate video · ${q.recommended_credits} paid credits`;
       v.generate.disabled=!v.accepting||!v.audioSupported;
-      say(v,`${q.recommended_credits} paid credits for this video.${body.type==='audio-to-video'?' Recording: '+v.audioAsset.duration_seconds+' seconds; priced for '+body.duration+' whole seconds.':''} Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate video.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
+      say(v,`${body.provider==='magic-hour'?'Magic Hour · MiniMax H3 backup. ':'LTX primary. '}${q.recommended_credits} paid credits for this video.${body.type==='audio-to-video'?' Recording: '+v.audioAsset.duration_seconds+' seconds; priced for '+body.duration+' whole seconds.':''} Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate video.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
     }catch(error){say(v,error.message);}finally{v.busy=false;if(alive(v)&&!v.pending)v.review.disabled=false;}
   }
   function rememberJob(v,id,title){
@@ -315,6 +321,11 @@
       for(const value of options){const option=el('option',value);option.value=value;select.append(option);}
       const button=el('button',displayValue(name,options[0]),'video-choice');button.id='choice-'+name;button.type='button';button.dataset.choiceFor=name;button.setAttribute('aria-label',label+': '+options[0]);button.setAttribute('aria-haspopup','dialog');button.onclick=()=>choose(v,label,select,button);select.addEventListener('change',()=>{button.textContent=displayValue(name,select.value);button.setAttribute('aria-label',label+': '+select.value);select.dispatchEvent(new Event('input',{bubbles:true}));});block.append(caption,select,button);group.append(block);
     }v.form.append(group);
+    const providerBlock=el('div',undefined,'block'),providerLabel=el('label','Video engine','label'),provider=el('select');provider.name='provider';provider.id='video-provider';providerLabel.htmlFor=provider.id;
+    const primary=el('option','LTX · Primary');primary.value='ltx';v.backupOption=el('option','Magic Hour · MiniMax H3 backup');v.backupOption.value='magic-hour';v.backupOption.disabled=true;provider.append(primary,v.backupOption);
+    providerBlock.append(providerLabel,provider,el('small','Changing engine requires a fresh price review. Accepted or uncertain jobs never switch engines automatically.','subtitle'));providerBlock.hidden=mode==='talking';v.form.append(providerBlock);
+    v.updateProvider=()=>{const ratio=v.form.elements.ratio;const values=mode==='image'&&provider.value==='magic-hour'?['source']:['16:9','9:16','1:1'];const previous=ratio.value;ratio.replaceChildren();for(const value of values){const option=el('option',displayValue('ratio',value));option.value=value;ratio.append(option);}if(values.includes(previous))ratio.value=previous;const button=v.form.querySelector('[data-choice-for="ratio"]');button.textContent=displayValue('ratio',ratio.value);};
+    provider.addEventListener('change',()=>{if(v.pending)return;v.updateProvider();v.quote=null;v.generate.disabled=true;v.generate.textContent='Review price before generating';say(v,provider.value==='magic-hour'?'Backup selected. Review its own price before generating. Image videos follow the source image format.':'LTX selected. Review its price before generating.');});
     const soundBlock=el('div',undefined,'block'),soundLabel=el('label','Sound description (optional)','label'),sound=el('input');sound.name='sound';sound.id='video-sound';sound.className='field';sound.maxLength=500;sound.placeholder='e.g. birdsong, flowing water, soft wind';soundLabel.htmlFor=sound.id;soundBlock.append(soundLabel,sound,el('small','AI sound follows the scene and your description. Specific dialogue, music or voices are not guaranteed.','subtitle'));v.form.append(soundBlock);v.form.elements.audio.addEventListener('change',()=>{sound.disabled=v.form.elements.audio.value==='Silent';});
     if(mode==='talking'){
       v.form.elements.audio.value='AI scene sound';v.form.elements.audio.closest('.block').hidden=true;
@@ -348,7 +359,7 @@
   window.openFeature=function(type,...args){return type==='voice'?window.neneOpenVideoStudio('talking',{voiceOnly:true}):oldFeature.call(this,type,...args);};
   window.addEventListener('nene-auth-changed',()=>{
     const v=active;if(!v||!alive(v))return;
-    document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();v.updateSpeechUI?.();v.imageData=null;v.sourceImageId=null;v.audioData=null;v.audioAsset=null;v.approvedSpeech=null;v.speechQuote=null;v.speechSelected=null;clearTimeout(v.speechTimer);if(v.voiceOutput)v.voiceOutput.replaceChildren();if(v.voiceJobs)v.voiceJobs.replaceChildren();if(v.voiceGenerate)v.voiceGenerate.disabled=true;if(v.audioFile)v.audioFile.value='';if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
+    document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();v.backupAvailable=false;v.backupOption.disabled=true;v.updateProvider();v.updateSpeechUI?.();v.imageData=null;v.sourceImageId=null;v.audioData=null;v.audioAsset=null;v.approvedSpeech=null;v.speechQuote=null;v.speechSelected=null;clearTimeout(v.speechTimer);if(v.voiceOutput)v.voiceOutput.replaceChildren();if(v.voiceJobs)v.voiceJobs.replaceChildren();if(v.voiceGenerate)v.voiceGenerate.disabled=true;if(v.audioFile)v.audioFile.value='';if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
     say(v,'Account changed. Check your account and availability before continuing.');
   });
 })();
