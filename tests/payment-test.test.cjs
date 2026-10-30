@@ -18,6 +18,8 @@ async function setup({mode='test',owner='owner-a',url='https://checkout.paystack
   if(endpoint.endsWith('/packages'))data={mode,live_payments_enabled:mode==='live',packages:[{id:'starter',name:'Starter',amount_ngn:5000,credits:'400'}]};
   else if(endpoint.endsWith('/checkout'))data={mode:'test',reference:REF,authorization_url:url};
   else if(endpoint.endsWith('/verify'))data={credited:true,reference:REF,duplicate:true};
+  else if(endpoint.endsWith('/wallet'))data={wallet:{available_credits:'400'}};
+  else if(endpoint.includes('/ledger?'))data={items:[{id:'receipt-1',entry_type:'purchase',amount:'400',metadata:{provider:'paystack',reference:REF}}]};
   else data={paid_available_credits:'400',free_generation:false};
   return {ok:true,json:async()=>data};
  };
@@ -95,4 +97,19 @@ test('an older tab cannot silently verify a stale reference after another checko
  assert.equal(s.calls.filter(c=>c.endpoint.endsWith('/verify')).length,0);
  assert.match(s.w.document.getElementById('testReference').textContent,new RegExp(next));
  assert.match(s.w.document.getElementById('testStatus').textContent,/newer checkout/);s.dom.window.close();
+});
+test('test delivery is confirmed from the ledger even when live spendable balance is zero',async()=>{
+ const s=await setup({saved:{owner:'owner-a',reference:REF}}),original=s.w.fetch;
+ s.w.fetch=(url,options)=>url.endsWith('/paid')?Promise.resolve({ok:true,json:async()=>({paid_available_credits:'0',free_generation:false})}):original(url,options);
+ for(let i=0;i<2;i++){s.w.document.getElementById('testVerify').click();await settle();}
+ assert.match(s.w.document.getElementById('testBalance').textContent,/includes test credits\): 400/);
+ assert.match(s.w.document.getElementById('testBalance').textContent,/live payments: 0/);
+ assert.match(s.w.document.getElementById('testReceipt').textContent,/400 test credits.*one purchase entry/);
+ assert.equal(s.calls.filter(c=>c.endpoint.endsWith('/checkout')).length,0);s.dom.window.close();
+});
+test('an unrelated purchase cannot confirm the current payment receipt',async()=>{
+ const s=await setup({saved:{owner:'owner-a',reference:REF}}),original=s.w.fetch;
+ s.w.fetch=(url,options)=>url.includes('/ledger?')?Promise.resolve({ok:true,json:async()=>({items:[{entry_type:'purchase',amount:'400',metadata:{provider:'paystack',reference:'nene_'+'f'.repeat(32)}}]})}):original(url,options);
+ s.w.document.getElementById('testVerify').click();await settle();
+ assert.match(s.w.document.getElementById('testReceipt').textContent,/No purchase entry/);s.dom.window.close();
 });
