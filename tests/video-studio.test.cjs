@@ -2,6 +2,12 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const {JSDOM}=require('jsdom'),fs=require('node:fs'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../video-studio.js'),'utf8');
 const USER='11111111-1111-4111-8111-111111111111',JOB='22222222-2222-4222-8222-222222222222',ASSET='33333333-3333-4333-8333-333333333333';
+test('completed video offers an in-app report with its owner and durable ID, never the signed URL',async()=>{
+ const s=await setup();let context;s.w.neneOpenOutputReport=value=>{context=value;};
+ await review(s);s.w.document.getElementById('video-generate').click();await settle();
+ const report=[...s.w.document.querySelectorAll('button')].find(n=>n.textContent==='Report AI content');assert.ok(report);report.click();
+ assert.equal(context.kind,'video');assert.equal(context.id,JOB);assert.equal(context.owner,USER);assert.equal(Object.keys(context).length,3);s.dom.window.close();
+});
 async function settle(){for(let i=0;i<20;i++)await new Promise(r=>setImmediate(r));}
 async function setup({mode='text',enabled=true,fail=false,pending=null,privateImage=true,speechPending=null,voiceOnly=false}={}){
  const dom=new JSDOM('<div id="screen"></div>',{url:'https://nene.test',runScripts:'outside-only'}),w=dom.window;let owner=USER;const calls=[];

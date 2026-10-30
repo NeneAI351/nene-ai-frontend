@@ -101,6 +101,7 @@
       const result=await api(state.owner,`/api/stories/${state.storyId}/video`);
       const url=new URL(result.video_url);if(url.protocol!=='https:')throw Error('A secure final video link is not available.');
       const video=node('video');video.dataset.storyResult='true';video.controls=true;video.playsInline=true;video.src=url.href;video.style.cssText='width:100%;border-radius:14px';document.querySelector('main')?.append(video);
+      const report=node('button','Report AI content');report.type='button';report.className='btn';report.onclick=()=>window.neneOpenOutputReport?.({kind:'story',id:state.storyId,owner:state.owner});document.querySelector('main')?.append(report);
       message('Your story is ready. Scene sound is preserved; silent scenes stay silent.');
       state.completed=true;save(state);
       try{await window.neneRefreshPaidWallet?.();}catch(_){}
