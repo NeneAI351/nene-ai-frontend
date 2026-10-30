@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>NENE AI · Payment test</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#090a0d;color:#f6f2e9}*{box-sizing:border-box}body{margin:0}main{max-width:620px;margin:48px auto;padding:24px}h1{font-size:32px;letter-spacing:-1px}h2{margin-top:0}p{line-height:1.6;color:#bbb8b0}a{color:#e9c972}.eyebrow{color:#e9c972;letter-spacing:2px;font-size:12px}.card{padding:24px;background:#14151b;border:1px solid #353128;border-radius:18px;margin:20px 0}.notice{padding:14px;background:#211c12;border-radius:10px;line-height:1.6}.btn,button{border:1px solid #615131;background:#1b1b20;color:#f6f2e9;border-radius:10px;padding:12px 16px;cursor:pointer;font:inherit}.gold{background:#e6c36a;color:#161109}.btn:disabled,button:disabled{opacity:.5;cursor:default}.row,.list{display:flex;gap:10px;flex-wrap:wrap}.block{margin:16px 0}.label,label{display:block;margin:8px 0}.field,input,select{width:100%;background:#090a0d;border:1px solid #504735;color:#fff;border-radius:10px;padding:12px;font:inherit}input[type=checkbox]{width:auto}#testCheckoutLink{display:inline-block;padding:12px 0}dialog{width:min(94vw,560px);padding:24px;border:1px solid #615131;border-radius:18px;background:#14151b;color:#f6f2e9}dialog::backdrop{background:#000b}[hidden]{display:none!important}#testStatus{min-height:48px;overflow-wrap:anywhere}small{color:#bbb8b0}
+</style>
+</head>
+<body><main>
+<a href="./">← NENE AI</a><h1>Payment test</h1>
+<p class="notice">Test mode only. Use Paystack’s test payment details. This screen cannot start a live checkout. Test credits are for staging verification.</p>
+<section class="card"><h2>Your test account</h2><p id="neneAuthSummary">Checking sign-in…</p>
+<div class="row"><button id="testSignIn" type="button">Sign in</button><button id="testAccount" type="button">Account setup</button></div></section>
+<section class="card"><h2>Test credit delivery</h2>
+<form id="testCheckoutForm">
+<label for="testPackage">Credit package</label><select id="testPackage" disabled></select>
+<label for="testEmail">Receipt email</label><input id="testEmail" type="email" autocomplete="email" required maxlength="254">
+<p><small>Completing checkout should add the selected package once. Rechecking the same payment must not add credits again.</small></p>
+<button id="testCreate" class="gold" type="submit" disabled>Create test checkout</button></form>
+<a id="testCheckoutLink" hidden target="_blank" rel="noopener noreferrer">Open Paystack test checkout ↗</a>
+<p id="testReference"></p>
+<div class="row"><button id="testVerify" type="button" disabled>Check payment &amp; wallet</button><button id="testNew" type="button" disabled>Start another test</button></div>
+<p id="testStatus" role="status" aria-live="polite">Checking test configuration…</p><p id="testBalance"></p>
+</section></main>
+<dialog id="accountDialog" aria-label="NENE AI account"><div id="accountContent"></div></dialog>
+<script>function showModal(html){document.getElementById('accountContent').innerHTML=html;const d=document.getElementById('accountDialog');if(!d.open)d.showModal()}function closeModal(){document.getElementById('accountDialog').close()}function toast(message){document.getElementById('testStatus').textContent=message}</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
+<script src="./auth-config.js?v=48"></script><script src="./account-setup.js?v=48"></script><script src="./auth.js?v=48"></script>
+<script src="./payment-test.js?v=1"></script>
+</body></html>
