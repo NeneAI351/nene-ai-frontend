@@ -160,6 +160,7 @@
     v.output.replaceChildren();const video=el('video');video.controls=true;video.playsInline=true;video.preload='metadata';video.style.width='100%';video.src=url.href;
     const download=el('a','Open / download video','btn');download.href=url.href;download.target='_blank';download.rel='noopener noreferrer';download.style.display='block';
     v.output.append(video,download);
+    const report=el('button','Report AI content','btn');report.type='button';report.onclick=()=>window.neneOpenOutputReport?.({kind:'video',id,owner:v.owner});v.output.append(report);
   }
   async function poll(v,id,attempt){
     if(!alive(v)||!UUID.test(id))return;clearTimeout(v.timer);v.selected=id;v.refresh.disabled=false;
@@ -248,6 +249,7 @@
         const refresh=el('button','Refresh voice link','btn');refresh.type='button';refresh.onclick=()=>pollSpeech(v,job,0);
         preview.onerror=()=>speechSay(v,'The voice preview could not load. Refresh the voice link to reopen this saved track; no new voice will be generated.');
         v.voiceOutput.append(download,refresh);
+        const report=el('button','Report AI content','btn');report.type='button';report.onclick=()=>window.neneOpenOutputReport?.({kind:'voice',id:job.id,owner:v.owner});v.voiceOutput.append(report);
         const approve=el('button',v.voiceOnly?'Animate a character with this voice':'Use this voice and script for video','btn gold');approve.type='button';approve.id='voice-approve';approve.disabled=data.can_animate!==true;
         approve.onclick=()=>{if(!alive(v)||v.speechSelected!==job.id)return;v.form.elements.dialogue.value=job.text;v.form.elements.ttsVoice.value=job.voice;v.form.querySelector('[data-choice-for="ttsVoice"]').textContent=job.voice;if(v.animationDetails)v.animationDetails.open=true;v.audioAsset=data;v.approvedSpeech={script:job.text,voice:job.voice,id:data.source_audio_id};v.quote=null;v.generate.disabled=true;speechSay(v,'Voice approved. Review the video price below; the saved voice will be used without another voice-generation charge.');};v.voiceOutput.append(approve);
         speechSay(v,data.can_animate?`Voice ready · ${data.duration_seconds} seconds. Listen, approve it, then review the video price.`:'Voice ready. This track is outside the 2–10 second video limit. Shorten or split the script before creating another paid voice track.');
