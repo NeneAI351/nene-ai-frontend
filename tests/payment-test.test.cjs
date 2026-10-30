@@ -72,5 +72,27 @@ test('failed or mismatched verification never claims credits were delivered',asy
  const s=await setup({saved:{owner:'owner-a',reference:REF}});const original=s.w.fetch;
  s.w.fetch=(url,options)=>url.endsWith('/verify')?Promise.resolve({ok:true,json:async()=>({credited:true,reference:'nene_'+'b'.repeat(32)})}):original(url,options);
  s.w.document.getElementById('testVerify').click();await settle();
- assert.match(s.w.document.getElementById('testStatus').textContent,/not confirmed/);assert.equal(s.w.document.getElementById('testBalance').textContent,'');s.dom.window.close();
+ assert.match(s.w.document.getElementById('testStatus').textContent,/not confirmed/);assert.match(s.w.document.getElementById('testBalance').textContent,/400/);s.dom.window.close();
+});
+test('a failed reference still displays the independently checked wallet balance',async()=>{
+ const s=await setup({saved:{owner:'owner-a',reference:REF}});const original=s.w.fetch;
+ s.w.fetch=(url,options)=>url.endsWith('/verify')?Promise.resolve({ok:true,json:async()=>({credited:false,status:'failed'})}):original(url,options);
+ s.w.document.getElementById('testVerify').click();await settle();
+ assert.match(s.w.document.getElementById('testStatus').textContent,/reference as failed/);
+ assert.match(s.w.document.getElementById('testBalance').textContent,/400/);s.dom.window.close();
+});
+test('returning from checkout reloads the latest owner-scoped reference',async()=>{
+ const s=await setup({saved:{owner:'owner-a',reference:REF}}),next='nene_'+'b'.repeat(32);
+ s.w.localStorage.setItem('nene-payment-test-v1:owner-a',JSON.stringify({owner:'owner-a',reference:next}));
+ s.w.dispatchEvent(new s.w.Event('focus'));await settle();
+ assert.match(s.w.document.getElementById('testReference').textContent,new RegExp(next));
+ assert.equal(s.calls.filter(c=>c.endpoint.endsWith('/checkout')).length,0);s.dom.window.close();
+});
+test('an older tab cannot silently verify a stale reference after another checkout was saved',async()=>{
+ const s=await setup({saved:{owner:'owner-a',reference:REF}}),next='nene_'+'c'.repeat(32);
+ s.w.localStorage.setItem('nene-payment-test-v1:owner-a',JSON.stringify({owner:'owner-a',reference:next}));
+ s.w.document.getElementById('testVerify').click();await settle();
+ assert.equal(s.calls.filter(c=>c.endpoint.endsWith('/verify')).length,0);
+ assert.match(s.w.document.getElementById('testReference').textContent,new RegExp(next));
+ assert.match(s.w.document.getElementById('testStatus').textContent,/newer checkout/);s.dom.window.close();
 });

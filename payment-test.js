@@ -89,6 +89,13 @@
   };
   $('testVerify').onclick = async () => {
     if (busy || !ready || !owner || !order) return;
+    let latest;
+    try { latest = JSON.parse(localStorage.getItem(storageKey(owner))); } catch (_) { /* Current reference remains usable. */ }
+    if (latest?.owner === owner && referencePattern.test(latest.reference) && latest.reference !== order.reference) {
+      await sync();
+      status('A newer checkout was saved in another tab. Its reference is now loaded; check payment again.');
+      return;
+    }
     const version = epoch, id = owner, reference = order.reference;
     busy = true; draw(); status('Checking this payment with Paystack…');
     try {
@@ -96,13 +103,19 @@
       const result = await api('/api/payments/verify', {method:'POST', headers, body:JSON.stringify({reference})});
       if (version !== epoch || owner !== id) return;
       if (result.credited !== true || result.reference !== reference) {
-        status('Payment is not confirmed as delivered yet. Complete checkout or check again later.'); return;
-      }
-      status(result.duplicate ? 'Payment was already delivered. No additional credits were added.' : 'Test payment verified and credits delivered.');
+        const messages = {
+          failed:'Paystack reports this reference as failed. It has not confirmed delivery for this payment.',
+          abandoned:'Paystack reports this reference as abandoned. It has not confirmed delivery for this payment.',
+          pending:'Paystack reports this reference as pending. Check again after checkout completes.',
+          ongoing:'Paystack reports this reference as ongoing. Check again after checkout completes.',
+          processing:'Paystack is still processing this reference. Check again shortly.'
+        };
+        status(messages[result.status] || 'Payment is not confirmed as delivered for this reference. The wallet balance below is checked separately.');
+      } else status(result.duplicate ? 'Payment was already delivered. No additional credits were added.' : 'Test payment verified and credits delivered.');
       const wallet = await api('/api/wallet/paid', {headers});
       if (version !== epoch || owner !== id) return;
       const balance = Number(wallet.paid_available_credits);
-      if (wallet.free_generation !== false || !Number.isFinite(balance) || balance < 0) throw Error('Payment verified; wallet balance could not be confirmed.');
+      if (wallet.free_generation !== false || !Number.isFinite(balance) || balance < 0) throw Error('Wallet balance could not be confirmed. Keep this reference and retry.');
       $('testBalance').textContent = 'Server wallet balance: ' + balance.toLocaleString() + ' paid credits.';
     } catch (error) { if (version === epoch) status(error.message); }
     finally { if (version === epoch) { busy = false; draw(); } }
@@ -114,5 +127,9 @@
     order = null; $('testBalance').textContent = ''; status('Ready for another test checkout.'); draw();
   };
   window.addEventListener('nene-auth-changed', sync);
+  window.addEventListener('focus', () => { if (!busy) sync(); });
+  window.addEventListener('storage', event => {
+    if (!busy && owner && event.key === storageKey(owner)) sync();
+  });
   sync();
 })();
