@@ -143,11 +143,11 @@
     const emailField = mode === "update" ? "" :
       '<div class="block"><div class="label" for="neneAuthEmail">Email address</div><input class="field" id="neneAuthEmail" type="email" autocomplete="email" maxlength="254" required></div>';
     const passwordField = mode === "reset" ? "" :
-      '<div class="block"><div class="label" for="neneAuthPassword">' +
+      '<div class="block"><label class="label" for="neneAuthPassword">' +
       (mode === "update" ? "New password" : "Password") +
-      '</div><input class="field" id="neneAuthPassword" type="password" autocomplete="' +
+      '</label><div style="position:relative"><input class="field" id="neneAuthPassword" style="padding-right:54px" type="password" autocomplete="' +
       (mode === "signup" || mode === "update" ? "new-password" : "current-password") +
-      '" minlength="12" required></div>';
+      '" minlength="12" required><button type="button" id="neneAuthPasswordToggle" aria-label="Show password" aria-controls="neneAuthPassword" aria-pressed="false" title="Show password" style="position:absolute;right:2px;top:2px;bottom:2px;width:46px;min-height:40px;display:flex;align-items:center;justify-content:center;background:transparent;color:#d7b45d;border:0;border-radius:8px;cursor:pointer"></button></div></div>';
 
     showModal(
       '<div class="eyebrow">NENE AI account</div>' +
@@ -168,6 +168,31 @@
       '<button class="btn" type="button" onclick="closeModal()">Cancel</button>' +
       '</div>'
     );
+
+    const passwordInput = document.getElementById("neneAuthPassword");
+    const visibilityButton = document.getElementById("neneAuthPasswordToggle");
+    if (passwordInput && visibilityButton) {
+      const eye = '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>';
+      const renderVisibility = function (visible) {
+        passwordInput.type = visible ? "text" : "password";
+        const label = visible ? "Hide password" : "Show password";
+        visibilityButton.setAttribute("aria-label", label);
+        visibilityButton.setAttribute("title", label);
+        visibilityButton.setAttribute("aria-pressed", String(visible));
+        visibilityButton.innerHTML = eye + (visible ? '<path d="m3 3 18 18"/>' : '') + '</svg>';
+      };
+      renderVisibility(false);
+      visibilityButton.addEventListener("click", function () {
+        const start = passwordInput.selectionStart;
+        const end = passwordInput.selectionEnd;
+        renderVisibility(passwordInput.type === "password");
+        passwordInput.focus();
+        if (start !== null && end !== null) passwordInput.setSelectionRange(start, end);
+      });
+      passwordInput.addEventListener("blur", function (event) {
+        if (event.relatedTarget !== visibilityButton) renderVisibility(false);
+      });
+    }
 
     const form = document.getElementById("neneAuthForm");
     const submitButton = document.getElementById("neneAuthSubmit");
