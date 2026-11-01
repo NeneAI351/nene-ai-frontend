@@ -2,10 +2,10 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const source=fs.readFileSync(__dirname+'/../privacy-actions.js','utf8');
 const OWNER='11111111-1111-4111-8111-111111111111',OTHER='22222222-2222-4222-8222-222222222222',RECEIPT='33333333-3333-4333-8333-333333333333';
 async function settle(){for(let i=0;i<15;i++)await new Promise(r=>setImmediate(r));}
-async function setup({signed=true,fail=false,help=false,receipt=false}={}){
+async function setup({signed=true,fail=false,help=false,receipt=false,deletionAvailable=true,availabilityFails=false}={}){
  const html=fs.readFileSync(__dirname+(help?'/../privacy-help.html':'/../delete-account.html'),'utf8');const dom=new JSDOM(html,{url:'https://nene.test/'+(help?'privacy-help.html':'delete-account.html')+(receipt?'?receipt='+RECEIPT:''),runScripts:'outside-only',virtualConsole:new VirtualConsole()}),w=dom.window,calls=[];let owner=signed?OWNER:null,signouts=0;
  w.NENE_DIRECTOR_CONFIG={backendUrl:'https://api.test'};w.neneAuthGetUserId=async()=>owner;w.neneAuthGetAccountToken=async()=>owner?'x.'+Buffer.from(JSON.stringify({sub:owner})).toString('base64url')+'.x':null;w.nenePrivacyLocalSignOut=async()=>{signouts++;owner=null;};
- w.fetch=async(url,options={})=>{calls.push({url,options});if(fail)throw Error('Connection lost');return {ok:true,json:async()=>url.includes('/enquiries')?{received:true,receipt_id:RECEIPT}:url.includes('/deletions/')?{status:'completed',provider_follow_up_pending:false}:{receipt_id:RECEIPT,status:'queued'}};};
+ w.fetch=async(url,options={})=>{if(url.endsWith('/availability')){if(availabilityFails)throw Error('Service unavailable');return {ok:true,json:async()=>({account_deletion_available:deletionAvailable})};}calls.push({url,options});if(fail)throw Error('Connection lost');return {ok:true,json:async()=>url.includes('/enquiries')?{received:true,receipt_id:RECEIPT}:url.includes('/deletions/')?{status:'completed',provider_follow_up_pending:false}:{receipt_id:RECEIPT,status:'queued'}};};
  w.eval(source);await settle();return {w,dom,calls,getSignouts:()=>signouts,setOwner:id=>owner=id};
 }
 test('deletion requires sign-in and explicit permanent-deletion confirmation',async()=>{
@@ -33,4 +33,17 @@ test('account records download uses the verified account token without accepting
  s.w.neneAuthGetAccessToken=()=>{throw Error('Terms-gated token must not be used');};
  s.w.fetch=async(url,options)=>{s.calls.push({url,options});return {ok:true,json:async()=>({format:'nene-ai-account-records-v1',records:{account:[{id:OWNER}]}})};};
  await s.w.neneDownloadAccountRecords();assert.equal(filename,'nene-ai-account-records.json');assert.ok(s.calls[0].url.endsWith('/api/privacy/account-export'));assert.equal(s.calls[0].options.cache,'no-store');assert.match(s.calls[0].options.headers.Authorization,/Bearer/);s.dom.window.close();
+});
+
+test('signed-in deletion stays disabled when identity cleanup is unavailable',async()=>{
+ const s=await setup({deletionAvailable:false});
+ assert.equal(s.w.document.getElementById('delete-submit').disabled,true);
+ assert.match(s.w.document.getElementById('delete-account-summary').textContent,/Privacy help/);
+ assert.equal(s.calls.length,0);assert.equal(s.getSignouts(),0);s.dom.window.close();
+});
+test('unconfirmed deletion availability fails closed without claiming deletion',async()=>{
+ const s=await setup({availabilityFails:true});
+ assert.equal(s.w.document.getElementById('delete-submit').disabled,true);
+ assert.match(s.w.document.getElementById('delete-account-summary').textContent,/could not verify/);
+ assert.equal(s.calls.length,0);s.dom.window.close();
 });
