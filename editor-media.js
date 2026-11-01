@@ -2,7 +2,8 @@
 (() => {
   'use strict';
   const M=window.NENEEditorModel;
-  function supportedTypes(){if(!window.MediaRecorder)return [];return ['video/mp4;codecs=avc1.42E01F,mp4a.40.2','video/mp4;codecs=avc1.4D401F,mp4a.40.2','video/webm;codecs=vp8,opus'].filter(type=>MediaRecorder.isTypeSupported(type));}
+  function nativeTypes(){if(!window.MediaRecorder)return [];return ['video/mp4;codecs=avc1.42E01F,mp4a.40.2','video/mp4;codecs=avc1.4D401F,mp4a.40.2','video/webm;codecs=vp8,opus'].filter(type=>MediaRecorder.isTypeSupported(type));}
+  function supportedTypes(){const types=nativeTypes();if(!types.some(t=>t.startsWith('video/mp4'))&&types.some(t=>t.startsWith('video/webm'))&&window.NENEEditorMP4)types.unshift('video/mp4');return types;}
   const audioContext=()=>new (window.AudioContext||window.webkitAudioContext)();
   function unlock(){const context=audioContext();let ready;try{ready=context.resume();}catch(e){ready=Promise.reject(e);}ready=Promise.resolve(ready);ready.catch(()=>{});return {context,ready};}
   async function bounded(promise,message,signal,timeout=12000){let timer,abort;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(message)),timeout);abort=()=>reject(Error('Export or preview cancelled. No fee was charged.'));signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();})]);}finally{clearTimeout(timer);if(abort)signal?.removeEventListener('abort',abort);}}
@@ -31,6 +32,8 @@
   async function run(project,resources,{canvas,record=false,mimeType,signal,playback,onStage=()=>{},onProgress=()=>{}}={}){
     const valid=M.validate(project,resources);project=valid.project;const [w,h]=M.FORMATS[project.format];canvas.width=w;canvas.height=h;
     if(record&&!supportedTypes().includes(mimeType))throw Error('This export format is not supported on this device.');
+    const convertMP4=record&&mimeType==='video/mp4'&&!nativeTypes().includes(mimeType);
+    const recordingMime=convertMP4?nativeTypes().find(t=>t.startsWith('video/webm')):mimeType;
     const ctx=canvas.getContext('2d');if(!ctx)throw Error('Video preview is unavailable on this device.');
     const context=playback?.context||audioContext(),destination=context.createMediaStreamDestination();let stream=null,recorder=null,recordingError=null,raf=null,finished=false;
     const chunks=[],nodes=[],audioSources=[];let bytes=0,failClip=null;
@@ -41,7 +44,7 @@
     const hidden=()=>{if(document.hidden)abort();};signal?.addEventListener('abort',abort,{once:true});document.addEventListener('visibilitychange',hidden);
     try{
       onStage('Starting sound…');await bounded(playback?.ready||context.resume(),'Audio playback could not start. Tap Preview again or try another browser. No fee was charged.',signal);if(signal?.aborted)throw Error('Export cancelled.');
-      if(record){stream=canvas.captureStream(30);destination.stream.getAudioTracks().forEach(t=>stream.addTrack(t));recorder=new MediaRecorder(stream,{mimeType,videoBitsPerSecond:4000000,audioBitsPerSecond:128000});recorder.ondataavailable=event=>{if(event.data.size){bytes+=event.data.size;if(bytes>64*1024*1024){recordingError=Error('The export is too large for this mobile editor. Shorten the timeline.');recorder.stop();}else chunks.push(event.data);}};recorder.onstop=resolveDone;recorder.onerror=()=>{recordingError=Error('The browser could not finish recording. No fee was charged.');rejectDone(recordingError);};}
+      if(record){stream=canvas.captureStream(30);destination.stream.getAudioTracks().forEach(t=>stream.addTrack(t));recorder=new MediaRecorder(stream,{mimeType:recordingMime,videoBitsPerSecond:4000000,audioBitsPerSecond:128000});recorder.ondataavailable=event=>{if(event.data.size){bytes+=event.data.size;if(bytes>64*1024*1024){recordingError=Error('The export is too large for this mobile editor. Shorten the timeline.');recorder.stop();}else chunks.push(event.data);}};recorder.onstop=resolveDone;recorder.onerror=()=>{recordingError=Error('The browser could not finish recording. No fee was charged.');rejectDone(recordingError);};}
       let offset=0,clipIndex=0;
       for(const clip of project.clips){
         if(recordingError||signal?.aborted)throw recordingError||Error('Export cancelled.');
@@ -76,8 +79,8 @@
       finished=true;
       if(!record)return null;
       if(recorder.state!=='inactive')recorder.stop();await done;if(recordingError)throw recordingError;
-      const actualType=recorder.mimeType||mimeType;if(actualType.split(';')[0]!==mimeType.split(';')[0])throw Error('The browser returned a different file format. No fee was charged.');
-      const blob=new Blob(chunks,{type:actualType});await validateBlob(blob,valid.duration,signal);return {blob,mimeType:actualType,extension:actualType.startsWith('video/mp4')?'mp4':'webm',duration:valid.duration};
+      const actualType=recorder.mimeType||recordingMime;if(actualType.split(';')[0]!==recordingMime.split(';')[0])throw Error('The browser returned a different file format. No fee was charged.');
+      let blob=new Blob(chunks,{type:actualType});if(convertMP4){blob=await window.NENEEditorMP4.convert(blob,{signal,onStage});}await validateBlob(blob,valid.duration,signal);return {blob,mimeType:blob.type,extension:blob.type.startsWith('video/mp4')?'mp4':'webm',duration:valid.duration};
     }finally{
       signal?.removeEventListener('abort',abort);document.removeEventListener('visibilitychange',hidden);cancelAnimationFrame(raf);stopAudio();for(const {player,original,gain} of nodes){player.pause();player.removeAttribute('src');player.load();player.remove();try{original?.disconnect();gain?.disconnect();}catch(_){}}if(recorder&&recorder.state!=='inactive')recorder.stop();stream?.getTracks().forEach(t=>t.stop());mixer.disconnect();await context.close();if(!finished)resolveDone?.();
     }
