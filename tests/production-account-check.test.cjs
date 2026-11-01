@@ -1,0 +1,12 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
+const source=fs.readFileSync(__dirname+'/../production-account-check.js','utf8');
+function setup({signed=true,rejected=false,switchAccount=false}={}){
+ const dom=new JSDOM(fs.readFileSync(__dirname+'/../production-account-check.html','utf8'),{url:'https://nene.test/production-account-check.html',runScripts:'outside-only'}),w=dom.window,calls=[];let owner=signed?'owner-a':null;
+ w.neneAuthGetUserId=async()=>owner;w.neneAuthGetAccountToken=async()=>owner?'test-token':null;
+ w.neneOpenAuth=()=>{};w.nenePrivacyLocalSignOut=async()=>{owner=null;};w.NENE_DIRECTOR_CONFIG={backendUrl:'https://production.test'};
+ w.fetch=async(url,options)=>{calls.push({url,options});if(switchAccount){owner='owner-b';w.dispatchEvent(new w.Event('nene-auth-changed'));}return {ok:!rejected,status:rejected?401:200,json:async()=>({})};};w.eval(source);return {dom,w,calls};
+}
+test('signed-out check never calls production APIs',async()=>{const s=setup({signed:false});await s.w.document.getElementById('account-check').onclick();assert.equal(s.calls.length,0);assert.match(s.w.document.getElementById('account-status').textContent,/Sign in/);s.dom.window.close();});
+test('successful check uses bearer authentication and no-store for every request',async()=>{const s=setup();await s.w.document.getElementById('account-check').onclick();assert.equal(s.calls.length,3);for(const c of s.calls){assert.equal(c.options.cache,'no-store');assert.equal(c.options.headers.Authorization,'Bearer test-token');assert.equal(c.options.method,undefined);}assert.equal(s.w.document.querySelectorAll('#account-results li').length,3);s.dom.window.close();});
+test('expired session does not report successful account access',async()=>{const s=setup({rejected:true});await s.w.document.getElementById('account-check').onclick();assert.match(s.w.document.getElementById('account-status').textContent,/expired or was rejected/);assert.equal(s.w.document.querySelectorAll('#account-results li').length,0);s.dom.window.close();});
+test('account change discards results from the preceding account',async()=>{const s=setup({switchAccount:true});await s.w.document.getElementById('account-check').onclick();assert.equal(s.w.document.querySelectorAll('#account-results li').length,0);assert.doesNotMatch(s.w.document.getElementById('account-status').textContent,/passed/);s.dom.window.close();});
