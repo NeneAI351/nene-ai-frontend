@@ -38,9 +38,19 @@
   }catch(e){message(e.message+' Keep your receipt and check again later.');}
  }
  async function refreshAccount(){
-  if(!el('delete-submit'))return;
-  try{const owner=await window.neneAuthGetUserId?.();el('delete-submit').disabled=!owner;if(el('delete-account-summary'))el('delete-account-summary').textContent=owner?'Signed in. The request will delete only this signed-in NENE AI account.':'Sign in to the NENE AI account you want to delete. You do not need to reinstall the app or accept new terms.';}
-  catch(_){el('delete-submit').disabled=true;}
+  const button=el('delete-submit'),summary=el('delete-account-summary');
+  if(!button)return;
+  button.disabled=true;
+  try{
+   const owner=await window.neneAuthGetUserId?.();
+   if(!owner){if(summary)summary.textContent='Sign in to the NENE AI account you want to delete. You do not need to reinstall the app or accept new terms.';return;}
+   if(summary)summary.textContent='Checking whether secure account deletion is available…';
+   const availability=await api('/availability');
+   if(owner!==await window.neneAuthGetUserId?.()||busy)return;
+   const available=availability.account_deletion_available===true;
+   button.disabled=!available;
+   if(summary)summary.textContent=available?'Signed in. The request will delete only this signed-in NENE AI account.':'Automatic account deletion is temporarily unavailable. Use Privacy help above to request deletion assistance. Your account has not been changed.';
+  }catch(_){if(summary)summary.textContent='We could not verify account deletion availability. Reload to retry, or use Privacy help above. Your account has not been changed.';}
  }
  async function removeAccount(event){
   event.preventDefault();if(busy)return;
