@@ -41,3 +41,6 @@ jobs:
 
       - name: Verify production project isolation diagnostics
         run: node --check production-isolation.js && node --test tests/production-isolation.test.cjs
+
+      - name: Verify guarded live payment check
+        run: node --check payment-live-check.js && node --test tests/payment-live-check.test.cjs
