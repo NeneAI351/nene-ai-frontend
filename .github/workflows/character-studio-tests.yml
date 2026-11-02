@@ -38,3 +38,6 @@ jobs:
 
       - name: Verify production account connection checks
         run: node --check production-account-check.js && node --test tests/production-account-check.test.cjs
+
+      - name: Verify production project isolation diagnostics
+        run: node --check production-isolation.js && node --test tests/production-isolation.test.cjs
