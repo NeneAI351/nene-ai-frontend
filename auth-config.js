@@ -1,15 +1,7 @@
-/*
- * NENE AI public authentication configuration.
- *
- * These are public client values for the NENE AI staging Supabase project.
- * Use the project root URL (without /rest/v1); the SDK builds Auth endpoints itself.
- * NEVER put a service_role key, database password, or secret here.
- */
+/* Public production client configuration. Never add server credentials here. */
 window.NENE_AUTH_CONFIG = Object.freeze({
-  supabaseUrl: "https://agchmegopyktwofcupny.supabase.co",
-  supabaseAnonKey: "sb_publishable_sKEK0zwZKHEm-v6-mEn9Hw_v_YCnGa0",
+  supabaseUrl: "https://ofsfhxtpaudxhrgceoiz.supabase.co",
+  supabaseAnonKey: "sb_publishable_6GZ4GtXAlAdVeOdYYTU4Vg_86DLCnKD",
   redirectTo: window.location.origin + window.location.pathname
 });
-
-/* Public staging API origin. No API keys belong in this configuration. */
-window.NENE_DIRECTOR_CONFIG = Object.freeze({backendUrl: "https://nene-ai-staging.onrender.com"});
+window.NENE_DIRECTOR_CONFIG = Object.freeze({backendUrl: "https://nene-ai.onrender.com"});
