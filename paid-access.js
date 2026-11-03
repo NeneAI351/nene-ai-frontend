@@ -24,10 +24,36 @@
     } catch (_) { /* Unavailable is not a fabricated balance. */ }
     finally { if (current === requestNumber) draw(); }
   };
-  window.neneOpenPaidCredits = () => {
-    showModal('<h2>Paid credits &amp; refund policy</h2><p class="subtitle">Registration and browsing are free. Video generation and AI planning require paid credits. There are no welcome or free generation credits.</p><p class="notice" id="paidRefundPolicy"></p><p class="subtitle">Purchases are not open yet. Payment verification and the complete generation journey must pass before paid access opens.</p><button class="btn gold" onclick="closeModal()">Close</button>');
+  let modalRevision = 0;
+  window.neneOpenPaidCredits = async () => {
+    const revision = ++modalRevision;
+    showModal('<h2>Paid credits &amp; refund policy</h2><p class="subtitle">Video generation and AI planning require paid credits. There are no free generation credits.</p><div id="paidPackageList"></div><p class="notice" id="paidCheckoutStatus" role="status">Checking purchase availability…</p><p class="notice" id="paidRefundPolicy"></p><a id="paidCheckout" class="btn gold" href="./credits.html" hidden>Buy credits</a><button class="btn secondary" onclick="closeModal()">Close</button>');
+    const status = document.getElementById('paidCheckoutStatus');
     document.getElementById('paidRefundPolicy').textContent = policy;
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      const base = window.NENE_DIRECTOR_CONFIG?.backendUrl?.replace(/\/$/, '');
+      if (!base) throw Error('unavailable');
+      const responses = await Promise.all(['/api/payments/packages', '/api/generation-availability'].map(path => fetch(base + path, {cache:'no-store', signal:controller.signal})));
+      if (responses.some(response => !response.ok)) throw Error('unavailable');
+      const [catalog, generation] = await Promise.all(responses.map(response => response.json()));
+      if (revision !== modalRevision || !status.isConnected) return;
+      if (!Array.isArray(catalog.packages)) throw Error('unavailable');
+      for (const item of catalog.packages) {
+        const amount = Number(item.amount_ngn), count = Number(item.credits);
+        if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(count) || count <= 0) continue;
+        const row = document.createElement('p');
+        row.textContent = String(item.name) + ' · ' + count.toLocaleString() + ' credits · ₦' + amount.toLocaleString();
+        document.getElementById('paidPackageList').append(row);
+      }
+      const available = catalog.mode === 'live' && catalog.live_payments_enabled === true && generation.accepting_requests === true;
+      status.textContent = available ? 'Review the package and refund policy before paying. Credits are added after payment verification.' : 'Credit purchases are temporarily closed while video generation is prepared. Please check back before buying.';
+      document.getElementById('paidCheckout').hidden = !available;
+    } catch (_) {
+      if (revision === modalRevision && status.isConnected) status.textContent = 'Purchases are temporarily unavailable. Please try again later.';
+    } finally { clearTimeout(timeout); }
   };
+  window.addEventListener('nene-auth-changed', () => { modalRevision++; if (document.getElementById('paidCheckoutStatus')) window.closeModal?.(); });
   window.addEventListener('nene-auth-changed', window.neneRefreshPaidWallet);
   window.addEventListener('focus', window.neneRefreshPaidWallet);
   window.neneRefreshPaidWallet();

@@ -44,3 +44,6 @@ jobs:
 
       - name: Verify guarded live payment check
         run: node --check payment-live-check.js && node --test tests/payment-live-check.test.cjs
+
+      - name: Verify launch account isolation and purchase availability
+        run: node --test tests/launch-state.test.cjs tests/paid-catalog.test.cjs

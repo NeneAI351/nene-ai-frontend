@@ -8,7 +8,7 @@ const w=dom.window;
 w.alert=()=>{};w.fetch=async()=>({ok:false});w.scrollTo=()=>{};
 const projects=Array.from({length:5},(_,i)=>({id:'project-'+i,name:i===4?'<img src=x onerror=alert(1)>':'Project '+i,type:'Creative',status:'Draft',updatedAt:`2026-10-${10+i}T10:00:00Z`}));
 w.localStorage.setItem('nene_ai_projects_v1',JSON.stringify(projects));
-const inline=[...w.document.querySelectorAll('script:not([src])')].map(t=>t.textContent).join('\n');w.eval(inline);w.eval(source);
+const inline=[...w.document.querySelectorAll('script:not([src])')].map(t=>t.textContent).join('\n');w.eval(inline+'\nprojects='+JSON.stringify(projects)+';renderHome();');w.eval(source);
 assert.equal(w.document.querySelector('.hero .studio-shortcut'),null,'Welcome section does not repeat the Studio shortcut');
 assert.ok(w.document.querySelector('.hero').textContent.includes('Create videos, stories and ads in one place.'),'Welcome description stays visible');
 assert.ok([...w.document.querySelectorAll('button')].some(button=>button.textContent.includes('View all 12 tools')),'The dedicated Studio section retains its discovery control');

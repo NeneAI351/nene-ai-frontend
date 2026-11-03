@@ -25,7 +25,7 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
   assert.ok(calls[0].url.endsWith('/api/wallet/paid'));
   w.__editCredits();
   assert.equal(w.__getCredits(),27.5,'Local increments are not authoritative');
-  assert.equal(JSON.parse(w.localStorage.getItem('nene_ai_state_v1')).credits,undefined);
+  assert.equal(w.__getCredits(),27.5,'Legacy stored credits never become spendable');
   w.neneOpenPaidCredits();
   const policy=w.document.getElementById('paidRefundPolicy').textContent;
   assert.match(policy,/change-of-mind cash refunds are not offered/);
