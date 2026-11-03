@@ -5,7 +5,7 @@
   const base = window.NENE_DIRECTOR_CONFIG?.backendUrl?.replace(/\/$/, '');
   const referencePattern = /^nene_[0-9a-f]{32}$/;
   const storageKey = owner => 'nene-payment-live-v1:' + owner;
-  let epoch = 0, owner = null, busy = false, ready = false, order = null;
+  let epoch = 0, owner = null, busy = false, ready = false, salesReady = false, order = null;
   const status = message => { $('testStatus').textContent = message; };
   function checkoutUrl(value) {
     if (typeof value !== 'string' || /[\s\\]/.test(value)) return false;
@@ -16,12 +16,12 @@
     } catch (_) { return false; }
   }
   function draw() {
-    $('testCreate').disabled = busy || !ready || !owner || !!order;
-    $('testPackage').disabled = busy || !ready || !!order;
+    $('testCreate').disabled = busy || !salesReady || !owner || !!order;
+    $('testPackage').disabled = busy || !salesReady || !!order;
     $('testEmail').disabled = busy || !!order;
     $('testVerify').disabled = busy || !ready || !owner || !order;
     $('testNew').disabled = busy || !order;
-    $('testCheckoutLink').hidden = busy || !ready || !order?.url;
+    $('testCheckoutLink').hidden = busy || !salesReady || !order?.url;
     if (order?.url) $('testCheckoutLink').href = order.url;
     else $('testCheckoutLink').removeAttribute('href');
     $('testReference').textContent = order ? 'Reference: ' + order.reference : '';
@@ -40,19 +40,21 @@
   }
   async function sync() {
     const version = ++epoch;
-    owner = null; order = null; ready = false; busy = false;
+    owner = null; order = null; ready = false; salesReady = false; busy = false;
     $('testBalance').textContent = ''; $('testReceipt').textContent = ''; draw();
     try {
       if (base !== 'https://nene-ai.onrender.com') throw Error('This screen only connects to NENE AI production.');
       const id = await window.neneAuthGetUserId?.();
       const packages = await api('/api/payments/packages');
       if (version !== epoch) return;
+      if (packages.mode !== 'live') throw Error('Live checkout is locked because this server is not in live mode.');
+      let generationReady = true;
       if (document.body.dataset.publicCheckout === 'true') {
-        const generation = await api('/api/generation-availability');
+        try { const generation = await api('/api/generation-availability'); generationReady = generation.accepting_requests === true; }
+        catch (_) { generationReady = false; }
         if (version !== epoch) return;
-        if (generation.accepting_requests !== true) throw Error('Purchases are temporarily closed while video generation is prepared. No payment has been started.');
       }
-      if (packages.mode !== 'live' || packages.live_payments_enabled !== true) throw Error('Live checkout is locked until the production backend is configured and approved.');
+      salesReady = packages.live_payments_enabled === true && generationReady;
       if (!Array.isArray(packages.packages) || !packages.packages.length) throw Error('Live packages are unavailable.');
       $('testPackage').replaceChildren();
       for (const item of packages.packages) {
@@ -67,7 +69,7 @@
         if (saved?.owner === owner && referencePattern.test(saved.reference))
           order = {reference:saved.reference, url:checkoutUrl(saved.url) ? saved.url : null};
       }
-      status(owner ? (order ? 'Saved live payment restored. Check its status before starting another.' : 'Ready. Create a live checkout when you are ready.') : 'Sign in with a NENE AI account, then finish account setup.');
+      status(!salesReady ? (order ? 'New purchases are temporarily closed. Your saved payment can still be checked below. Do not pay again.' : 'Live checkout is locked: purchases are temporarily closed while generation is prepared. No payment has been started.') : owner ? (order ? 'Saved live payment restored. Check its status before starting another.' : 'Ready. Create a live checkout when you are ready.') : 'Sign in with a NENE AI account, then finish account setup.');
     } catch (error) { if (version === epoch) status(error.message); }
     finally { if (version === epoch) draw(); }
   }
@@ -75,7 +77,7 @@
   $('testAccount').onclick = () => window.neneOpenAccountAgreement();
   $('testCheckoutForm').onsubmit = async event => {
     event.preventDefault();
-    if (busy || !ready || !owner || order) return;
+    if (busy || !salesReady || !owner || order) return;
     const version = epoch, id = owner;
     busy = true; draw(); status('Creating a live checkout…');
     try {
