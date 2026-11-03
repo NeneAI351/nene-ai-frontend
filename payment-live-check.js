@@ -47,6 +47,11 @@
       const id = await window.neneAuthGetUserId?.();
       const packages = await api('/api/payments/packages');
       if (version !== epoch) return;
+      if (document.body.dataset.publicCheckout === 'true') {
+        const generation = await api('/api/generation-availability');
+        if (version !== epoch) return;
+        if (generation.accepting_requests !== true) throw Error('Purchases are temporarily closed while video generation is prepared. No payment has been started.');
+      }
       if (packages.mode !== 'live' || packages.live_payments_enabled !== true) throw Error('Live checkout is locked until the production backend is configured and approved.');
       if (!Array.isArray(packages.packages) || !packages.packages.length) throw Error('Live packages are unavailable.');
       $('testPackage').replaceChildren();
