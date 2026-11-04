@@ -16,7 +16,8 @@ async function setup({signedIn=true,available=true,postError=null,pending=null,j
  if(pending)w.localStorage.setItem('nene_ad_pending_v1:'+USER,JSON.stringify(pending));
  w.fetch=async(url,options={})=>{
   calls.push({url,options});let data;
-  if(url.endsWith('/api/generation-availability'))data={accepting_requests:available,message:available?'Paid video submissions are enabled.':'Paid video generation is not enabled yet.'};
+  if(url.endsWith('/api/providers'))data={providers:[{id:'ltx',available:false},{id:'magic-hour',available:true,generation_types:['text-to-video']}]};
+  else if(url.endsWith('/api/generation-availability'))data={accepting_requests:available,message:available?'Paid video submissions are enabled.':'Paid video generation is not enabled yet.'};
   else if(url.endsWith('/api/pricing/quote'))data={recommended_credits:120};
   else if(url.endsWith('/api/generations')){
    if(postError==='network')throw new TypeError('Network request failed');
