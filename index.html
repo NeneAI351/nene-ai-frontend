@@ -338,7 +338,7 @@ function renderHome(){
  setNav('home');
  screen.innerHTML=`<main>
  <section class="hero"><div class="hero-row"><img src="${avatarData}"><div><div class="eyebrow">Welcome to NENE AI</div><h1>Create. Imagine. Bring it to life.</h1><div class="subtitle">Create videos, stories and ads in one place.</div></div></div></section>
- <div class="kpi"><div class="notice"><b id="homePaidBalance">${Number.isFinite(window.NENE_PAID_WALLET)?window.NENE_PAID_WALLET.toLocaleString():'—'}</b><br>paid credits</div><div class="notice"><b>${projects.length}</b><br>projects on this device</div></div>
+ <div class="kpi"><div class="notice"><b id="homePaidBalance">${Number.isFinite(window.NENE_PAID_WALLET)?window.NENE_PAID_WALLET.toLocaleString():'—'}</b><br>paid credits</div><button class="notice btn" type="button" onclick="document.querySelector('[data-nav=creations]').click()"><b>My Creations</b><br>View your videos and projects</button></div>
  <div class="section-title">What do you want to create?</div>
  <div class="grid">
   ${toolCard("🎬","Text → Video","Turn a prompt into a video.","text")}
