@@ -29,9 +29,9 @@
     finally{clearTimeout(timer);}
   }
   function draft(v){const data={};for(const name of fields)data[name]=v.form.elements[name].value.trim();return data;}
-  function payload(d){
+  function payload(d,engine){
     if(!d.product || !d.audience || !d.benefit || !d.cta)throw new Error('Enter the product, audience, benefit and call to action.');
-    return {type:'text-to-video',provider:'ltx',model:'ltx-2-5-fast',resolution:d.resolution,duration:Number(d.duration),aspect_ratio:d.ratio,
+    return {type:'text-to-video',provider:engine,model:engine==='magic-hour'?'minimax-h3':'ltx-2-5-fast',resolution:d.resolution,duration:Number(d.duration),aspect_ratio:d.ratio,
       prompt:[`Create a ${d.duration}-second ${d.style} advertisement video.`,
         `Product or business: ${d.product}. Audience: ${d.audience}.`,
         `Supplied benefit: ${d.benefit}. Offer: ${d.offer||'No special offer supplied'}.`,
@@ -62,7 +62,11 @@
     try{
       if(!await window.neneRequireAccount?.('Sign in to review your advertisement.'))return;
       if(!v.owner)await checkAccount(v);
-      const d=draft(v),body=payload(d);v.busy=true;v.review.disabled=true;v.generate.disabled=true;
+      const d=draft(v);v.busy=true;v.review.disabled=true;v.generate.disabled=true;
+      const catalog=await api(v,'/api/providers');
+      const engine=['ltx','magic-hour'].find(id=>catalog.providers?.some(provider=>provider.id===id&&provider.available===true&&provider.generation_types?.includes('text-to-video')));
+      if(!engine)throw Error('No advertisement video engine is available right now.');
+      const body=payload(d,engine);
       const q=await api(v,'/api/pricing/quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:body.provider,model:body.model,resolution:body.resolution,duration:body.duration})});
       const amount=Number(q.recommended_credits);
       if(!Number.isFinite(amount)||amount<=0)throw new Error('No valid paid price is available for this advertisement.');
@@ -70,7 +74,7 @@
       v.quote={draft:JSON.stringify(d),body,cost:String(q.recommended_credits)};
       v.generate.textContent=`Generate advertisement · ${q.recommended_credits} paid credits`;
       v.generate.disabled=!v.accepting;
-      say(v,`${q.recommended_credits} paid credits for this video. Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate advertisement.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
+      say(v,`${engine==='magic-hour'?'Magic Hour':'LTX'} · ${q.recommended_credits} paid credits for this video. Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate advertisement.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
     }catch(error){say(v,error.message);}finally{v.busy=false;if(alive(v)&&!v.pending)v.review.disabled=false;}
   }
   function rememberJob(v,id,title){
@@ -103,6 +107,12 @@
     }catch(error){
       if(!requestStarted){
         v.pending=null;say(v,'Could not save a safe pending request on this device. No generation was submitted.');return;
+      }
+      if(error.status===409 && error.message==='generation_engine_unavailable'){
+        localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
+        v.generate.textContent='Review price before generating';
+        say(v,'The original engine is unavailable. No video was submitted or credits reserved. Review the current price to continue.');
+        return;
       }
       const definiteRejection=[400,401,402,403,422].includes(error.status)||(error.status===409 && /price increased/i.test(error.message));
       if(definiteRejection && (!hadPending || (error.status===409 && /price increased/i.test(error.message)))){
