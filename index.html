@@ -349,10 +349,10 @@ function renderHome(){
   ${toolCard("🧠","AI Director","Plan scripts, scenes and production directions.","director")}
  </div>
  ${studioSectionMarkup()}
- <section class="recent-projects" aria-labelledby="recent-projects-title">
+ ${projects.length ? `<section class="recent-projects" aria-labelledby="recent-projects-title">
  <div class="section-heading"><h2 id="recent-projects-title">Recent projects</h2><button class="text-button" type="button" onclick="renderProjects()">View all projects →</button></div>
- <div class="list">${[...projects].sort((a,b)=>(Date.parse(b.updatedAt)||0)-(Date.parse(a.updatedAt)||0)).slice(0,2).map(p=>`<div class="creation"><div class="thumb">${escapeNeneText(p.icon||'📁')}</div><div class="project-summary"><b>${escapeNeneText(p.name)}</b><div><span class="badge">${escapeNeneText(p.type)}</span> <span class="badge">${escapeNeneText(p.status)}</span></div></div><button class="project-open" type="button" data-project-id="${escapeNeneText(p.id)}">Open</button></div>`).join('')||'<p class="notice">No projects on this device yet. Finished videos are in My Creations.</p>'}</div>
- </section>
+ <div class="list">${[...projects].sort((a,b)=>(Date.parse(b.updatedAt)||0)-(Date.parse(a.updatedAt)||0)).slice(0,2).map(p=>`<div class="creation"><div class="thumb">${escapeNeneText(p.icon||'📁')}</div><div class="project-summary"><b>${escapeNeneText(p.name)}</b><div><span class="badge">${escapeNeneText(p.type)}</span> <span class="badge">${escapeNeneText(p.status)}</span></div></div><button class="project-open" type="button" data-project-id="${escapeNeneText(p.id)}">Open</button></div>`).join('')}</div>
+ </section>` : ''}
  </main>`;
  if(window.neneMountStudioSections)window.neneMountStudioSections();
 }
