@@ -21,7 +21,7 @@ button,input,textarea,select{font:inherit} button{cursor:pointer}
 header{position:sticky;top:0;z-index:10;padding:14px 16px 12px;border-bottom:1px solid #5a4318;background:rgba(7,7,7,.93);backdrop-filter:blur(12px);display:flex;align-items:center;gap:10px}
 .logo{font-family:Georgia,serif;font-size:25px;letter-spacing:1px;font-weight:700;color:var(--gold2)} .tag{font-size:9px;color:var(--gold);margin-top:1px}
 .avatar{margin-left:auto;width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--gold)}
-.credits{font-size:11px;border:1px solid #72571d;border-radius:22px;padding:7px 10px;color:var(--gold2);background:#0d0b07}.credits b{font-size:14px}
+.credits{text-decoration:none;text-align:center;font-size:11px;border:1px solid #72571d;border-radius:22px;padding:7px 10px;color:var(--gold2);background:#0d0b07}.credits b{font-size:14px}
 .auth-header-btn{border:1px solid #72571d;border-radius:999px;padding:8px 10px;background:#17130c;color:var(--gold2);font-size:11px;font-weight:700;white-space:nowrap}
 main{padding:18px 16px 92px}.eyebrow{color:var(--gold);font-size:11px;letter-spacing:1.8px;text-transform:uppercase}
 h1{font-family:Georgia,serif;font-size:33px;margin:5px 0 8px}.subtitle{color:var(--muted);line-height:1.5;font-size:14px}
@@ -131,7 +131,7 @@ window.NENEBackend={
 <div class="app">
 <header>
   <div class="brand-lockup"><img class="brand-mark" src="./brand-mark.svg?v=50" alt=""><div><div class="logo">NENE AI</div><div class="tag">Create. Imagine. Bring it to life.</div></div></div>
-  <div class="credits">Paid Credits<br><b id="credits">0</b></div>
+  <a class="credits" href="./credits.html" aria-label="Buy credits and view your paid credit balance">Buy credits<br><b id="credits">0</b></a>
   <button id="neneAuthHeaderButton" class="auth-header-btn" onclick="neneOpenAuth()">Sign in</button>
   <button id="neneFullscreenButton" class="fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
   <img id="avatar" class="avatar" alt="NENE AI profile" title="NENE AI profile">
