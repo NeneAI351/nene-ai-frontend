@@ -77,7 +77,7 @@
         v.updateSpeechUI?.();lock(v,true);v.generate.textContent='Retry pending submission safely';v.generate.disabled=!v.accepting||!v.audioSupported;
         say(v,'A pending submission is saved on this device. Retry it with the same request key to avoid duplicate charges. '+(v.accepting?'':'Video creation is temporarily unavailable.'));
       }else{v.pending=null;lock(v,false);selectAvailableEngine(v);v.generate.textContent='Generate video';}
-      renderJobs(v);if(v.mode==='talking')renderSpeechJobs(v);
+      restoreLatestVideo(v);if(v.mode==='talking')renderSpeechJobs(v);
     }catch(error){say(v,error.message);}
     finally{if(v.mode==='talking'&&v.owner&&alive(v)){renderSpeechJobs(v);try{const state=await api(v,'/api/speech/availability');if(!alive(v))return;v.speechAccepting=state.accepting_requests===true;if(!v.speechPending&&!v.approvedSpeech)speechSay(v,state.message||(v.speechAccepting?'Write your script and review the voice price.':'Voice generation is not enabled yet. No credits have been charged.'));}catch(e){speechSay(v,e.message);}}}
   }
@@ -144,7 +144,7 @@
       if(!alive(v))return;
       rememberJob(v,result.generation_id,v.pending.draft.idea.slice(0,100));
       localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
-      v.generate.textContent='Review price before creating another video';renderJobs(v);
+      v.generate.textContent='Review price before creating another video';restoreLatestVideo(v);
       await poll(v,result.generation_id,0);
       try{await window.neneRefreshPaidWallet?.();}catch(_){}
     }catch(error){
@@ -173,10 +173,11 @@
       v.busy=false;if(alive(v)){lock(v,!!v.pending);v.generate.disabled=!(v.pending&&v.accepting&&v.audioSupported);}
     }
   }
-  function renderJobs(v){
-    v.jobs.replaceChildren();const jobs=read(v,'jobs',[]);
-    if(!Array.isArray(jobs))return;
-    for(const job of jobs){if(!UUID.test(job.id))continue;const button=el('button',job.title||'Saved video','btn');button.type='button';button.onclick=()=>poll(v,job.id,0);v.jobs.append(button);}
+  function restoreLatestVideo(v){
+    const jobs=read(v,'jobs',[]);
+    if(!v.selected&&Array.isArray(jobs))v.selected=jobs.find(job=>UUID.test(job.id))?.id||null;
+    v.refresh.disabled=!v.selected;
+    v.refresh.hidden=!v.selected;
   }
   async function media(v,id){
     const data=await api(v,`/api/generations/${id}/media-url`);if(!alive(v)||v.selected!==id)return;
@@ -187,7 +188,7 @@
     const report=el('button','Report AI content','btn');report.type='button';report.onclick=()=>window.neneOpenOutputReport?.({kind:'video',id,owner:v.owner});v.output.append(report);
   }
   async function poll(v,id,attempt){
-    if(!alive(v)||!UUID.test(id))return;clearTimeout(v.timer);v.selected=id;v.refresh.disabled=false;
+    if(!alive(v)||!UUID.test(id))return;clearTimeout(v.timer);v.selected=id;v.refresh.disabled=false;v.refresh.hidden=false;
     try{
       const data=await api(v,`/api/generations/${id}`);if(!alive(v)||v.selected!==id)return;
       const job=data.generation||{};v.output.replaceChildren();
@@ -201,7 +202,7 @@
       }
       say(v,`Video status: ${String(job.status||'pending')}. Keep this saved job; do not submit another copy.`);
       if(attempt<120)v.timer=setTimeout(()=>poll(v,id,attempt+1),7000);
-    }catch(error){say(v,error.message+' Your job remains saved. Use Refresh saved video status.');}
+    }catch(error){say(v,error.message+' Your job remains saved. Use Check latest video.');}
   }
   function choose(v,title,select,trigger){
     const overlay=el('div',undefined,'video-choice-overlay'),panel=el('section',undefined,'video-choice-panel');panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',title);
@@ -406,10 +407,11 @@
     v.generate=el('button','Generate video','btn gold');v.generate.type='button';v.generate.id='video-generate';v.generate.disabled=true;v.generate.onclick=()=>submit(v);
     const signin=el('button','Sign in / account','btn');signin.onclick=()=>window.neneOpenAuth?.();
     const check=el('button','Check account and availability','btn');check.onclick=()=>checkAccount(v);
-    v.refresh=el('button','Refresh saved video status / link','btn');v.refresh.disabled=true;v.refresh.onclick=()=>v.selected&&poll(v,v.selected,0);
-    v.output=el('div');v.output.id='video-output';v.jobs=el('div',undefined,'list');v.jobs.id='video-jobs';
-    root.append(v.form,el('p','Review your credit price before generating. AI scene sound is generated with the video when selected. Captions, separate music tracks and voice cloning are not included. Watermark-free export is not guaranteed; exact text, logos and visual consistency may need editing.','notice'),v.message,v.review,v.generate,signin,check,v.refresh,v.output,el('h2','Your saved videos'),v.jobs,
-      el('p','Pending submissions and job IDs are saved on this device for this account. Finished videos are retrieved through your private account.','subtitle'));
+    v.refresh=el('button','Check latest video','btn');v.refresh.disabled=true;v.refresh.hidden=true;v.refresh.onclick=()=>v.selected&&poll(v,v.selected,0);
+    v.output=el('div');v.output.id='video-output';
+    const library=el('button','View finished videos in My Creations','btn');
+    library.type='button';library.onclick=()=>renderCreations();
+    root.append(v.form,el('p','Review your credit price before generating. AI scene sound is generated with the video when selected. Captions, separate music tracks and voice cloning are not included. Watermark-free export is not guaranteed; exact text, logos and visual consistency may need editing.','notice'),v.message,v.review,v.generate,signin,check,v.refresh,v.output,library);
     if(v.voiceOnly){
       v.dialogueLabel.textContent='Your voice script';dialogue.placeholder='Write the words you want the AI voice to say…';
       v.speechHint.textContent='Voice generation uses paid credits. Review the cost before submitting, then listen to your saved track. No photo is needed for audio. Animation is optional and charged separately.';
@@ -420,7 +422,7 @@
       let afterForm=false;for(const child of [...root.children]){if(child===v.form){afterForm=true;continue;}if(afterForm&&child!==signin&&child!==check)details.append(child);}
     }
     document.getElementById('screen').replaceChildren(root);
-    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,jobs:v.jobs,getState:()=>v,settings:false});
+    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,getState:()=>v,settings:false});
     await checkAccount(v);
   };
   const oldFeature=window.openFeature;
@@ -428,7 +430,7 @@
   window.addEventListener('nene-auth-changed',()=>{
     window.neneLoadFinishedVideos(document.getElementById('neneFinishedVideos'));
     const v=active;if(!v||!alive(v))return;
-    document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();v.backupAvailable=false;v.backupOption.disabled=true;v.form.elements.provider.options[0].disabled=false;v.updateProvider();v.updateSpeechUI?.();v.imageData=null;v.sourceImageId=null;v.audioData=null;v.audioAsset=null;v.approvedSpeech=null;v.speechQuote=null;v.speechSelected=null;clearTimeout(v.speechTimer);if(v.voiceOutput)v.voiceOutput.replaceChildren();if(v.voiceJobs)v.voiceJobs.replaceChildren();if(v.voiceGenerate)v.voiceGenerate.disabled=true;if(v.audioFile)v.audioFile.value='';if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
+    document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.refresh.hidden=true;v.form.reset();v.backupAvailable=false;v.backupOption.disabled=true;v.form.elements.provider.options[0].disabled=false;v.updateProvider();v.updateSpeechUI?.();v.imageData=null;v.sourceImageId=null;v.audioData=null;v.audioAsset=null;v.approvedSpeech=null;v.speechQuote=null;v.speechSelected=null;clearTimeout(v.speechTimer);if(v.voiceOutput)v.voiceOutput.replaceChildren();if(v.voiceJobs)v.voiceJobs.replaceChildren();if(v.voiceGenerate)v.voiceGenerate.disabled=true;if(v.audioFile)v.audioFile.value='';if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
     say(v,'Account changed. Check your account and availability before continuing.');
   });
 })();
