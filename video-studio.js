@@ -25,7 +25,7 @@
         headers:{Authorization:'Bearer '+token,...options.headers}});
       const data=await response.json().catch(()=>({}));
       if(await window.neneAuthGetUserId?.()!==owner || v.owner!==owner)throw new Error('The account changed. Reopen Video Studio.');
-      if(!response.ok){const raw=typeof data.detail==='string'?data.detail:'The video service could not complete this request.';const e=new Error(/LTX|Pixazo|Magic Hour|provider|durable|configuration|worker|database/i.test(raw)?'Video creation is temporarily unavailable. Please try again later.':raw);e.status=response.status;throw e;}
+      if(!response.ok){const raw=typeof data.detail==='string'?data.detail:'The video service could not complete this request.';const e=new Error(/LTX|Pixazo|Magic Hour|provider|durable|configuration|worker|database/i.test(raw)?'Video creation is temporarily unavailable. Please try again later.':raw);e.status=response.status;e.code=raw;throw e;}
       return data;
     }catch(error){if(error.name==='AbortError')throw new Error('The request timed out. Retry the same pending submission safely; do not create another copy.');throw error;}
     finally{clearTimeout(timer);}
@@ -65,8 +65,9 @@
       if(!owner){v.owner=null;say(v,'Sign in to review pricing and create a paid video.');return;}
       if(!alive(v))return;v.owner=owner;
       const state=await api(v,'/api/generation-availability');if(!alive(v))return;
-      v.backupAvailable=false;
-      try{const catalog=await api(v,'/api/providers');if(!alive(v))return;v.backupAvailable=Array.isArray(catalog.providers)&&catalog.providers.some(p=>p.id==='magic-hour'&&p.available===true);}catch(_){}
+      v.backupAvailable=false;v.primaryAvailable=true;
+      try{const catalog=await api(v,'/api/providers');if(!alive(v))return;if(Array.isArray(catalog.providers)){v.primaryAvailable=!catalog.providers.some(p=>p.id==='ltx'&&p.available===false);v.backupAvailable=catalog.providers.some(p=>p.id==='magic-hour'&&p.available===true);}}catch(_){}
+      v.form.elements.provider.options[0].disabled=!v.primaryAvailable;
       v.backupOption.disabled=!v.backupAvailable||v.mode==='talking';
       v.accepting=state.accepting_requests===true;v.audioSupported=state.generate_audio_supported===true&&(v.mode!=='talking'||state.talking_character_supported===true);say(v,v.accepting?'Choose your options, then review the price.':'Video creation is temporarily unavailable. Your work has not been submitted and no credits were charged.');
       v.pending=read(v,'pending',null);
@@ -75,10 +76,17 @@
         for(const name of fields)if(v.pending.draft[name]!==undefined){v.form.elements[name].value=v.pending.draft[name];const button=v.form.querySelector('[data-choice-for="'+name+'"]');if(button)button.textContent=displayValue(name,v.pending.draft[name]);}
         v.updateSpeechUI?.();lock(v,true);v.generate.textContent='Retry pending submission safely';v.generate.disabled=!v.accepting||!v.audioSupported;
         say(v,'A pending submission is saved on this device. Retry it with the same request key to avoid duplicate charges. '+(v.accepting?'':'Video creation is temporarily unavailable.'));
-      }else{v.pending=null;lock(v,false);v.generate.textContent='Generate video';}
+      }else{v.pending=null;lock(v,false);selectAvailableEngine(v);v.generate.textContent='Generate video';}
       renderJobs(v);if(v.mode==='talking')renderSpeechJobs(v);
     }catch(error){say(v,error.message);}
     finally{if(v.mode==='talking'&&v.owner&&alive(v)){renderSpeechJobs(v);try{const state=await api(v,'/api/speech/availability');if(!alive(v))return;v.speechAccepting=state.accepting_requests===true;if(!v.speechPending&&!v.approvedSpeech)speechSay(v,state.message||(v.speechAccepting?'Write your script and review the voice price.':'Voice generation is not enabled yet. No credits have been charged.'));}catch(e){speechSay(v,e.message);}}}
+  }
+  function selectAvailableEngine(v){
+    const provider=v.form.elements.provider;
+    const available=[...provider.options].find(option=>!option.disabled);
+    if(provider.selectedOptions[0]?.disabled && available){
+      provider.value=available.value;v.updateProvider();
+    }
   }
   async function review(v){
     if(v.busy || v.pending)return;
@@ -86,6 +94,7 @@
       if(!await window.neneRequireAccount?.('Sign in to review your video.'))return;
       if(!v.owner)await checkAccount(v);
       v.busy=true;v.review.disabled=true;
+      if(v.form.elements.provider.selectedOptions[0]?.disabled)throw Error('No video engine is available for this tool right now.');
       const recordingData=v.audioData;
       if(v.mode==='talking'&&v.form.elements.speechMode.value==='Upload voice recording'&&!v.audioAsset){
         if(!v.audioData)throw Error('Choose a voice recording first.');
@@ -141,6 +150,15 @@
     }catch(error){
       if(!requestStarted){
         v.pending=null;say(v,error.message+' No video was submitted. Review your settings before trying again.');return;
+      }
+      if(error.status===409 && error.code==='generation_engine_unavailable'){
+        v.sourceImageId=v.pending.payload.source_image_id||null;
+        v.form.elements.provider.selectedOptions[0].disabled=true;
+        localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
+        selectAvailableEngine(v);
+        v.generate.textContent='Review price before generating';
+        say(v,'The original engine is unavailable. No video was submitted and no credits were reserved. Review the price of an available engine to continue.');
+        return;
       }
       const definiteRejection=[400,401,402,403,422].includes(error.status)||(error.status===409 && /price increased/i.test(error.message));
       if(definiteRejection && (!hadPending || (error.status===409 && /price increased/i.test(error.message)))){
@@ -359,7 +377,7 @@
   window.openFeature=function(type,...args){return type==='voice'?window.neneOpenVideoStudio('talking',{voiceOnly:true}):oldFeature.call(this,type,...args);};
   window.addEventListener('nene-auth-changed',()=>{
     const v=active;if(!v||!alive(v))return;
-    document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();v.backupAvailable=false;v.backupOption.disabled=true;v.updateProvider();v.updateSpeechUI?.();v.imageData=null;v.sourceImageId=null;v.audioData=null;v.audioAsset=null;v.approvedSpeech=null;v.speechQuote=null;v.speechSelected=null;clearTimeout(v.speechTimer);if(v.voiceOutput)v.voiceOutput.replaceChildren();if(v.voiceJobs)v.voiceJobs.replaceChildren();if(v.voiceGenerate)v.voiceGenerate.disabled=true;if(v.audioFile)v.audioFile.value='';if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
+    document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();v.backupAvailable=false;v.backupOption.disabled=true;v.form.elements.provider.options[0].disabled=false;v.updateProvider();v.updateSpeechUI?.();v.imageData=null;v.sourceImageId=null;v.audioData=null;v.audioAsset=null;v.approvedSpeech=null;v.speechQuote=null;v.speechSelected=null;clearTimeout(v.speechTimer);if(v.voiceOutput)v.voiceOutput.replaceChildren();if(v.voiceJobs)v.voiceJobs.replaceChildren();if(v.voiceGenerate)v.voiceGenerate.disabled=true;if(v.audioFile)v.audioFile.value='';if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
     say(v,'Account changed. Check your account and availability before continuing.');
   });
 })();
