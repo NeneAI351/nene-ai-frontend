@@ -54,7 +54,7 @@
     }
     if(prompt.length>5000)throw new Error('Shorten the prompt and sound description to fit within 5,000 characters.');
     const backup=d.provider==='magic-hour';
-    if(backup && (!v.backupAvailable || v.mode==='talking'))throw Error('The video backup is not available for these settings. No video was submitted.');
+    if(backup && (!v.backupAvailable || v.mode==='talking'))throw Error('Video creation is unavailable for these settings. No video was submitted.');
     return {...(v.mode==='talking'?{source_audio_id:v.audioAsset.source_audio_id}:{}),generate_audio:d.audio==='AI scene sound',type:v.mode==='talking'?'audio-to-video':v.mode==='image'?'image-to-video':'text-to-video',provider:backup?'magic-hour':'ltx',model:backup?'minimax-h3':'ltx-2-5-fast',resolution:d.resolution,duration:v.mode==='talking'?v.audioAsset.billable_seconds:Number(d.duration),aspect_ratio:d.ratio==='source'?null:d.ratio,prompt};
   }
   async function checkAccount(v){
@@ -94,7 +94,7 @@
       if(!await window.neneRequireAccount?.('Sign in to review your video.'))return;
       if(!v.owner)await checkAccount(v);
       v.busy=true;v.review.disabled=true;
-      if(v.form.elements.provider.selectedOptions[0]?.disabled)throw Error('No video engine is available for this tool right now.');
+      if(v.form.elements.provider.selectedOptions[0]?.disabled)throw Error('Video creation is temporarily unavailable. Please try again later.');
       const recordingData=v.audioData;
       if(v.mode==='talking'&&v.form.elements.speechMode.value==='Upload voice recording'&&!v.audioAsset){
         if(!v.audioData)throw Error('Choose a voice recording first.');
@@ -112,7 +112,7 @@
       v.quote={draft:JSON.stringify(d),body,cost:String(q.recommended_credits)};
       v.generate.textContent=`Generate video · ${q.recommended_credits} paid credits`;
       v.generate.disabled=!v.accepting||!v.audioSupported;
-      say(v,`${body.provider==='magic-hour'?'Magic Hour · MiniMax H3 backup. ':'LTX primary. '}${q.recommended_credits} paid credits for this video.${body.type==='audio-to-video'?' Recording: '+v.audioAsset.duration_seconds+' seconds; priced for '+body.duration+' whole seconds.':''} Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate video.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
+      say(v,`${q.recommended_credits} paid credits for this video.${body.type==='audio-to-video'?' Recording: '+v.audioAsset.duration_seconds+' seconds; priced for '+body.duration+' whole seconds.':''} Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate video.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
     }catch(error){say(v,error.message);}finally{v.busy=false;if(alive(v)&&!v.pending)v.review.disabled=false;}
   }
   function rememberJob(v,id,title){
@@ -157,7 +157,7 @@
         localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
         selectAvailableEngine(v);
         v.generate.textContent='Review price before generating';
-        say(v,'The original engine is unavailable. No video was submitted and no credits were reserved. Review the price of an available engine to continue.');
+        say(v,'No video was submitted and no credits were reserved. Review the current price to continue.');
         return;
       }
       const definiteRejection=[400,401,402,403,422].includes(error.status)||(error.status===409 && /price increased/i.test(error.message));
@@ -392,9 +392,9 @@
     }v.form.append(group);
     const providerBlock=el('div',undefined,'block'),providerLabel=el('label','Video engine','label'),provider=el('select');provider.name='provider';provider.id='video-provider';providerLabel.htmlFor=provider.id;
     const primary=el('option','LTX · Primary');primary.value='ltx';v.backupOption=el('option','Magic Hour · MiniMax H3 backup');v.backupOption.value='magic-hour';v.backupOption.disabled=true;provider.append(primary,v.backupOption);
-    providerBlock.append(providerLabel,provider,el('small','Changing engine requires a fresh price review. Accepted or uncertain jobs never switch engines automatically.','subtitle'));providerBlock.hidden=mode==='talking';v.form.append(providerBlock);
+    providerBlock.append(providerLabel,provider);providerBlock.hidden=true;v.form.append(providerBlock);
     v.updateProvider=()=>{const ratio=v.form.elements.ratio;const values=mode==='image'&&provider.value==='magic-hour'?['source']:['16:9','9:16','1:1'];const previous=ratio.value;ratio.replaceChildren();for(const value of values){const option=el('option',displayValue('ratio',value));option.value=value;ratio.append(option);}if(values.includes(previous))ratio.value=previous;const button=v.form.querySelector('[data-choice-for="ratio"]');button.textContent=displayValue('ratio',ratio.value);};
-    provider.addEventListener('change',()=>{if(v.pending)return;v.updateProvider();v.quote=null;v.generate.disabled=true;v.generate.textContent='Review price before generating';say(v,provider.value==='magic-hour'?'Backup selected. Review its own price before generating. Image videos follow the source image format.':'LTX selected. Review its price before generating.');});
+    provider.addEventListener('change',()=>{if(v.pending)return;v.updateProvider();v.quote=null;v.generate.disabled=true;v.generate.textContent='Review price before generating';say(v,'Review the updated price before generating.');});
     const soundBlock=el('div',undefined,'block'),soundLabel=el('label','Sound description (optional)','label'),sound=el('input');sound.name='sound';sound.id='video-sound';sound.className='field';sound.maxLength=500;sound.placeholder='e.g. birdsong, flowing water, soft wind';soundLabel.htmlFor=sound.id;soundBlock.append(soundLabel,sound,el('small','AI sound follows the scene and your description. Specific dialogue, music or voices are not guaranteed.','subtitle'));v.form.append(soundBlock);v.form.elements.audio.addEventListener('change',()=>{sound.disabled=v.form.elements.audio.value==='Silent';});
     if(mode==='talking'){
       v.form.elements.audio.value='AI scene sound';v.form.elements.audio.closest('.block').hidden=true;
