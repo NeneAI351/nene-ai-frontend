@@ -6,19 +6,19 @@
  async function account(ui){
   const version=++ui.version;
   try{const owner=await window.neneAuthGetUserId?.();if(version!==ui.version||!ui.root.isConnected)return;
-   ui.signin.hidden=!!owner;ui.badge.textContent=owner?'Signed in':'Sign in to create';ui.badge.classList.toggle('is-connected',!!owner);
-  }catch(_){if(version===ui.version){ui.signin.hidden=false;ui.badge.textContent='Check your sign-in';}}
+   ui.signin.hidden=!!owner;if(ui.compactAccount)ui.bar.hidden=!!owner;ui.badge.textContent=owner?'Signed in':'Sign in to create';ui.badge.classList.toggle('is-connected',!!owner);
+  }catch(_){if(version===ui.version){ui.signin.hidden=false;ui.bar.hidden=false;ui.badge.textContent='Check your sign-in';}}
  }
  function enhance(options){
   for(const old of views)if(!old.root.isConnected){old.observer.disconnect();old.emptyObserver?.disconnect();views.delete(old);}
   const {root,form,signin,check,refresh,review,generate,jobs,getState}=options;
   root.classList.add('creation-studio');
-  const ui={root,signin,version:0},bar=node('div',undefined,'studio-account'),badge=node('span','Checking account…','studio-account-status');ui.badge=badge;
+  const ui={root,signin,version:0},bar=node('div',undefined,'studio-account'),badge=node('span','Checking account…','studio-account-status');ui.badge=badge;ui.bar=bar;ui.compactAccount=options.compactAccount===true;
   signin.textContent='Sign in';signin.classList.add('studio-text-button');bar.append(badge,signin);
   if(check){check.textContent='Refresh';check.title='Refresh availability and saved work';check.classList.add('studio-text-button');bar.append(check);}
   const heading=root.querySelector('.toolhead');if(heading)heading.after(bar);else root.prepend(bar);
   const notes=[...root.children].filter(n=>n.matches('p.notice')&&!n.id);
-  if(notes.length){const details=node('details',undefined,'studio-info');details.append(node('summary','About credits and output'));for(const note of notes)details.append(note);const anchor=form||root.querySelector('label');if(anchor)anchor.before(details);else bar.after(details);}
+  if(notes.length){const details=node('details',undefined,'studio-info');details.append(node('summary','About credits and output'));for(const note of notes)details.append(note);const anchor=form||root.querySelector('label');if(ui.compactAccount&&check){check.textContent='Check availability';details.append(check);}if(anchor)anchor.before(details);else bar.after(details);}
   if(options.settings){const target=form||root;const blocks=[...target.children].filter(n=>n.classList.contains('block')&&n.querySelector('select'));
    if(blocks.length){const settings=node('section',undefined,'studio-settings'),grid=node('div',undefined,'studio-settings-grid');settings.append(node('h2','Creation settings'),grid);blocks[0].before(settings);for(const block of blocks){grid.append(block);const select=block.querySelector('select');for(const option of select.options){if(/^\d+$/.test(option.value)&&/duration/i.test(select.name+' '+select.id))option.textContent=option.value+' seconds';if(['16:9','9:16','1:1'].includes(option.value))option.textContent=option.value+' · '+({'16:9':'Landscape','9:16':'Portrait','1:1':'Square'}[option.value]);}}}
   }

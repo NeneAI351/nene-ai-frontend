@@ -422,7 +422,7 @@
       let afterForm=false;for(const child of [...root.children]){if(child===v.form){afterForm=true;continue;}if(afterForm&&child!==signin&&child!==check)details.append(child);}
     }
     document.getElementById('screen').replaceChildren(root);
-    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,getState:()=>v,settings:false});
+    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,getState:()=>v,settings:false,compactAccount:true});
     await checkAccount(v);
   };
   const oldFeature=window.openFeature;
