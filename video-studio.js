@@ -83,8 +83,9 @@
   }
   function selectAvailableEngine(v){
     const provider=v.form.elements.provider;
-    if(provider.selectedOptions[0]?.disabled && !v.backupOption.disabled){
-      provider.value='magic-hour';v.updateProvider();
+    const available=[...provider.options].find(option=>!option.disabled);
+    if(provider.selectedOptions[0]?.disabled && available){
+      provider.value=available.value;v.updateProvider();
     }
   }
   async function review(v){
@@ -93,6 +94,7 @@
       if(!await window.neneRequireAccount?.('Sign in to review your video.'))return;
       if(!v.owner)await checkAccount(v);
       v.busy=true;v.review.disabled=true;
+      if(v.form.elements.provider.selectedOptions[0]?.disabled)throw Error('No video engine is available for this tool right now.');
       const recordingData=v.audioData;
       if(v.mode==='talking'&&v.form.elements.speechMode.value==='Upload voice recording'&&!v.audioAsset){
         if(!v.audioData)throw Error('Choose a voice recording first.');
