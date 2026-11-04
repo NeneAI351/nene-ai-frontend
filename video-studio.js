@@ -299,13 +299,36 @@
       const videos=Array.isArray(data.videos)?data.videos.filter(video=>UUID.test(video.id)):[];
       root.replaceChildren();
       if(!videos.length){root.textContent='No finished videos yet.';return;}
-      for(const video of videos){
-        const button=el('button',video.title||'Finished video','btn');
-        button.type='button';
-        button.setAttribute('aria-label','Play '+button.textContent);
-        const mode=video.generation_type==='image-to-video'?'image':video.generation_type==='audio-to-video'?'talking':'text';
-        button.onclick=()=>window.neneOpenVideoStudio(mode,{savedVideoId:video.id,savedVideoOwner:owner});
-        root.append(button);
+      for(const [index, item] of videos.entries()){
+        const card=el('article',undefined,'block');
+        const title=(item.title||'').split(/Production preferences|Production guidance/)[0].trim().replace(/^Scene brief:\s*/,'')||'Finished video';
+        const player=el('video');
+        player.controls=true;player.playsInline=true;player.preload='metadata';
+        player.style.cssText='width:100%;aspect-ratio:16/9;background:#000;border-radius:12px';
+        player.setAttribute('aria-label',title);
+        const play=el('button','▶ Play video','btn');
+        play.type='button';
+        const status=el('p',undefined,'subtitle');status.setAttribute('role','status');
+        const load=async autoplay=>{
+          play.disabled=true;
+          try{
+            const media=await api({owner},`/api/generations/${item.id}/media-url`);
+            if(!current())return;
+            const url=new URL(media.url);
+            if(url.protocol!=='https:')throw Error('Invalid private playback URL.');
+            if(player.src!==url.href)player.src=url.href;
+            status.textContent='';
+            if(autoplay){
+              try{await player.play();}catch(_){if(current())status.textContent='Tap the play control on the video.';}
+            }
+          }catch(_){if(current()&&autoplay)status.textContent='The video could not load. Tap Play video to retry.';}
+          finally{if(current())play.disabled=false;}
+        };
+        player.onerror=()=>{if(current())status.textContent='Playback could not load. Tap Play video to refresh access.';};
+        play.onclick=()=>load(true);
+        card.append(player,el('p',title,'subtitle'),play,status);
+        root.append(card);
+        if(index===0)void load(false);
       }
     }catch(_){if(current())root.textContent='Your videos could not load. Reopen My Creations to try again.';}
   };
@@ -356,7 +379,7 @@
       for(const input of [dialogue,ttsVoice]){input.addEventListener('input',()=>{v.speechQuote=null;v.approvedSpeech=null;v.audioAsset=null;v.voiceGenerate.disabled=true;v.voiceGenerate.textContent='Review voice price before generating';});}
     }
     const block=el('div',undefined,'block'),label=el('label',mode==='image'?'Describe the motion':'Your prompt','label'),input=el('textarea');input.id='prompt';input.name='idea';input.maxLength=10000;input.placeholder=mode==='image'?'What should move? Describe the action and camera direction…':'Describe the subject, action, setting and mood…';label.htmlFor=input.id;block.append(label,input);
-    if(mode==='text'){const assist=el('button','✨ Enhance my prompt','btn');assist.type='button';assist.onclick=()=>window.enhanceNenePrompt?.();block.append(assist,el('small','Preview and edit your prompt before applying changes.','subtitle'));}v.form.append(block);
+    if(mode==='text'||mode==='image'){const assist=el('button','✨ Enhance my prompt','btn');assist.type='button';assist.onclick=()=>window.enhanceNenePrompt?.();block.append(assist,el('small','Preview and edit your prompt before applying changes.','subtitle'));}v.form.append(block);
     const idFor={style:'neneStyle',shot:'neneShot',camera:'neneCamera',lighting:'neneLighting',motion:'neneMotion',duration:'neneDuration',resolution:'neneResolution',ratio:'neneAspectRatio',audio:'neneAudio'};
     const group=el('div',undefined,'video-options');
     for(const [name,label,options] of [['style','Visual style',['Cinematic','Photorealistic','Animated','3D','Documentary']],['shot','Framing',['Medium shot','Close-up','Wide establishing shot','Tracking shot']],['camera','Camera',['Smooth cinematic camera','Static locked camera','Slow dolly-in','Gentle tracking shot','Slow orbit']],['lighting','Lighting',['Natural cinematic lighting','Golden-hour lighting','Soft diffused lighting','Dramatic high-contrast lighting']],['motion','Motion',['Natural, realistic movement','Slow, elegant movement','Subtle movement with stable framing','Energetic dynamic movement']],['duration','Duration',['6','8','10']],['resolution','Resolution',['720p','1080p']],['ratio','Format',['16:9','9:16','1:1']],['audio','Sound',['AI scene sound','Silent']]]){
@@ -397,10 +420,6 @@
     document.getElementById('screen').replaceChildren(root);
     window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,jobs:v.jobs,getState:()=>v,settings:false});
     await checkAccount(v);
-    if(alive(v)&&UUID.test(options.savedVideoId)&&v.owner===options.savedVideoOwner){
-      await poll(v,options.savedVideoId,0);
-      if(alive(v))v.output.scrollIntoView?.({block:'nearest'});
-    }
   };
   const oldFeature=window.openFeature;
   window.openFeature=function(type,...args){return type==='voice'?window.neneOpenVideoStudio('talking',{voiceOnly:true}):oldFeature.call(this,type,...args);};
