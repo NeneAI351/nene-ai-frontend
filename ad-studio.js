@@ -65,7 +65,7 @@
       const d=draft(v);v.busy=true;v.review.disabled=true;v.generate.disabled=true;
       const catalog=await api(v,'/api/providers');
       const engine=['ltx','magic-hour'].find(id=>catalog.providers?.some(provider=>provider.id===id&&provider.available===true&&provider.generation_types?.includes('text-to-video')));
-      if(!engine)throw Error('No advertisement video engine is available right now.');
+      if(!engine)throw Error('Advertisement creation is temporarily unavailable. Please try again later.');
       const body=payload(d,engine);
       const q=await api(v,'/api/pricing/quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:body.provider,model:body.model,resolution:body.resolution,duration:body.duration})});
       const amount=Number(q.recommended_credits);
@@ -74,7 +74,7 @@
       v.quote={draft:JSON.stringify(d),body,cost:String(q.recommended_credits)};
       v.generate.textContent=`Generate advertisement · ${q.recommended_credits} paid credits`;
       v.generate.disabled=!v.accepting;
-      say(v,`${engine==='magic-hour'?'Magic Hour':'LTX'} · ${q.recommended_credits} paid credits for this video. Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate advertisement.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
+      say(v,`${q.recommended_credits} paid credits for this video. Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate advertisement.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
     }catch(error){say(v,error.message);}finally{v.busy=false;if(alive(v)&&!v.pending)v.review.disabled=false;}
   }
   function rememberJob(v,id,title){
@@ -111,7 +111,7 @@
       if(error.status===409 && error.message==='generation_engine_unavailable'){
         localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
         v.generate.textContent='Review price before generating';
-        say(v,'The original engine is unavailable. No video was submitted or credits reserved. Review the current price to continue.');
+        say(v,'No video was submitted and no credits were reserved. Review the current price to continue.');
         return;
       }
       const definiteRejection=[400,401,402,403,422].includes(error.status)||(error.status===409 && /price increased/i.test(error.message));
