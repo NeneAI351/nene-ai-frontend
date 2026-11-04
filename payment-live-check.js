@@ -3,6 +3,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const base = window.NENE_DIRECTOR_CONFIG?.backendUrl?.replace(/\/$/, '');
+  const publicCheckout = document.body.dataset.publicCheckout === 'true';
   const referencePattern = /^nene_[0-9a-f]{32}$/;
   const storageKey = owner => 'nene-payment-live-v1:' + owner;
   let epoch = 0, owner = null, busy = false, ready = false, salesReady = false, order = null;
@@ -19,6 +20,11 @@
     $('testCreate').disabled = busy || !salesReady || !owner || !!order;
     $('testPackage').disabled = busy || !salesReady || !!order;
     $('testEmail').disabled = busy || !!order;
+    if (publicCheckout) {
+      $('testVerify').hidden = !order;
+      $('testNew').hidden = !order;
+      $('testCreate').hidden = !!order;
+    }
     $('testVerify').disabled = busy || !ready || !owner || !order;
     $('testNew').disabled = busy || !order;
     $('testCheckoutLink').hidden = busy || !salesReady || !order?.url;
@@ -45,11 +51,17 @@
     try {
       if (base !== 'https://nene-ai.onrender.com') throw Error('This screen only connects to NENE AI production.');
       const id = await window.neneAuthGetUserId?.();
+      if (version !== epoch) return;
+      if (publicCheckout) {
+        $('creditAuthSummary').textContent = id ? 'Signed in' : 'Sign in to buy credits for your account.';
+        $('testSignIn').hidden = !!id;
+        $('testAccount').hidden = !id;
+      }
       const packages = await api('/api/payments/packages');
       if (version !== epoch) return;
       if (packages.mode !== 'live') throw Error('Live checkout is locked because this server is not in live mode.');
       let generationReady = true;
-      if (document.body.dataset.publicCheckout === 'true') {
+      if (publicCheckout) {
         try { const generation = await api('/api/generation-availability'); generationReady = generation.accepting_requests === true; }
         catch (_) { generationReady = false; }
         if (version !== epoch) return;
@@ -59,7 +71,7 @@
       $('testPackage').replaceChildren();
       for (const item of packages.packages) {
         const option = document.createElement('option'); option.value = item.id;
-        option.textContent = item.name + ' · ' + item.credits + ' credits · ₦' + Number(item.amount_ngn).toLocaleString() + ' (real payment)';
+        option.textContent = item.name + ' · ' + item.credits + ' credits · ₦' + Number(item.amount_ngn).toLocaleString() + (publicCheckout ? '' : ' (real payment)');
         $('testPackage').append(option);
       }
       owner = id || null; ready = true;
@@ -69,7 +81,7 @@
         if (saved?.owner === owner && referencePattern.test(saved.reference))
           order = {reference:saved.reference, url:checkoutUrl(saved.url) ? saved.url : null};
       }
-      status(!salesReady ? (order ? 'New purchases are temporarily closed. Your saved payment can still be checked below. Do not pay again.' : 'Live checkout is locked: purchases are temporarily closed while generation is prepared. No payment has been started.') : owner ? (order ? 'Saved live payment restored. Check its status before starting another.' : 'Ready. Create a live checkout when you are ready.') : 'Sign in with a NENE AI account, then finish account setup.');
+      status(!salesReady ? (order ? 'New purchases are temporarily closed. Your saved payment can still be checked below. Do not pay again.' : 'Live checkout is locked: purchases are temporarily closed while generation is prepared. No payment has been started.') : owner ? (order ? 'Saved live payment restored. Check its status before starting another.' : (publicCheckout ? '' : 'Ready. Create a live checkout when you are ready.')) : 'Sign in with a NENE AI account, then finish account setup.');
     } catch (error) { if (version === epoch) status(error.message); }
     finally { if (version === epoch) draw(); }
   }
