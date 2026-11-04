@@ -284,6 +284,31 @@
       if(attempt<120)v.speechTimer=setTimeout(()=>pollSpeech(v,job,attempt+1),5000);
     }catch(e){speechSay(v,e.message+' Use Saved voice tracks to check the same job again.');}
   }
+  window.neneLoadFinishedVideos=async function(root){
+    if(!root)return;
+    root.textContent='Loading your finished videos…';
+    const request=Symbol();
+    root.videoRequest=request;
+    const current=()=>root.isConnected && root.videoRequest===request;
+    try{
+      const owner=await window.neneAuthGetUserId?.();
+      if(!current())return;
+      if(!owner){root.textContent='Sign in to see your finished videos.';return;}
+      const data=await api({owner},'/api/generations');
+      if(!current())return;
+      const videos=Array.isArray(data.videos)?data.videos.filter(video=>UUID.test(video.id)):[];
+      root.replaceChildren();
+      if(!videos.length){root.textContent='No finished videos yet.';return;}
+      for(const video of videos){
+        const button=el('button',video.title||'Finished video','btn');
+        button.type='button';
+        button.setAttribute('aria-label','Play '+button.textContent);
+        const mode=video.generation_type==='image-to-video'?'image':video.generation_type==='audio-to-video'?'talking':'text';
+        button.onclick=()=>window.neneOpenVideoStudio(mode,{savedVideoId:video.id,savedVideoOwner:owner});
+        root.append(button);
+      }
+    }catch(_){if(current())root.textContent='Your videos could not load. Reopen My Creations to try again.';}
+  };
   window.neneOpenVideoStudio=async function(mode='text',options={}){
     if(!['text','image','talking'].includes(mode))return;
     if(active?.busy){toast('Please wait for the current video request.');return;}
@@ -372,10 +397,15 @@
     document.getElementById('screen').replaceChildren(root);
     window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,jobs:v.jobs,getState:()=>v,settings:false});
     await checkAccount(v);
+    if(alive(v)&&UUID.test(options.savedVideoId)&&v.owner===options.savedVideoOwner){
+      await poll(v,options.savedVideoId,0);
+      if(alive(v))v.output.scrollIntoView?.({block:'nearest'});
+    }
   };
   const oldFeature=window.openFeature;
   window.openFeature=function(type,...args){return type==='voice'?window.neneOpenVideoStudio('talking',{voiceOnly:true}):oldFeature.call(this,type,...args);};
   window.addEventListener('nene-auth-changed',()=>{
+    window.neneLoadFinishedVideos(document.getElementById('neneFinishedVideos'));
     const v=active;if(!v||!alive(v))return;
     document.querySelectorAll('.video-choice-overlay').forEach(e=>e.remove());clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();v.backupAvailable=false;v.backupOption.disabled=true;v.form.elements.provider.options[0].disabled=false;v.updateProvider();v.updateSpeechUI?.();v.imageData=null;v.sourceImageId=null;v.audioData=null;v.audioAsset=null;v.approvedSpeech=null;v.speechQuote=null;v.speechSelected=null;clearTimeout(v.speechTimer);if(v.voiceOutput)v.voiceOutput.replaceChildren();if(v.voiceJobs)v.voiceJobs.replaceChildren();if(v.voiceGenerate)v.voiceGenerate.disabled=true;if(v.audioFile)v.audioFile.value='';if(v.preview){v.preview.removeAttribute('src');v.preview.style.display='none';}for(const button of v.form.querySelectorAll('[data-choice-for]'))button.textContent=displayValue(button.dataset.choiceFor,v.form.elements[button.dataset.choiceFor].value);lock(v,false);v.generate.disabled=true;
     say(v,'Account changed. Check your account and availability before continuing.');
