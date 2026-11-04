@@ -326,7 +326,9 @@
         };
         player.onerror=()=>{if(current())status.textContent='Playback could not load. Tap Play video to refresh access.';};
         play.onclick=()=>load(true);
-        card.append(player,el('p',title,'subtitle'),play,status);
+        const report=el('button','Report AI content','btn');report.type='button';
+        report.onclick=()=>window.neneOpenOutputReport?.({kind:'video',id:item.id,owner});
+        card.append(player,el('p',title,'subtitle'),play,status,report);
         root.append(card);
         if(index===0)void load(false);
       }
