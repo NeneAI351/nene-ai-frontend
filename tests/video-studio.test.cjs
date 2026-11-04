@@ -109,3 +109,28 @@ test('backup image requests match the source and signing out resets the engine o
 test('a pending backup retry retains its provider and key after the backup is locked',async()=>{
  const first=await setup({backup:true,fail:true}),d=first.w.document;d.getElementById('video-provider').value='magic-hour';d.getElementById('video-provider').dispatchEvent(new first.w.Event('change',{bubbles:true}));await review(first);d.getElementById('video-generate').click();await settle();const previous=submissions(first)[0],pending=JSON.parse(first.w.localStorage.getItem(`nene_video_text_pending_v1:${USER}`));first.dom.window.close();const retry=await setup({pending,backup:false});assert.equal(retry.w.document.getElementById('video-provider').disabled,true);retry.w.document.getElementById('video-generate').click();await settle();assert.equal(submissions(retry)[0].options.body,previous.options.body);assert.equal(submissions(retry)[0].options.headers['Idempotency-Key'],previous.options.headers['Idempotency-Key']);retry.dom.window.close();
 });
+
+test('finished image videos play in My Creations and Image to Video offers Prompt Assist',async()=>{
+ const s=await setup({mode:'image'}),d=s.w.document;
+ let enhanced=false;s.w.enhanceNenePrompt=()=>{enhanced=true;};
+ [...d.querySelectorAll('button')].find(button=>button.textContent.includes('Enhance my prompt')).click();
+ assert.equal(enhanced,true);
+ const root=d.createElement('div');d.getElementById('screen').replaceChildren(root);
+ const requests=[];
+ s.w.fetch=async(url,options)=>{
+  requests.push({url,options});
+  const data=url.endsWith('/media-url')?{url:'https://private.test/video.mp4?temporary-link'}:{videos:[{id:JOB,generation_type:'image-to-video',title:'Smile and wave Production preferences: style'}]};
+  return {ok:true,json:async()=>data};
+ };
+ let played=false;s.w.HTMLMediaElement.prototype.play=async()=>{played=true;};
+ await s.w.neneLoadFinishedVideos(root);await settle();
+ const video=root.querySelector('video');
+ assert.equal(video.getAttribute('aria-label'),'Smile and wave');
+ assert.match(video.src,/^https:\/\/private\.test/);
+ [...root.querySelectorAll('button')].find(button=>button.textContent.includes('Play video')).click();
+ await settle();
+ assert.equal(played,true);
+ assert.equal(root.isConnected,true);
+ assert.ok(requests.every(({options})=>!options.method));
+ s.dom.window.close();
+});
