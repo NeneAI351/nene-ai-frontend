@@ -43,6 +43,13 @@
       if(!v.imageData&&!v.sourceImageId)throw new Error('Choose a source image first.');
       prompt+='\nUse the supplied source image as the visual anchor. Preserve its subject and appearance while applying only the requested motion. Exact visual identity is not guaranteed.';
     }
+    if(v.mode==='image'){
+      prompt=[d.idea,
+        'Animate the supplied photograph. Preserve the same person throughout: facial structure, eyes, nose, mouth, skin tone, age, hair, clothing and body proportions.',
+        'Keep the original photographic appearance, lighting and background. Do not restyle, beautify, replace, morph or redraw the face. Apply only the requested movement, with natural small changes between frames.',
+        'Camera direction: '+d.camera+'. Motion preference: '+d.motion+'.'
+      ].join('\n');
+    }
     if(d.audio==='AI scene sound'&&d.sound)prompt+='\nSound direction: '+d.sound;
     if(v.mode==='talking'){
       if(d.audio!=='AI scene sound')throw Error('Talking characters require sound.');
