@@ -21,9 +21,9 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="neneai351.github.io" android:pathPrefix="/nene-ai-frontend/" />
+                <data android:scheme="https" android:host="neneai.app" android:path="/" />
             </intent-filter>
-            <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL" android:value="https://neneai351.github.io/nene-ai-frontend/" />
+            <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL" android:value="https://neneai.app/" />
             <meta-data android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR" android:resource="@color/background" />
             <meta-data android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR" android:resource="@color/background" />
             <meta-data android:name="android.support.customtabs.trusted.FALLBACK_STRATEGY" android:value="customtabs" />
