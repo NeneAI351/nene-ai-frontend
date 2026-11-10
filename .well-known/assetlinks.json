@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.neneai.app",
+      "sha256_cert_fingerprints": [
+        "87:E3:ED:59:5D:72:54:BF:70:67:06:4B:1C:3D:15:47:E6:8F:AC:1E:DD:DF:56:EB:A8:04:EA:4A:76:3F:09:8D"
+      ]
+    }
+  }
+]
