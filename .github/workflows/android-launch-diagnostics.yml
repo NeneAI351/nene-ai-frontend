@@ -1,0 +1,51 @@
+name: Android launch diagnostics
+on:
+  push:
+    branches: [build/android-launch-diagnostics]
+permissions:
+  contents: read
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Enable KVM for Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Build the unchanged launcher
+        working-directory: android
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+          gradle --no-daemon :app:assembleDebug
+      - name: Launch Android 14 and inspect for startup crashes
+        run: |
+          set -euo pipefail
+          sdkmanager 'emulator' 'system-images;android-34;google_apis;x86_64'
+          printf 'no\n' | avdmanager create avd --name nene-launch --package 'system-images;android-34;google_apis;x86_64'
+          emulator -avd nene-launch -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect >/tmp/nene-emulator.log 2>&1 &
+          trap 'cat /tmp/nene-emulator.log | tail -30' EXIT
+          timeout 180 adb wait-for-device
+          for attempt in $(seq 1 90); do
+            if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then break; fi
+            sleep 2
+          done
+          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
+          adb shell input keyevent 82
+          adb install android/app/build/outputs/apk/debug/app-debug.apk
+          adb logcat -c
+          adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n com.neneai.app.internal/com.google.androidbrowserhelper.trusted.LauncherActivity
+          sleep 5
+          adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true
+          adb logcat -d -s AndroidRuntime:E TwaLauncher:D LauncherActivity:D
+          ! adb logcat -d -b crash | grep -F 'Process: com.neneai.app.internal,'
