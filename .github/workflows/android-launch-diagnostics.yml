@@ -36,9 +36,15 @@ jobs:
           set -euo pipefail
           sdkmanager 'emulator' 'system-images;android-34;google_apis;x86_64'
           printf 'no\n' | avdmanager create avd --name nene-launch --package 'system-images;android-34;google_apis;x86_64'
-          emulator -avd nene-launch -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect >/tmp/nene-emulator.log 2>&1 &
-          trap 'cat /tmp/nene-emulator.log | tail -30' EXIT
-          timeout 180 adb wait-for-device
+          "$ANDROID_HOME/emulator/emulator" -avd nene-launch -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect >/tmp/nene-emulator.log 2>&1 &
+          trap 'tail -30 /tmp/nene-emulator.log' EXIT
+          emulator_pid=$!
+          for attempt in $(seq 1 90); do
+            kill -0 "$emulator_pid"
+            if adb get-state 2>/dev/null | grep -qx device; then break; fi
+            sleep 2
+          done
+          adb get-state | grep -qx device
           for attempt in $(seq 1 90); do
             if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then break; fi
             sleep 2
