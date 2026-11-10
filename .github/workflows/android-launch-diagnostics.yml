@@ -26,35 +26,38 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Build the unchanged launcher
+      - name: Build both launcher variants
         working-directory: android
         run: |
-          sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
-          gradle --no-daemon :app:assembleDebug
-      - name: Launch Android 14 and inspect for startup crashes
-        run: |
           set -euo pipefail
-          sdkmanager 'emulator' 'system-images;android-34;google_apis;x86_64'
-          printf 'no\n' | avdmanager create avd --name nene-launch --package 'system-images;android-34;google_apis;x86_64'
-          "$ANDROID_HOME/emulator/emulator" -avd nene-launch -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect >/tmp/nene-emulator.log 2>&1 &
-          trap 'tail -30 /tmp/nene-emulator.log' EXIT
-          emulator_pid=$!
-          for attempt in $(seq 1 90); do
-            kill -0 "$emulator_pid"
-            if adb get-state 2>/dev/null | grep -qx device; then break; fi
-            sleep 2
-          done
-          adb get-state | grep -qx device
-          for attempt in $(seq 1 90); do
-            if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then break; fi
-            sleep 2
-          done
-          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
-          adb shell input keyevent 82
-          adb install android/app/build/outputs/apk/debug/app-debug.apk
-          adb logcat -c
-          adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n com.neneai.app.internal/com.google.androidbrowserhelper.trusted.LauncherActivity
-          sleep 5
-          adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true
-          adb logcat -d -s AndroidRuntime:E TwaLauncher:D LauncherActivity:D
-          ! adb logcat -d -b crash | grep -F 'Process: com.neneai.app.internal,'
+          sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+          manifest=app/src/main/AndroidManifest.xml
+          cp "$manifest" /tmp/nene-manifest-fixed.xml
+          git show 46644536c2aa60ccbcf8f18a0ace0e376b2c67e5:android/app/src/main/AndroidManifest.xml > "$manifest"
+          gradle --no-daemon :app:assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/nene-original.apk
+          cp /tmp/nene-manifest-fixed.xml "$manifest"
+          gradle --no-daemon :app:assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/nene-fixed.apk
+      - name: Compare Android 14 launcher behavior
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install /tmp/nene-original.apk
+            adb logcat -c
+            adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n com.neneai.app.internal/com.google.androidbrowserhelper.trusted.LauncherActivity
+            sleep 5
+            adb logcat -d -b crash | tee /tmp/nene-original-crash.txt
+            adb uninstall com.neneai.app.internal
+            adb install /tmp/nene-fixed.apk
+            adb logcat -c
+            adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n com.neneai.app.internal/com.google.androidbrowserhelper.trusted.LauncherActivity
+            sleep 5
+            adb logcat -d -b crash | tee /tmp/nene-fixed-crash.txt
+            adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity'
+            ! grep -F 'Process: com.neneai.app.internal,' /tmp/nene-fixed-crash.txt
