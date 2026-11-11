@@ -122,7 +122,7 @@ window.NENEBackend={
 };
 </script>
 
-<link rel="stylesheet" href="./layout.css?v=50">
+<link rel="stylesheet" href="./layout.css?v=56">
 <link rel="stylesheet" href="./video-studio.css?v=50">
 <link rel="stylesheet" href="./studio-ui.css?v=50">
 <link rel="stylesheet" href="./video-editor.css?v=50">
@@ -1035,14 +1035,14 @@ resumeActiveNeneJobs();
  <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=54', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=56', {updateViaCache:'none'}).then(reg => { try { reg.update(); } catch (_) {} }).catch(() => {});
   });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3"></script>
 <script src="./auth-config.js?v=53"></script>
 <script src="./account-setup.js?v=50"></script>
-<script src="./profile.js?v=50"></script>
+<script src="./profile.js?v=56"></script>
 <script src="./characters.js?v=50"></script>
 <script src="./script-writer.js?v=50"></script>
 <script src="./editor-model.js?v=50"></script>
