@@ -87,6 +87,7 @@
   const pageMethods=['renderHome','renderCreations','renderProfile','renderCreateHub','renderProjects','renderJobCenter','openFeature','openTool','openProject','neneOpenStudio','neneOpenDirector','neneOpenScriptWriter','neneOpenVideoStudio','neneOpenSocialContent','neneOpenAdvertisement','neneOpenVideoEditor'];
   const validPage=p=>p&&pageMethods.includes(p.method)&&(p.arg===undefined||typeof p.arg==='string'&&/^[a-zA-Z0-9_-]{1,80}$/.test(p.arg));
   if(!validPage(pendingPage)||pendingPage.method==='renderHome')pendingPage=null;
+  if(pendingPage)appScreen?.setAttribute('aria-busy','true');
   for(const method of pageMethods){
     const original=window[method];if(typeof original!=='function')continue;
     window[method]=function(...args){
@@ -109,7 +110,7 @@
       if(!owner||!pendingPage||pendingPage.owner!==owner){try{sessionStorage.removeItem(pageKey);}catch(_){}return;}
       if(typeof window[pendingPage.method]==='function')await window[pendingPage.method](pendingPage.arg);
     }catch(_){try{sessionStorage.removeItem(pageKey);}catch(_){}window.renderHome?.();}
-    finally{booting=false;pendingPage=null;appScreen?.dispatchEvent(new Event('nene-page-restored'));}
+    finally{booting=false;pendingPage=null;document.documentElement.removeAttribute('data-nene-restoring');appScreen?.removeAttribute('aria-busy');appScreen?.dispatchEvent(new Event('nene-page-restored'));}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>void restorePage(),{once:true});else void restorePage();
 
