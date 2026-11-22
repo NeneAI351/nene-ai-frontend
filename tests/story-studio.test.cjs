@@ -135,3 +135,14 @@ test('480p is offered only for a supporting story adapter',async()=>{
   assert.equal(values.includes('480p'),provider==='magic-hour');dom.window.close();
  }
 });
+
+test('creating stays visible until the backend completes the film; errors never show Done',async()=>{
+ const s=await setup();const button=s.w.document.createElement('button');button.id='neneGenerateStoryScenesBtn';s.w.document.querySelector('main').append(button);
+ const original=s.w.fetch;let finish;
+ s.w.fetch=async(url,options)=>url.endsWith('/assembly')?new Promise(resolve=>{finish=()=>resolve({ok:true,json:async()=>({assembly:{status:'succeeded'}})});}):original(url,options);
+ await s.w.neneGenerateDurableStory(plan);s.w.document.querySelector('dialog .gold').click();
+ assert.equal(button.textContent,'Creating…');assert.equal(button.disabled,true);
+ await settle();assert.equal(button.textContent,'Combining…');assert.doesNotMatch(s.w.document.getElementById('neneStoryProgress').textContent,/^Done/);
+ finish();await settle();assert.equal(button.textContent,'Done');assert.match(s.w.document.getElementById('neneStoryProgress').textContent,/saved to My Creations/);s.dom.window.close();
+ const failed=await setup({fail:true});await failed.w.neneGenerateDurableStory(plan);failed.w.document.querySelector('dialog .gold').click();await settle();assert.equal(failed.w.document.getElementById('neneStoryProgress').dataset.state,'Check saved progress');failed.dom.window.close();
+});

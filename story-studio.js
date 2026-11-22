@@ -25,6 +25,13 @@
   }
   const send=(owner,path,body,method='POST',idempotency)=>api(owner,path,{method,headers:{'Content-Type':'application/json',...(idempotency?{'Idempotency-Key':idempotency}:{})},...(body!==undefined?{body:JSON.stringify(body)}:{})});
   function message(text){let box=document.getElementById('neneStoryProgress');if(!box){box=node('div');box.id='neneStoryProgress';box.className='notice';box.setAttribute('role','status');document.querySelector('main')?.append(box);}box.textContent=text;}
+  function progress(label,text){
+    message(text);
+    const box=document.getElementById('neneStoryProgress');box.dataset.state=label;box.setAttribute('aria-live','polite');
+    const button=document.getElementById('neneGenerateStoryScenesBtn');
+    if(button){button.textContent=label;button.disabled=['Creating…','Combining…','Done'].includes(label);}
+  }
+  const statusLabel=status=>status==='succeeded'||status==='completed'?'Done':status==='failed'?'Failed':status==='queued'?'Queued':status==='pending'?'Not started':'Creating…';
   function prepare(plan,profile){
     const duration=Number(document.getElementById('neneDuration')?.value),resolution=document.getElementById('neneResolution')?.value;
     if(![6,8,10].includes(duration)||!(profile.resolutions||['720p','1080p']).includes(resolution))throw Error('Choose a supported scene length and quality.');
@@ -73,7 +80,7 @@
     player.onended=()=>{if(scenes[current+1]?.status==='succeeded')void playScene(current+1).catch(e=>message(e.message));};
     box.append(action('Preview scenes in order',()=>playScene(0)));
     for(const scene of scenes){
-      const row=node('div');row.append(node('p',`Scene ${scene.scene_index+1} · ${scene.status}`));
+      const row=node('div');row.append(node('p',`Scene ${scene.scene_index+1} · ${statusLabel(scene.status)}`));
       if(scene.status==='succeeded')row.append(action('Preview scene '+(scene.scene_index+1),()=>playScene(scene.scene_index)));
       if(scene.status==='failed')row.append(action('Review retry for scene '+(scene.scene_index+1),async()=>{
         if(busy)return;
@@ -105,17 +112,18 @@
   }
   async function assemble(state){
     if(state.owner!==await window.neneAuthGetUserId?.())throw Error('Sign in to the same account.');
-    message('Combining your story with its scene sound…');
+    progress('Combining…','Combining your story with its scene sound…');
     await send(state.owner,`/api/stories/${state.storyId}/assemble`,undefined,'POST',`story:${state.storyId}:assembly:v1`);
     await poll(state,`/api/stories/${state.storyId}/assembly`,d=>d.assembly,d=>d?.status==='succeeded');
     const url=await secureMedia(state.owner,`/api/stories/${state.storyId}/video`);
     document.querySelectorAll('video[data-story-result]').forEach(n=>n.remove());
     const video=node('video');video.dataset.storyResult='true';video.controls=true;video.playsInline=true;video.src=url;video.style.cssText='width:100%;border-radius:14px';document.querySelector('main')?.append(video);
-    state.completed=true;save(state);await workspace(state);message('Your story film is saved to My Creations. Preview, edit or watch it here.');
+    state.completed=true;save(state);await workspace(state);progress('Done','Done — your story film is saved to My Creations. Preview, edit or watch it here.');
   }
-  async function poll(state,path,extract,done){
+  async function poll(state,path,extract,done,onStatus){
     for(let i=0;i<130;i++){
       const data=extract(await api(state.owner,path));
+      if(onStatus)onStatus(data);
       if(done(data))return data;
       if(['failed','cancelled','canceled','rejected'].includes(data?.status))throw Error('A story job stopped. Your saved story remains available; no replacement job was submitted.');
       await new Promise(resolve=>setTimeout(resolve,7000));
@@ -124,6 +132,7 @@
   }
   async function run(state){
     if(busy)return;busy=true;
+    progress('Creating…','Creating… checking your saved story progress.');
     try{
       // Saving before any paid request is mandatory. If storage fails, stop.
       if(state.storyId){const stored=await api(state.owner,`/api/stories/${state.storyId}`);for(const scene of state.scenes){const remote=stored.scenes?.find(s=>s.scene_index===scene.scene_index);if(remote?.generation_id){scene.generationId=remote.generation_id;scene.linked=true;}}}
@@ -150,7 +159,7 @@
         state.scenesSaved=true;save(state);
       }
       for(const scene of state.scenes){
-        message(`Scene ${scene.scene_index+1}/${state.scenes.length}: checking saved progress…`);
+        progress('Creating…',`Creating… scene ${scene.scene_index+1} of ${state.scenes.length}. Checking saved progress…`);
         if(!scene.generationId){
           scene.requestKey=scene.requestKey||crypto.randomUUID();save(state);
           const accepted=await send(state.owner,'/api/generations',scene.body,'POST',scene.requestKey);
@@ -158,12 +167,12 @@
           scene.generationId=accepted.generation_id;save(state);
         }
         if(!scene.linked){await send(state.owner,`/api/stories/${state.storyId}/scenes/${scene.scene_index}/generation`,{generation_id:scene.generationId});scene.linked=true;save(state);}
-        await poll(state,`/api/generations/${scene.generationId}`,d=>d.generation||d,d=>d?.status==='succeeded');
+        await poll(state,`/api/generations/${scene.generationId}`,d=>d.generation||d,d=>d?.status==='succeeded',d=>progress('Creating…',`Creating… scene ${scene.scene_index+1} of ${state.scenes.length} · ${statusLabel(d?.status)}`));
       }
       await workspace(state);
       await assemble(state);
       try{await window.neneRefreshPaidWallet?.();}catch(_){}
-    }catch(e){message(e.message+' Continue saved story checks the same jobs; use Review retry only for confirmed failed scenes.');if(state.storyId)try{await workspace(state);}catch(_){} }
+    }catch(e){progress('Check saved progress',e.message+' Continue saved story checks the same jobs; use Review retry only for confirmed failed scenes.');if(state.storyId)try{await workspace(state);}catch(_){} }
     finally{busy=false;}
   }
   window.neneGenerateDurableStory=async plan=>{
@@ -188,7 +197,7 @@
   window.neneLoadStoryLibrary=async root=>{
     if(!root)return;const owner=await window.neneAuthGetUserId?.();root.textContent='Loading your story films…';
     try{if(!owner)throw Error('Sign in to see your stories.');const data=await api(owner,'/api/stories');if(!root.isConnected)return;root.replaceChildren();
-      for(const story of data.items||[]){if(!UUID.test(story.id))continue;const row=node('article');row.className='block';row.append(node('h3',story.title),node('p',story.status));
+      for(const story of data.items||[]){if(!UUID.test(story.id))continue;const row=node('article');row.className='block';row.append(node('h3',story.title),node('p',statusLabel(story.status)));
         row.append(action('Open story',async()=>{const saved=JSON.parse(localStorage.getItem(key(owner))||'null');await workspace(saved?.storyId===story.id?saved:{owner,storyId:story.id,title:story.title,scenes:[]});}));root.append(row);}
       if(!root.children.length)root.textContent='No saved story films yet.';
     }catch(e){if(root.isConnected)root.textContent=e.message;}
