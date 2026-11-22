@@ -84,3 +84,19 @@ test('character studio round-trip restores story text, scene edits, audio and ch
  assert.equal(w.document.querySelector('.storySceneAudio').value,'silent');
  dom.window.close();
 });
+
+test('story planner refuses a blank scene title without preparing a plan',()=>{
+ const html=fs.readFileSync(__dirname+'/../index.html','utf8');
+ const start=html.indexOf('function getSelectedStoryCharacters(){'),end=html.indexOf('async function generateStoryScenes(){',start);
+ const dom=new JSDOM('<main><textarea id="prompt">River friends</textarea><input type="checkbox" class="storyCharacterCheck" checked value="0"><select id="storyScenes"><option value="2">2</option></select><div id="storySceneCharacters"></div><button id="neneGenerateBtn"></button></main>',{url:'https://app.test',runScripts:'outside-only'}),w=dom.window;
+ w.eval('const characters=[{id:"'+USER+'",name:"Ada"}];'+html.slice(start,end));
+ w.NENECharacters={owner:USER};w.escapeNeneText=String;w.toast=()=>{};
+ let warning='';w.alert=message=>{warning=message;};
+ w.renderStoryCharacterAssignments();
+ w.document.querySelector('.storySceneTitle').value=' ';
+ w.buildStoryPlan();
+ assert.match(warning,/Give scene 1 a title/);
+ assert.equal(w.neneCurrentStoryPlan,undefined);
+ assert.equal(w.document.getElementById('neneGenerateBtn').disabled,false);
+ dom.window.close();
+});
