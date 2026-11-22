@@ -27,7 +27,7 @@
   function message(text){let box=document.getElementById('neneStoryProgress');if(!box){box=node('div');box.id='neneStoryProgress';box.className='notice';box.setAttribute('role','status');document.querySelector('main')?.append(box);}box.textContent=text;}
   function prepare(plan,profile){
     const duration=Number(document.getElementById('neneDuration')?.value),resolution=document.getElementById('neneResolution')?.value;
-    if(![6,8,10].includes(duration)||!['720p','1080p'].includes(resolution))throw Error('Choose a supported scene length and quality.');
+    if(![6,8,10].includes(duration)||!(profile.resolutions||['720p','1080p']).includes(resolution))throw Error('Choose a supported scene length and quality.');
     return plan.scenes.map((scene,i)=>{
       const chars=scene.characters||[];
       const sound=String(scene.sound_direction||'').trim();
@@ -198,7 +198,11 @@
     const result=await original.call(this,type,...args);
     if(type!=='story'||!document.getElementById('storyScenes'))return result;
     document.getElementById('neneDuration').innerHTML='<option value="6">6 seconds per scene</option><option value="8">8 seconds per scene</option><option value="10">10 seconds per scene</option>';
-    document.getElementById('neneResolution').innerHTML='<option value="720p">720p</option><option value="1080p">1080p HD</option>';
+    const quality=document.getElementById('neneResolution');
+    quality.replaceChildren();
+    try{const owner=await window.neneAuthGetUserId?.();const availability=await api(owner,'/api/generation-availability');
+      for(const r of availability.story_generation?.resolutions||['720p','1080p']){if(!['480p','720p','1080p'].includes(r))continue;const option=node('option',r==='480p'?'480p — Standard':r==='720p'?'720p — HD':'1080p — Full HD');option.value=r;quality.append(option);}
+    }catch(e){message('Story quality options are temporarily unavailable.');}
     document.getElementById('neneProvider')?.closest('.block')?.remove();
     const notice=document.getElementById('neneProviderNotice');if(notice)notice.textContent='Choose sound for each scene. Review the total paid credit cost before generating. Final stories are assembled in landscape format.';
     const resume=node('button','Continue saved story');resume.className='btn';resume.type='button';resume.onclick=async()=>{try{const owner=await window.neneAuthGetUserId?.();const state=JSON.parse(localStorage.getItem(key(owner))||'null');if(!owner||!state||state.owner!==owner)throw Error('No saved story is waiting in this account on this device.');await run(state);}catch(e){message(e.message);}};
