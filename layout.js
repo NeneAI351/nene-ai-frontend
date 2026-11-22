@@ -80,16 +80,48 @@
     }catch(_){if(typeof window.toast==='function')window.toast('Full screen is unavailable here. Add NENE AI to your home screen for an app view.');}
   };document.addEventListener('fullscreenchange',fullscreenLabel);fullscreenLabel();}
 
+  const appScreen=document.getElementById('screen');
+  const pageKey='nene_last_page_v1';
+  let pendingPage=null,booting=true,routeRevision=0,navigationDepth=0;
+  try{pendingPage=JSON.parse(sessionStorage.getItem(pageKey)||'null');}catch(_){}
+  const pageMethods=['renderHome','renderCreations','renderProfile','renderCreateHub','renderProjects','renderJobCenter','openFeature','openTool','openProject','neneOpenStudio','neneOpenDirector','neneOpenScriptWriter','neneOpenVideoStudio','neneOpenSocialContent','neneOpenAdvertisement','neneOpenVideoEditor'];
+  const validPage=p=>p&&pageMethods.includes(p.method)&&(p.arg===undefined||typeof p.arg==='string'&&/^[a-zA-Z0-9_-]{1,80}$/.test(p.arg));
+  if(!validPage(pendingPage)||pendingPage.method==='renderHome')pendingPage=null;
+  for(const method of pageMethods){
+    const original=window[method];if(typeof original!=='function')continue;
+    window[method]=function(...args){
+      const outer=navigationDepth===0;navigationDepth++;
+      try{return original.apply(this,args);}finally{navigationDepth--;
+        if(outer&&!booting){const revision=++routeRevision;const arg=typeof args[0]==='string'?args[0]:undefined;
+          Promise.resolve(window.neneAuthGetUserId?.()).then(owner=>{if(revision!==routeRevision)return;
+            try{if(owner&&validPage({method,arg}))sessionStorage.setItem(pageKey,JSON.stringify({owner,method,...(arg?{arg}:{} )}));else sessionStorage.removeItem(pageKey);}catch(_){}
+          }).catch(()=>{});
+        }
+      }
+    };
+  }
+  window.addEventListener('nene-auth-changed',()=>{if(!booting){routeRevision++;try{sessionStorage.removeItem(pageKey);}catch(_){}}});
+  async function restorePage(){
+    try{
+      if(typeof window.neneAuthGetUserId!=='function')return;
+      await window.syncLocalAccount?.(false);
+      const owner=await window.neneAuthGetUserId();
+      if(!owner||!pendingPage||pendingPage.owner!==owner){try{sessionStorage.removeItem(pageKey);}catch(_){}return;}
+      if(typeof window[pendingPage.method]==='function')await window[pendingPage.method](pendingPage.arg);
+    }catch(_){try{sessionStorage.removeItem(pageKey);}catch(_){}window.renderHome?.();}
+    finally{booting=false;pendingPage=null;appScreen?.dispatchEvent(new Event('nene-page-restored'));}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>void restorePage(),{once:true});else void restorePage();
+
   // The Android TWA follows browser history. Keep one in-app entry while a
   // tool is open so system Back returns to the dashboard instead of exiting.
-  const appScreen=document.getElementById('screen');
   if(appScreen&&window.history?.pushState){
     let toolEntry=window.history.state?.neneView==='tool',returning=false;
     const isHome=()=>!!appScreen.querySelector('#homePaidBalance');
     const markHome=()=>window.history.replaceState({...window.history.state,neneView:'home'},'');
-    if(isHome()){toolEntry=false;markHome();}
+    if(isHome()&&!pendingPage){toolEntry=false;markHome();}
     const sync=()=>{
-      if(!appScreen.firstElementChild||returning)return;
+      if(!appScreen.firstElementChild||returning||booting)return;
       if(isHome()){
         if(toolEntry){toolEntry=false;returning=true;window.history.back();}
         else markHome();
@@ -98,6 +130,7 @@
       }
     };
     new MutationObserver(sync).observe(appScreen,{childList:true});
+    appScreen.addEventListener('nene-page-restored',sync);
     window.addEventListener('popstate',()=>{
       returning=false;toolEntry=false;
       document.querySelectorAll('dialog[open]').forEach(d=>d.close());
