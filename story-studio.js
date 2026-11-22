@@ -25,7 +25,7 @@
   }
   const send=(owner,path,body,method='POST',idempotency)=>api(owner,path,{method,headers:{'Content-Type':'application/json',...(idempotency?{'Idempotency-Key':idempotency}:{})},...(body!==undefined?{body:JSON.stringify(body)}:{})});
   function message(text){let box=document.getElementById('neneStoryProgress');if(!box){box=node('div');box.id='neneStoryProgress';box.className='notice';box.setAttribute('role','status');document.querySelector('main')?.append(box);}box.textContent=text;}
-  function prepare(plan){
+  function prepare(plan,profile){
     const duration=Number(document.getElementById('neneDuration')?.value),resolution=document.getElementById('neneResolution')?.value;
     if(![6,8,10].includes(duration)||!['720p','1080p'].includes(resolution))throw Error('Choose a supported scene length and quality.');
     return plan.scenes.map((scene,i)=>{
@@ -39,7 +39,7 @@
         scene.generate_audio!==false&&sound?'Sound direction: '+sound:''].filter(Boolean).join('\n');
       if(prompt.length>5000)throw Error('Shorten your story and character descriptions to fit the scene prompt limit.');
       return {scene_index:i,prompt,duration_seconds:duration,generate_audio:scene.generate_audio!==false,sound_direction:sound,
-        body:{type:chars.length===1&&chars[0].referenceImage?'image-to-video':'text-to-video',provider:'ltx',model:'ltx-2-5-fast',resolution,duration,aspect_ratio:'16:9',prompt,generate_audio:scene.generate_audio!==false},referenceCharacterId:chars.length===1?chars[0].id:null,reference:chars.length===1?chars[0].referenceImage:null};
+        body:{type:chars.length===1&&chars[0].referenceImage?'image-to-video':'text-to-video',provider:profile.provider,model:profile.model,resolution,duration,aspect_ratio:chars.length===1&&chars[0].referenceImage?profile.reference_aspect_ratio:'16:9',prompt,generate_audio:scene.generate_audio!==false},referenceCharacterId:chars.length===1?chars[0].id:null,reference:chars.length===1?chars[0].referenceImage:null};
     });
   }
   function review(state,quote,onConfirm){
@@ -173,9 +173,12 @@
       if(!owner||plan?.owner!==owner)throw Error('Sign in and build a story plan in this account first.');
       const previous=JSON.parse(localStorage.getItem(key(owner))||'null');
       if(previous&&!previous.completed){message('Continue your saved story before starting another paid story.');return;}
-      const state={owner,title:plan.title.slice(0,160),prompt:plan.storyPrompt,characterIds:plan.characters.map(c=>c.id),scenes:prepare(plan)};
+      const state={owner,title:plan.title.slice(0,160),prompt:plan.storyPrompt,characterIds:plan.characters.map(c=>c.id),scenes:[]};
       const available=await api(owner,'/api/generation-availability');
       if(!available.accepting_requests||!available.generate_audio_supported||!available.story_audio_supported)throw Error('Story creation is temporarily unavailable. Nothing was submitted and no credits were charged.');
+      const profile=available.story_generation;
+      if(!profile||!['ltx','magic-hour'].includes(profile.provider)||!profile.model)throw Error('Story creation is temporarily unavailable. No credits were charged.');
+      state.scenes=prepare(plan,profile);
       const quote=await storyQuote(owner,state.scenes);
       quote.scenes.forEach((q,i)=>state.scenes[i].body.credit_limit=String(q.credits));
       review(state,quote,()=>run(state));
