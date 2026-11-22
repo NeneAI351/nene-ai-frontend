@@ -64,7 +64,7 @@
   const saved=characters.find(c=>c.id===id);if(id&&!saved)return;
   const ticket=++epoch;reference=saved?.referenceImage||null;referenceReady=true;
   form={owner,id:saved?.id||crypto.randomUUID(),existing:!!saved,busy:false,pending:null,ticket};
-  const box=document.getElementById('characterEditor');box.innerHTML=`<form id="characterForm"><h2>${saved?'Edit character':'New character'}</h2><label class="block" style="display:block">Name<input class="field" name="name" maxlength="120" required></label><label class="block" style="display:block">Appearance<textarea name="appearance" maxlength="3000" required></textarea></label><label class="block" style="display:block">Personality<textarea name="personality" maxlength="2000"></textarea></label><label class="block" style="display:block">Wardrobe<textarea name="wardrobe" maxlength="2000"></textarea></label><label class="block" style="display:block">Style<select name="style">${['Realistic','Cinematic','Animated','3D','Fantasy','Fashion'].map(s=>`<option>${s}</option>`).join('')}</select></label><label class="block" style="display:block">Reference image<input class="field" name="reference" type="file" accept="image/png,image/jpeg,image/webp"></label><p class="subtitle">PNG, JPEG or WebP, up to 400 KB. Stored privately with this character.</p><p id="characterReferenceStatus" role="status"></p><img id="characterReferencePreview" alt="Selected character reference" style="display:none;width:120px;border-radius:12px"><button class="btn" id="clearCharacterReference" type="button">Remove reference</button><p id="characterFormStatus" role="status" aria-live="polite"></p><div class="row"><button class="btn" id="cancelCharacter" type="button">Cancel</button><button class="btn gold" type="submit">Save to account</button></div></form>`;
+  const box=document.getElementById('characterEditor');box.innerHTML=`<form id="characterForm"><h2>${saved?'Edit character':'New character'}</h2><label class="block" style="display:block">Name<input class="field" name="name" maxlength="120" required></label><label class="block" style="display:block">Appearance<textarea name="appearance" maxlength="3000" required></textarea></label><label class="block" style="display:block">Personality<textarea name="personality" maxlength="2000"></textarea></label><label class="block" style="display:block">Wardrobe<textarea name="wardrobe" maxlength="2000"></textarea></label><label class="block" style="display:block">Style<select name="style">${['Realistic','Cinematic','Animated','3D','Fantasy','Fashion'].map(s=>`<option>${s}</option>`).join('')}</select></label><label class="block" style="display:block">Reference image<input class="field" name="reference" type="file" accept="image/png,image/jpeg,image/webp"></label><p class="subtitle">PNG, JPEG or WebP, up to 20 MB. Larger photos are resized automatically before private storage.</p><p id="characterReferenceStatus" role="status"></p><img id="characterReferencePreview" alt="Selected character reference" style="display:none;width:120px;border-radius:12px"><button class="btn" id="clearCharacterReference" type="button">Remove reference</button><p id="characterFormStatus" role="status" aria-live="polite"></p><div class="row"><button class="btn" id="cancelCharacter" type="button">Cancel</button><button class="btn gold" type="submit">Save to account</button></div></form>`;
   const f=document.getElementById('characterForm');let imageTicket=0;for(const key of ['name','appearance','personality','wardrobe','style'])if(saved?.[key])f.elements[key].value=saved[key];
   const preview=()=>{const img=document.getElementById('characterReferencePreview');img.style.display=reference?'block':'none';if(reference)img.src=reference;else img.removeAttribute('src');document.getElementById('characterReferenceStatus').textContent=reference?'Reference ready to save.':'No reference selected.';};preview();
   document.getElementById('clearCharacterReference').onclick=()=>{if(form?.busy)return;imageTicket++;reference=null;referenceReady=true;f.elements.reference.value='';preview();};
@@ -73,14 +73,33 @@
    const file=f.elements.reference.files?.[0];referenceReady=false;
    if(!file){referenceReady=true;return;}
    try{
-    if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>400*1024)throw Error('Choose a PNG, JPEG or WebP smaller than 400 KB.');
-    const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read the image.'));reader.readAsDataURL(file);});
-    await new Promise((resolve,reject)=>{const img=new Image();img.onload=resolve;img.onerror=()=>reject(Error('This image could not be opened.'));img.src=data;});
+    const data=await prepareReference(file);
     if(ticket!==epoch||selected!==imageTicket||!form)return;reference=data;referenceReady=true;preview();
-   }catch(error){if(ticket===epoch&&selected===imageTicket)document.getElementById('characterReferenceStatus').textContent=error.message+' Remove it or choose another image before saving.';}
+   }catch(error){if(ticket===epoch&&selected===imageTicket)document.getElementById('characterReferenceStatus').textContent=error.message+' Choose another image or remove the reference before saving.';}
   };
   document.getElementById('cancelCharacter').onclick=()=>{if(form?.busy)return;form=null;reference=null;box.replaceChildren();};
   f.onsubmit=save;box.scrollIntoView?.({behavior:'smooth',block:'start'});
+ }
+ async function prepareReference(file){
+  const types=['image/png','image/jpeg','image/webp'];
+  if(!types.includes(file.type))throw Error('Choose a PNG, JPEG or WebP image.');
+  if(file.size>20*1024*1024)throw Error('This photo is too large to process (20 MB maximum).');
+  const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read the image.'));reader.readAsDataURL(file);});
+  const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(Error('This image could not be opened.'));image.src=data;});
+  if(file.size<=400*1024)return data;
+  if(!img.naturalWidth||!img.naturalHeight)throw Error('This image has invalid dimensions.');
+  for(const maxEdge of [1600,1280,1024,800,640,480,320]){
+   const scale=Math.min(1,maxEdge/Math.max(img.naturalWidth,img.naturalHeight));
+   const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+   const ctx=canvas.getContext('2d');if(!ctx)throw Error('Image compression is unavailable on this device.');
+   ctx.drawImage(img,0,0,canvas.width,canvas.height);
+   for(const quality of [0.86,0.72,0.58,0.42]){
+    const compressed=canvas.toDataURL('image/jpeg',quality);
+    if(!compressed.startsWith('data:image/jpeg;base64,'))throw Error('Image compression is unavailable on this device.');
+    if(Math.floor((compressed.length-compressed.indexOf(',')-1)*3/4)<=400*1024)return compressed;
+   }
+  }
+  throw Error('Could not compress this image safely. Please choose another photo.');
  }
  async function save(event){
   event.preventDefault();const state=form;if(!state||state.busy)return;
