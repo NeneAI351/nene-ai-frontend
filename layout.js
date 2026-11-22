@@ -79,5 +79,32 @@
       fullscreenLabel();
     }catch(_){if(typeof window.toast==='function')window.toast('Full screen is unavailable here. Add NENE AI to your home screen for an app view.');}
   };document.addEventListener('fullscreenchange',fullscreenLabel);fullscreenLabel();}
+
+  // The Android TWA follows browser history. Keep one in-app entry while a
+  // tool is open so system Back returns to the dashboard instead of exiting.
+  const appScreen=document.getElementById('screen');
+  if(appScreen&&window.history?.pushState){
+    let toolEntry=window.history.state?.neneView==='tool',returning=false;
+    const isHome=()=>!!appScreen.querySelector('#homePaidBalance');
+    const markHome=()=>window.history.replaceState({...window.history.state,neneView:'home'},'');
+    if(isHome()){toolEntry=false;markHome();}
+    const sync=()=>{
+      if(!appScreen.firstElementChild||returning)return;
+      if(isHome()){
+        if(toolEntry){toolEntry=false;returning=true;window.history.back();}
+        else markHome();
+      }else if(!toolEntry){
+        window.history.pushState({...window.history.state,neneView:'tool'},'');toolEntry=true;
+      }
+    };
+    new MutationObserver(sync).observe(appScreen,{childList:true});
+    window.addEventListener('popstate',()=>{
+      returning=false;toolEntry=false;
+      document.querySelectorAll('dialog[open]').forEach(d=>d.close());
+      window.closeModal?.();
+      if(!isHome())window.renderHome();
+      markHome();
+    });
+  }
   window.neneMountStudioSections();
 })();
