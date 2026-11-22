@@ -2,12 +2,12 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const USER='11111111-1111-4111-8111-111111111111',STORY='22222222-2222-4222-8222-222222222222',JOB='33333333-3333-4333-8333-333333333333';
 const source=fs.readFileSync(__dirname+'/../story-studio.js','utf8');
 async function settle(){for(let i=0;i<30;i++)await new Promise(r=>setImmediate(r));}
-async function setup({enabled=true,fail=false,saved}={}){
+async function setup({enabled=true,fail=false,saved,sceneFailure=false,brokenQuote=false}={}){
  const dom=new JSDOM('<main><select id="neneDuration"></select><select id="neneResolution"></select><select id="storyScenes"></select><div class="block"><select id="neneProvider"></select></div><div id="neneProviderNotice"></div></main>',{url:'https://app.test',runScripts:'outside-only'}),w=dom.window,calls=[];
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.remove();};
  w.openTool=async()=>{};w.neneAuthGetUserId=async()=>USER;w.neneAuthGetAccessToken=async()=>'x.'+Buffer.from(JSON.stringify({sub:USER})).toString('base64url')+'.x';w.NENE_DIRECTOR_CONFIG={backendUrl:'https://api.test'};
  if(saved)w.localStorage.setItem('nene_durable_story_v1:'+USER,JSON.stringify(saved));
- w.fetch=async(url,options={})=>{calls.push({url,options});let data={};if(url.endsWith('/api/generation-availability'))data={accepting_requests:enabled,generate_audio_supported:true,story_audio_supported:true};else if(url.endsWith('/api/pricing/quote'))data={recommended_credits:120};else if(url.endsWith('/api/stories'))data={id:STORY};else if(url.endsWith('/api/generations')){if(fail)throw Error('Connection lost');data={generation_id:JOB};}else if(url.endsWith('/assembly'))data={assembly:{status:'succeeded'}};else if(url.endsWith('/video'))data={video_url:'https://private.test/story.mp4?signature=secret'};else data={generation:{status:'succeeded'}};return {ok:true,json:async()=>data};};
+ let retried=false,assembled=false;w.HTMLMediaElement.prototype.play=async()=>{};w.fetch=async(url,options={})=>{calls.push({url,options});let data={};if(url.endsWith('/api/generation-availability'))data={accepting_requests:enabled,generate_audio_supported:true,story_audio_supported:true};else if(url.endsWith('/api/stories/quote')){const scenes=JSON.parse(options.body).scenes;data={scenes:scenes.map((_,i)=>({scene_index:i,credits:'120'})),total_credits:brokenQuote?'invalid':String(scenes.length*120)};}else if(url.endsWith('/api/stories'))data=options.method?{id:STORY}:{items:[]};else if(url.endsWith('/api/generations')){if(fail)throw Error('Connection lost');data={generation_id:JOB};}else if(url.endsWith('/retry')){retried=true;data={generation_id:JOB};}else if(url.endsWith('/assemble')){assembled=true;data={};}else if(url.endsWith('/api/stories/'+STORY))data={title:'River story',status:assembled?'completed':'generating',scenes:[{scene_index:0,generation_id:saved&&!saved.scenes[0]?.generationId?null:JOB,status:sceneFailure&&!retried?'failed':'succeeded'},{scene_index:1,generation_id:saved&&!saved.scenes[1]?.generationId?null:JOB,status:'succeeded'}]};else if(url.endsWith('/media-url'))data={url:'https://private.test/scene.mp4?signature=secret'};else if(url.endsWith('/assembly'))data={assembly:{status:'succeeded'}};else if(url.endsWith('/video'))data={video_url:'https://private.test/story.mp4?signature=secret'};else data={generation:{status:sceneFailure&&!retried?'failed':'succeeded'}};return {ok:true,json:async()=>data};};
  w.eval(source);await w.openTool('story');return {w,dom,calls};
 }
 const plan={owner:USER,title:'River story',storyPrompt:'Friends cross a river',characters:[{id:USER}],scenes:[{title:'Opening',brief:'Establish river',generate_audio:true,sound_direction:'Flowing water',characters:[]},{title:'Ending',brief:'Reach home',generate_audio:false,sound_direction:'ignored',characters:[]}]};
@@ -21,7 +21,7 @@ test('a lost submission response replays exactly the same paid scene key and pay
  const first=await setup({fail:true});await first.w.neneGenerateDurableStory(plan);first.w.document.querySelector('dialog .gold').click();await settle();const saved=JSON.parse(first.w.localStorage.getItem('nene_durable_story_v1:'+USER)),before=paid(first)[0];first.dom.window.close();
  const next=await setup({saved});[...next.w.document.querySelectorAll('button')].find(n=>n.textContent==='Continue saved story').click();await settle();assert.equal(paid(next)[0].options.headers['Idempotency-Key'],before.options.headers['Idempotency-Key']);assert.equal(paid(next)[0].options.body,before.options.body);next.dom.window.close();
 });
-test('closed launch gate never creates a story or paid scene',async()=>{const s=await setup({enabled:false});await s.w.neneGenerateDurableStory(plan);assert.equal(paid(s).length,0);assert.equal(s.calls.some(c=>c.url.endsWith('/api/stories')),false);assert.equal(s.w.document.querySelector('dialog'),null);assert.match(s.w.document.body.textContent,/no credits were charged/);s.dom.window.close();});
+test('closed launch gate never creates a story or paid scene',async()=>{const s=await setup({enabled:false});await s.w.neneGenerateDurableStory(plan);assert.equal(paid(s).length,0);assert.equal(s.calls.some(c=>c.url.endsWith('/api/stories')&&c.options.method==='POST'),false);assert.equal(s.w.document.querySelector('dialog'),null);assert.match(s.w.document.body.textContent,/no credits were charged/);s.dom.window.close();});
 test('actual story planner retains per-scene sound choices after character selection changes',()=>{
  const html=fs.readFileSync(__dirname+'/../index.html','utf8');const start=html.indexOf('function getSelectedStoryCharacters(){'),end=html.indexOf('async function generateStoryScenes(){',start);
  const dom=new JSDOM('<main><textarea id="prompt">River friends</textarea><input type="checkbox" class="storyCharacterCheck" checked value="0"><select id="storyScenes"><option value="3">3</option></select><div id="storySceneCharacters"></div><button id="neneGenerateBtn"></button></main>',{url:'https://app.test',runScripts:'outside-only'}),w=dom.window;
@@ -99,4 +99,22 @@ test('story planner refuses a blank scene title without preparing a plan',()=>{
  assert.equal(w.neneCurrentStoryPlan,undefined);
  assert.equal(w.document.getElementById('neneGenerateBtn').disabled,false);
  dom.window.close();
+});
+
+
+test('five-scene estimate comes from the server and confirmation pins every scene limit',async()=>{
+ const s=await setup(),five={...plan,scenes:Array.from({length:5},()=>plan.scenes[0])};await s.w.neneGenerateDurableStory(five);
+ const request=s.calls.find(c=>c.url.endsWith('/api/stories/quote'));assert.equal(JSON.parse(request.options.body).scenes.length,5);
+ assert.match(s.w.document.querySelector('dialog').textContent,/600 paid credits total/);assert.equal(paid(s).length,0);
+ s.w.document.querySelector('dialog .gold').click();await settle();assert.equal(paid(s).length,5);assert.ok(paid(s).every(c=>JSON.parse(c.options.body).credit_limit==='120'));s.dom.window.close();
+});
+test('invalid total never permits a paid story request',async()=>{const s=await setup({brokenQuote:true});await s.w.neneGenerateDurableStory(plan);assert.equal(s.w.document.querySelector('dialog'),null);assert.equal(paid(s).length,0);s.dom.window.close();});
+test('failed scene requires a fresh review and uses the safe retry endpoint before continuing',async()=>{
+ const s=await setup({sceneFailure:true});await s.w.neneGenerateDurableStory(plan);s.w.document.querySelector('dialog .gold').click();await settle();
+ const b=[...s.w.document.querySelectorAll('button')].find(b=>b.textContent==='Review retry for scene 1');assert.ok(b);b.click();await settle();assert.equal(s.calls.filter(c=>c.url.endsWith('/retry')).length,0);
+ s.w.document.querySelector('dialog .gold').click();await settle();const retries=s.calls.filter(c=>c.url.endsWith('/retry'));assert.equal(retries.length,1);assert.equal(JSON.parse(retries[0].options.body).failed_generation_id,JOB);assert.equal(JSON.parse(retries[0].options.body).credit_limit,'120');assert.ok([...s.w.document.querySelectorAll('button')].some(b=>b.textContent==='Watch finished film'));s.dom.window.close();
+});
+test('scene preview advances in order through private GET links without further generation',async()=>{
+ const s=await setup();await s.w.neneGenerateDurableStory(plan);s.w.document.querySelector('dialog .gold').click();await settle();const count=paid(s).length;
+ const b=[...s.w.document.querySelectorAll('button')].find(b=>b.textContent==='Preview scenes in order');b.click();await settle();const player=s.w.document.querySelector('#neneStoryWorkspace video');assert.equal(player.getAttribute('aria-label'),'Scene 1');player.onended();await settle();assert.equal(player.getAttribute('aria-label'),'Scene 2');assert.equal(paid(s).length,count);s.dom.window.close();
 });
