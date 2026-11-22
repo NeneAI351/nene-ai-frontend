@@ -23,7 +23,7 @@ header{position:sticky;top:0;z-index:10;padding:14px 16px 12px;border-bottom:1px
 .avatar{margin-left:auto;width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--gold)}
 .credits{text-decoration:none;text-align:center;font-size:11px;border:1px solid #72571d;border-radius:22px;padding:7px 10px;color:var(--gold2);background:#0d0b07}.credits b{font-size:14px}
 .auth-header-btn{border:1px solid #72571d;border-radius:999px;padding:8px 10px;background:#17130c;color:var(--gold2);font-size:11px;font-weight:700;white-space:nowrap}
-main{padding:18px 16px 92px}.eyebrow{color:var(--gold);font-size:11px;letter-spacing:1.8px;text-transform:uppercase}
+main{padding:18px 16px calc(120px + env(safe-area-inset-bottom, 0px));scroll-padding-bottom:calc(120px + env(safe-area-inset-bottom, 0px))}.eyebrow{color:var(--gold);font-size:11px;letter-spacing:1.8px;text-transform:uppercase}
 h1{font-family:Georgia,serif;font-size:33px;margin:5px 0 8px}.subtitle{color:var(--muted);line-height:1.5;font-size:14px}
 .hero{padding:20px;border:1px solid #594418;border-radius:24px;background:linear-gradient(135deg,#17120a,#0e0d0b);box-shadow:0 0 35px rgba(244,201,93,.08);margin-bottom:18px}
 .hero-row{display:flex;align-items:center;gap:15px}.hero img{width:88px;height:88px;border-radius:22px;object-fit:cover;filter:brightness(.72) contrast(1.05);border:1px solid #8b6820}
@@ -39,7 +39,7 @@ textarea{min-height:130px;resize:vertical}.label{font-size:12px;color:#cfc8bb;ma
 .chips{display:flex;flex-wrap:wrap;gap:7px}.chip{border:1px solid #493716;border-radius:999px;padding:9px 11px;background:#0f0e0c;color:#cfc8bb;font-size:12px}.chip.active{border-color:var(--gold);color:var(--gold2);box-shadow:0 0 14px rgba(244,201,93,.12)}
 .preview{height:210px;border:1px dashed #72571d;border-radius:18px;background:linear-gradient(135deg,#17120a,#090909);display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);overflow:hidden}.preview img{width:100%;height:100%;object-fit:cover;filter:brightness(.65)}
 .upload{position:relative}.upload input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(1100px,100%);height:76px;background:rgba(7,7,7,.96);border-top:1px solid #4d3b17;display:grid;grid-template-columns:repeat(4,1fr);z-index:20}
+.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(1100px,100%);height:calc(76px + env(safe-area-inset-bottom, 0px));padding-bottom:env(safe-area-inset-bottom, 0px);background:rgba(7,7,7,.96);border-top:1px solid #4d3b17;display:grid;grid-template-columns:repeat(4,1fr);z-index:20}
 .nav{border:0;background:none;color:#aaa49a;font-size:10px}.nav span{display:block;font-size:20px;margin-bottom:3px}.nav.active{color:var(--gold2)} .create{font-size:28px;color:var(--gold);text-shadow:0 0 14px rgba(244,201,93,.5)}
 .back{border:0;background:none;color:var(--gold);font-size:22px}.toolhead{display:flex;align-items:center;gap:8px;margin-bottom:15px}
 .badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#20180b;border:1px solid #644a17;color:var(--gold);font-size:10px}
@@ -610,9 +610,11 @@ function buildStoryPlan(){
   const button=document.getElementById('neneGenerateBtn');
   if(button){button.disabled=true;button.innerHTML='✓ Story plan prepared with character guidance';}
   const main=document.querySelector('main');
+  document.getElementById('neneStoryPlanPreview')?.remove();
+  document.getElementById('neneGenerateStoryScenesBtn')?.remove();
   if(main){
     const cards=scenePlans.map(sc=>'<div class="creation"><div class="thumb">🎬</div><div><b>Scene '+sc.number+': '+escapeNeneText(sc.title)+'</b><small>'+escapeNeneText(sc.brief)+'</small><small style="display:block;color:#d8b55b">🔒 '+escapeNeneText(sc.characters.map(c=>c.name).join(' + '))+' · character guidance</small></div></div>').join('');
-    main.insertAdjacentHTML('beforeend','<div class="block" style="margin-top:16px"><div class="label">Your scene plan</div><div class="list">'+cards+'</div><div class="notice" style="margin-top:10px">🎭 Character guidance: '+escapeNeneText(selectedCharacters.map(c=>c.name).join(', '))+' '+(selectedCharacters.length===1?'is':'are')+' assigned to the story scenes. Descriptions guide the outputs; exact visual identity is not guaranteed.</div></div>');
+    main.insertAdjacentHTML('beforeend','<div id="neneStoryPlanPreview" class="block" style="margin-top:16px"><div class="label">Your scene plan</div><div class="list">'+cards+'</div><div class="notice" style="margin-top:10px">🎭 Character guidance: '+escapeNeneText(selectedCharacters.map(c=>c.name).join(', '))+' '+(selectedCharacters.length===1?'is':'are')+' assigned to the story scenes. Descriptions guide the outputs; exact visual identity is not guaranteed.</div></div>');
   }
   window.neneCurrentStoryPlan = plan;
   toast('Story plan prepared with character guidance');
