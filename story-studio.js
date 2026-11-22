@@ -31,7 +31,7 @@
     const button=document.getElementById('neneGenerateStoryScenesBtn');
     if(button){button.textContent=label;button.disabled=['Creating…','Combining…','Done'].includes(label);}
   }
-  const statusLabel=status=>status==='succeeded'||status==='completed'?'Done':status==='failed'?'Failed':status==='queued'?'Queued':status==='pending'?'Not started':'Creating…';
+  const statusLabel=status=>status==='succeeded'||status==='completed'?'Done':status==='failed'?'Failed':status==='queued'?'Queued':['pending','planned','draft'].includes(status)?'Not started':'Creating…';
   function prepare(plan,profile){
     const duration=Number(document.getElementById('neneDuration')?.value),resolution=document.getElementById('neneResolution')?.value;
     if(![6,8,10].includes(duration)||!(profile.resolutions||['720p','1080p']).includes(resolution))throw Error('Choose a supported scene length and quality.');
@@ -49,14 +49,27 @@
         body:{type:chars.length===1&&chars[0].referenceImage?'image-to-video':'text-to-video',provider:profile.provider,model:profile.model,resolution,duration,aspect_ratio:chars.length===1&&chars[0].referenceImage?profile.reference_aspect_ratio:'16:9',prompt,generate_audio:scene.generate_audio!==false},referenceCharacterId:chars.length===1?chars[0].id:null,reference:chars.length===1?chars[0].referenceImage:null};
     });
   }
-  function review(state,quote,onConfirm){
+  function review(state,quote,onConfirm,selectable=false){
     document.getElementById('neneStoryReview')?.remove();
     const dialog=node('dialog');dialog.id='neneStoryReview';dialog.style.cssText='background:#15120c;color:#f7edda;border:1px solid #967735;border-radius:18px;padding:22px;max-width:90vw';
-    dialog.append(node('h2','Review story credits'),node('p',`${state.scenes.length} scenes · ${quote.total_credits} paid credits total.`));
-    quote.scenes.forEach((scene,i)=>dialog.append(node('p',`Scene ${i+1}: ${scene.credits} paid credits`)));
-    dialog.append(node('p','Scene sound and combining the film are included. Editing preview is free; an edited export has its own price confirmation. Failed scene reservations are released before a paid replacement.'));
+    const summary=node('p');dialog.append(node('h2','Review story credits'),summary);
+    const checks=[];
+    quote.scenes.forEach((scene,i)=>{const row=node('label');row.style.display='block';
+      const check=node('input');check.type='checkbox';check.checked=true;check.dataset.scene=state.scenes[i].scene_index;check.setAttribute('aria-label','Generate scene '+(state.scenes[i].scene_index+1));checks.push(check);
+      if(selectable)row.append(check);
+      row.append(document.createTextNode(`Scene ${state.scenes[i].scene_index+1}: ${scene.credits} paid credits`));dialog.append(row);
+    });
+    dialog.append(node('p',selectable?'Select scenes to generate now. Unselected scenes stay saved in your account for later. Remaining prices are estimates and will be reviewed again.':'Scene sound and combining the film are included. Editing preview is free; an edited export has its own price confirmation. Failed scene reservations are released before a paid replacement.'));
     const cancel=node('button','Back');cancel.className='btn';cancel.onclick=()=>dialog.close();
-    const confirm=node('button',`Generate story · ${quote.total_credits} paid credits`);confirm.className='btn gold';confirm.onclick=()=>{confirm.disabled=true;dialog.close();onConfirm();};dialog.append(cancel,confirm);document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();
+    const confirm=node('button');confirm.className='btn gold';
+    const selected=()=>checks.flatMap((c,i)=>c.checked?[i]:[]);
+    const update=()=>{const indices=selected(),total=indices.reduce((v,i)=>v+Number(quote.scenes[i].credits),0),remaining=Number(quote.total_credits)-total;
+      summary.textContent=`${indices.length} scenes · ${total} paid credits total.`+(selectable?` Remaining scenes: ${remaining} credits estimated.`:'');
+      confirm.textContent=`Generate ${selectable?'selected scenes':'story'} · ${total} paid credits`;confirm.disabled=!indices.length;
+    };
+    checks.forEach(c=>c.onchange=update);update();
+    confirm.onclick=()=>{const indices=selected();if(!indices.length)return;confirm.disabled=true;dialog.close();onConfirm(indices.map(i=>state.scenes[i].scene_index));};
+    dialog.append(cancel,confirm);document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();
   }
   async function storyQuote(owner,scenes){
     const quote=await send(owner,'/api/stories/quote',{scenes:scenes.map(s=>{const b=s.body;return {provider:b.provider,model:b.model,resolution:b.resolution,duration:b.duration};})});
@@ -68,8 +81,9 @@
   async function workspace(state){
     const story=await api(state.owner,`/api/stories/${state.storyId}`);
     if(!Array.isArray(story.scenes))return;
-    if(!state.scenes.length&&story.scenes.every(s=>s.generation_request)){
-      state.scenes=story.scenes.map(s=>({...s,body:s.generation_request,generationId:s.generation_id,linked:true}));state.scenesSaved=true;state.title=story.title;state.prompt=story.prompt;
+    if(!state.scenes.length&&story.scenes.every(s=>s.generation_request||story.character_lock?.scene_settings?.[String(s.scene_index)])){
+      state.batchMode=!!story.character_lock?.scene_settings;
+      state.scenes=story.scenes.map(s=>({...s,body:s.generation_request||{...story.character_lock.scene_settings[String(s.scene_index)],prompt:s.prompt,duration:s.duration_seconds,generate_audio:s.generate_audio},generationId:s.generation_id,linked:!!s.generation_id}));state.scenesSaved=true;state.title=story.title;state.prompt=story.prompt;
     }
     let box=document.getElementById('neneStoryWorkspace');if(!box){box=node('section');box.id='neneStoryWorkspace';document.querySelector('main')?.append(box);}
     box.replaceChildren(node('h2',story.title||state.title||'Your story'));
@@ -97,6 +111,7 @@
       }));
       box.append(row);
     }
+    if(state.batchMode&&scenes.some(s=>!s.generation_id))box.append(action('Choose remaining scenes',()=>continueStory(state)));
     if(scenes.length&&scenes.every(s=>s.status==='succeeded'))box.append(action('Combine into film',()=>assemble(state)));
     if(story.status==='completed'){
       box.append(action('Report AI content',()=>window.neneOpenOutputReport?.({kind:'story',id:state.storyId,owner:state.owner})),action('Watch finished film',async()=>{player.src=await secureMedia(state.owner,`/api/stories/${state.storyId}/video`);player.onended=null;try{await player.play();}catch(_){};}),
@@ -130,7 +145,7 @@
     }
     throw Error('Your story is still processing. Continue the saved story later to check it.');
   }
-  async function run(state){
+  async function run(state,selectedIndices){
     if(busy)return;busy=true;
     progress('Creating…','Creating… checking your saved story progress.');
     try{
@@ -150,7 +165,7 @@
         scene.body.source_image_id=uploaded.source_image_id;save(state);
       }
       if(!state.storyId){
-        const created=await send(state.owner,'/api/stories',{title:state.title,prompt:state.prompt,character_lock:{character_ids:state.characterIds}});
+        const created=await send(state.owner,'/api/stories',{title:state.title,prompt:state.prompt,character_lock:{character_ids:state.characterIds,...(state.batchMode?{scene_settings:Object.fromEntries(state.scenes.map(s=>[String(s.scene_index),Object.fromEntries(['type','provider','model','resolution','aspect_ratio','source_image_id'].filter(k=>s.body[k]!==undefined).map(k=>[k,s.body[k]]))]))}:{})}});
         if(!UUID.test(created.id))throw Error('The saved story could not be confirmed.');
         state.storyId=created.id;save(state);
       }
@@ -158,7 +173,12 @@
         await send(state.owner,`/api/stories/${state.storyId}/scenes`,{scenes:state.scenes.map(({scene_index,prompt,duration_seconds,generate_audio,sound_direction})=>({scene_index,prompt,duration_seconds,generate_audio,sound_direction}))},'PUT');
         state.scenesSaved=true;save(state);
       }
+      if(state.batchMode&&selectedIndices?.length){
+        const batch=await send(state.owner,`/api/stories/${state.storyId}/generate-selected`,{scenes:state.scenes.filter(s=>selectedIndices.includes(s.scene_index)).map(s=>({scene_index:s.scene_index,credit_limit:s.body.credit_limit}))});
+        for(const result of batch.scenes||[]){const scene=state.scenes.find(s=>s.scene_index===result.scene_index);if(!scene||!UUID.test(result.generation_id))throw Error('Check saved batch progress before continuing.');scene.generationId=result.generation_id;scene.linked=true;}save(state);
+      }
       for(const scene of state.scenes){
+        if(state.batchMode&&!scene.generationId)continue;
         progress('Creating…',`Creating… scene ${scene.scene_index+1} of ${state.scenes.length}. Checking saved progress…`);
         if(!scene.generationId){
           scene.requestKey=scene.requestKey||crypto.randomUUID();save(state);
@@ -170,10 +190,22 @@
         await poll(state,`/api/generations/${scene.generationId}`,d=>d.generation||d,d=>d?.status==='succeeded',d=>progress('Creating…',`Creating… scene ${scene.scene_index+1} of ${state.scenes.length} · ${statusLabel(d?.status)}`));
       }
       await workspace(state);
-      await assemble(state);
+      if(state.scenes.every(s=>s.generationId))await assemble(state);
+      else progress('Paused','Selected scenes are done. Remaining scenes are saved to your account. Buy credits, then choose remaining scenes to continue.');
       try{await window.neneRefreshPaidWallet?.();}catch(_){}
     }catch(e){progress('Check saved progress',e.message+' Continue saved story checks the same jobs; use Review retry only for confirmed failed scenes.');if(state.storyId)try{await workspace(state);}catch(_){} }
     finally{busy=false;}
+  }
+  async function continueStory(state){
+    if(busy)return;
+    if(!state.batchMode){await run(state);return;}
+    const story=await workspace(state);
+    for(const scene of state.scenes){const remote=story.scenes?.find(s=>s.scene_index===scene.scene_index);if(remote?.generation_id){scene.generationId=remote.generation_id;scene.linked=true;}}
+    const pending=state.scenes.filter(s=>!s.generationId);
+    if(!pending.length){await run(state,[]);return;}
+    const quote=await storyQuote(state.owner,pending);
+    quote.scenes.forEach((q,i)=>pending[i].body.credit_limit=String(q.credits));
+    review({...state,scenes:pending},quote,indices=>run(state,indices),true);
   }
   window.neneGenerateDurableStory=async plan=>{
     if(busy)return;
@@ -182,15 +214,16 @@
       if(!owner||plan?.owner!==owner)throw Error('Sign in and build a story plan in this account first.');
       const previous=JSON.parse(localStorage.getItem(key(owner))||'null');
       if(previous&&!previous.completed){message('Continue your saved story before starting another paid story.');return;}
-      const state={owner,title:plan.title.slice(0,160),prompt:plan.storyPrompt,characterIds:plan.characters.map(c=>c.id),scenes:[]};
+      const state={batchMode:false,owner,title:plan.title.slice(0,160),prompt:plan.storyPrompt,characterIds:plan.characters.map(c=>c.id),scenes:[]};
       const available=await api(owner,'/api/generation-availability');
       if(!available.accepting_requests||!available.generate_audio_supported||!available.story_audio_supported)throw Error('Story creation is temporarily unavailable. Nothing was submitted and no credits were charged.');
+      state.batchMode=available.story_selected_scenes_supported===true;
       const profile=available.story_generation;
       if(!profile||!['ltx','magic-hour'].includes(profile.provider)||!profile.model)throw Error('Story creation is temporarily unavailable. No credits were charged.');
       state.scenes=prepare(plan,profile);
       const quote=await storyQuote(owner,state.scenes);
       quote.scenes.forEach((q,i)=>state.scenes[i].body.credit_limit=String(q.credits));
-      review(state,quote,()=>run(state));
+      review(state,quote,indices=>run(state,indices),state.batchMode);
     }catch(e){message(e.message);}
   };
   window.addEventListener('nene-auth-changed',()=>{document.getElementById('neneStoryReview')?.remove();document.getElementById('neneStoryProgress')?.remove();document.getElementById('neneStoryWorkspace')?.remove();document.getElementById('neneStoryLibrary')?.replaceChildren();document.getElementById('neneStoryFilms')?.replaceChildren();document.querySelectorAll('video[data-story-result]').forEach(n=>n.remove());});
@@ -218,7 +251,7 @@
     }catch(e){message('Story quality options are temporarily unavailable.');}
     document.getElementById('neneProvider')?.closest('.block')?.remove();
     const notice=document.getElementById('neneProviderNotice');if(notice)notice.textContent='Choose sound for each scene. Review the total paid credit cost before generating. Final stories are assembled in landscape format.';
-    const resume=node('button','Continue saved story');resume.className='btn';resume.type='button';resume.onclick=async()=>{try{const owner=await window.neneAuthGetUserId?.();const state=JSON.parse(localStorage.getItem(key(owner))||'null');if(!owner||!state||state.owner!==owner)throw Error('No saved story is waiting in this account on this device.');await run(state);}catch(e){message(e.message);}};
+    const resume=node('button','Continue saved story');resume.className='btn';resume.type='button';resume.onclick=async()=>{try{const owner=await window.neneAuthGetUserId?.();const state=JSON.parse(localStorage.getItem(key(owner))||'null');if(!owner||!state||state.owner!==owner)throw Error('No saved story is waiting in this account on this device.');await continueStory(state);}catch(e){message(e.message);}};
     document.querySelector('main')?.append(resume);const library=node('section');library.id='neneStoryLibrary';document.querySelector('main')?.append(library);void window.neneLoadStoryLibrary(library);
     return result;
   };
