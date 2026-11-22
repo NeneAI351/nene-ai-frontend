@@ -198,6 +198,10 @@
     const result=await original.call(this,type,...args);
     if(type!=='story'||!document.getElementById('storyScenes'))return result;
     document.getElementById('neneDuration').innerHTML='<option value="6">6 seconds per scene</option><option value="8">8 seconds per scene</option><option value="10">10 seconds per scene</option>';
+    const count=document.getElementById('storyScenes');
+    if(![...count.options].some(o=>o.value==='1')){const one=node('option','1 scene');one.value='1';count.prepend(one);}
+    count.value='1';
+    window.renderStoryCharacterAssignments?.();
     const quality=document.getElementById('neneResolution');
     quality.replaceChildren();
     try{const owner=await window.neneAuthGetUserId?.();const availability=await api(owner,'/api/generation-availability');
