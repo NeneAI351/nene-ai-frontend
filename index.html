@@ -23,7 +23,7 @@ header{position:sticky;top:0;z-index:10;padding:14px 16px 12px;border-bottom:1px
 .avatar{margin-left:auto;width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--gold)}
 .credits{text-decoration:none;text-align:center;font-size:11px;border:1px solid #72571d;border-radius:22px;padding:7px 10px;color:var(--gold2);background:#0d0b07}.credits b{font-size:14px}
 .auth-header-btn{border:1px solid #72571d;border-radius:999px;padding:8px 10px;background:#17130c;color:var(--gold2);font-size:11px;font-weight:700;white-space:nowrap}
-main{padding:18px 16px 92px}.eyebrow{color:var(--gold);font-size:11px;letter-spacing:1.8px;text-transform:uppercase}
+main{padding:18px 16px calc(120px + env(safe-area-inset-bottom, 0px));scroll-padding-bottom:calc(120px + env(safe-area-inset-bottom, 0px))}.eyebrow{color:var(--gold);font-size:11px;letter-spacing:1.8px;text-transform:uppercase}
 h1{font-family:Georgia,serif;font-size:33px;margin:5px 0 8px}.subtitle{color:var(--muted);line-height:1.5;font-size:14px}
 .hero{padding:20px;border:1px solid #594418;border-radius:24px;background:linear-gradient(135deg,#17120a,#0e0d0b);box-shadow:0 0 35px rgba(244,201,93,.08);margin-bottom:18px}
 .hero-row{display:flex;align-items:center;gap:15px}.hero img{width:88px;height:88px;border-radius:22px;object-fit:cover;filter:brightness(.72) contrast(1.05);border:1px solid #8b6820}
@@ -39,7 +39,7 @@ textarea{min-height:130px;resize:vertical}.label{font-size:12px;color:#cfc8bb;ma
 .chips{display:flex;flex-wrap:wrap;gap:7px}.chip{border:1px solid #493716;border-radius:999px;padding:9px 11px;background:#0f0e0c;color:#cfc8bb;font-size:12px}.chip.active{border-color:var(--gold);color:var(--gold2);box-shadow:0 0 14px rgba(244,201,93,.12)}
 .preview{height:210px;border:1px dashed #72571d;border-radius:18px;background:linear-gradient(135deg,#17120a,#090909);display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);overflow:hidden}.preview img{width:100%;height:100%;object-fit:cover;filter:brightness(.65)}
 .upload{position:relative}.upload input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(1100px,100%);height:76px;background:rgba(7,7,7,.96);border-top:1px solid #4d3b17;display:grid;grid-template-columns:repeat(4,1fr);z-index:20}
+.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(1100px,100%);height:calc(76px + env(safe-area-inset-bottom, 0px));padding-bottom:env(safe-area-inset-bottom, 0px);background:rgba(7,7,7,.96);border-top:1px solid #4d3b17;display:grid;grid-template-columns:repeat(4,1fr);z-index:20}
 .nav{border:0;background:none;color:#aaa49a;font-size:10px}.nav span{display:block;font-size:20px;margin-bottom:3px}.nav.active{color:var(--gold2)} .create{font-size:28px;color:var(--gold);text-shadow:0 0 14px rgba(244,201,93,.5)}
 .back{border:0;background:none;color:var(--gold);font-size:22px}.toolhead{display:flex;align-items:center;gap:8px;margin-bottom:15px}
 .badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#20180b;border:1px solid #644a17;color:var(--gold);font-size:10px}
@@ -494,6 +494,77 @@ function previewCharacterReference(e){
   }).catch(err=>alert(err.message||'Could not read the reference image.'));
 }
 
+// Keep unfinished Story Studio edits while visiting Character Studio.
+function neneEnhanceStoryIdea(){
+ const field=document.getElementById('prompt');
+ if(!field||!field.value.trim()){alert('Write a story idea first.');return;}
+ const original=field.value.trim();
+ const proposed=original+'\n\nStory direction: Introduce the setting and main characters, show a clear goal or conflict, build tension through meaningful choices, and finish with a memorable resolution. Include visual actions, locations and emotional changes that can be filmed as short scenes.';
+ const preview=document.createElement('dialog');
+ preview.style.cssText='background:#15120c;color:#f7edda;border:1px solid #967735;border-radius:16px;padding:18px;max-width:min(560px,90vw)';
+ const heading=document.createElement('h2');heading.textContent='Review enhanced story idea';
+ const note=document.createElement('p');note.textContent='Optional writing guidance generated on this device. This is not an AI model response. No credits are charged.';
+ const edit=document.createElement('textarea');edit.value=proposed;edit.maxLength=6000;edit.style.cssText='width:100%;min-height:180px';
+ const cancel=document.createElement('button');cancel.type='button';cancel.className='btn';cancel.textContent='Keep original';cancel.onclick=()=>preview.close();
+ const apply=document.createElement('button');apply.type='button';apply.className='btn gold';apply.textContent='Use this version';apply.onclick=()=>{if(!edit.value.trim())return;field.value=edit.value.trim();preview.close();};
+ preview.append(heading,note,edit,cancel,apply);document.body.append(preview);
+ preview.addEventListener('close',()=>preview.remove(),{once:true});preview.showModal();
+}
+function neneSaveStoryDraft(){
+ const owner=window.NENECharacters?.owner;
+ if(!owner)return false;
+ const selected=[...document.querySelectorAll('.storyCharacterCheck:checked')].map(el=>characters[Number(el.value)]?.id).filter(Boolean);
+ const sceneDrafts=[...document.querySelectorAll('.storySceneTitle')].map((el,i)=>({
+  title:el.value,brief:document.querySelectorAll('.storySceneBrief')[i]?.value||'',
+  audio:document.querySelectorAll('.storySceneAudio')[i]?.value||'audio',
+  sound:document.querySelectorAll('.storySceneSound')[i]?.value||'',
+  characterIds:[...document.querySelectorAll('.sceneCharacterCheck[data-scene="'+i+'"]:checked')].map(c=>characters[Number(c.value)]?.id).filter(Boolean)
+ }));
+ try{
+  sessionStorage.setItem('nene_story_draft:'+owner,JSON.stringify({
+   prompt:document.getElementById('prompt')?.value||'',
+   direction:document.getElementById('storyCharacter')?.value||'',
+   count:document.getElementById('storyScenes')?.value||'5',
+   duration:document.getElementById('neneDuration')?.value||'6',
+   resolution:document.getElementById('neneResolution')?.value||'720p',
+   selected,sceneDrafts
+  }));
+  return true;
+ }catch(_){toast('Could not save your story draft on this device.');return false;}
+}
+function neneStoryCreateCharacter(){
+ if(!neneSaveStoryDraft())return;
+ if(!window.NENECharacters?.render){toast('Character Studio is unavailable. Try again later.');return;}
+ window.NENECharacters.render();
+}
+function neneRestoreStoryDraft(){
+ const owner=window.NENECharacters?.owner;
+ if(!owner)return;
+ let draft;
+ try{draft=JSON.parse(sessionStorage.getItem('nene_story_draft:'+owner)||'null');}catch(_){return;}
+ if(!draft)return;
+ document.getElementById('prompt').value=draft.prompt||'';
+ document.getElementById('storyCharacter').value=draft.direction||'';
+ const count=document.getElementById('storyScenes');if([...count.options].some(o=>o.value===draft.count))count.value=draft.count;
+ for(const checkbox of document.querySelectorAll('.storyCharacterCheck')){
+  const c=characters[Number(checkbox.value)];
+  checkbox.checked=!!c&&draft.selected.includes(c.id);
+ }
+ renderStoryCharacterAssignments();
+ (draft.sceneDrafts||[]).forEach((scene,i)=>{
+  const title=document.querySelectorAll('.storySceneTitle')[i],brief=document.querySelectorAll('.storySceneBrief')[i],
+   audio=document.querySelectorAll('.storySceneAudio')[i],sound=document.querySelectorAll('.storySceneSound')[i];
+  if(title)title.value=scene.title||'';if(brief)brief.value=scene.brief||'';
+  if(audio){audio.value=scene.audio||'audio';audio.dispatchEvent(new Event('change'));}
+  if(sound)sound.value=scene.sound||'';
+  document.querySelectorAll('.sceneCharacterCheck[data-scene="'+i+'"]').forEach(el=>{
+   el.checked=scene.characterIds?.includes(characters[Number(el.value)]?.id)||false;
+  });
+ });
+ for(const [id,value] of [['neneDuration',draft.duration],['neneResolution',draft.resolution]]){
+  const input=document.getElementById(id);if(input&&[...input.options].some(o=>o.value===value))input.value=value;
+ }
+}
 function openTool(type){
  if(type==='text'||type==='image'){if(window.neneOpenVideoStudio)return window.neneOpenVideoStudio(type);toast('Video Studio could not load. Refresh the app.');return;}
  if(type==='social'){if(window.neneOpenSocialContent)return window.neneOpenSocialContent();toast('Social Content could not load. Refresh the app.');return;}
@@ -516,7 +587,17 @@ function openTool(type){
  screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider" onchange="syncVideoProviderOptions()"><option value="auto">Auto (Best available)</option><option value="pixazo">Pixazo</option><option value="magic-hour">Magic Hour (free may watermark)</option><option value="ltx">LTX (provider plan)</option></select></div><div class="notice" id="neneProviderNotice">Real video generation is enabled when your secure NENE AI backend is connected. NENE AI does not add a watermark to your generated media. Provider branding, if any, is controlled by the provider and its plan.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">${type==="story" ? "✨ Build Story Plan" : "✨ Generate "+titles[type]+" · Paid credits required"}</button></div></main>`;
  const genBtn=document.getElementById('neneGenerateBtn');
 window.currentNeneToolType=type;
-if(type==="story"){document.querySelectorAll('.storyCharacterCheck').forEach(el=>el.addEventListener('change',storyCharacterSelectionChanged));renderStoryCharacterAssignments();}
+if(type==="story"){
+ document.querySelectorAll('.storyCharacterCheck').forEach(el=>el.addEventListener('change',storyCharacterSelectionChanged));
+ renderStoryCharacterAssignments();
+ const promptField=document.getElementById('prompt');
+ const enhance=document.createElement('button');enhance.type='button';enhance.className='btn';enhance.textContent='✨ Enhance my story';enhance.onclick=neneEnhanceStoryIdea;promptField?.after(enhance);
+ const characterList=document.getElementById('storyCharacterList');
+ const shortcut=document.createElement('button');shortcut.type='button';shortcut.className='btn';shortcut.textContent='＋ Create character in Character Studio';
+ shortcut.onclick=neneStoryCreateCharacter;characterList?.after(shortcut);
+ const returnNote=document.createElement('small');returnNote.textContent='Your unfinished story is saved on this device. Return to Story → Video after saving the character.';shortcut.after(returnNote);
+ neneRestoreStoryDraft();
+}
 if(genBtn){
   genBtn.type='button';
   genBtn.onclick=function(ev){ ev.preventDefault(); ev.stopPropagation(); if(genBtn.disabled) return false; if(type==="story") buildStoryPlan(); else window.generate(type); return false; };
@@ -533,14 +614,22 @@ function renderStoryCharacterAssignments(){
   const box=document.getElementById('storySceneCharacters');
   const count=Number(document.getElementById('storyScenes')?.value||5);
   if(!box)return;
-  const sounds=[...box.querySelectorAll('.storySceneAudio')].map((n,i)=>({audio:n.value,sound:box.querySelectorAll('.storySceneSound')[i]?.value||''}));
+  const sounds=[...box.querySelectorAll('.storySceneAudio')].map((n,i)=>({audio:n.value,sound:box.querySelectorAll('.storySceneSound')[i]?.value||'',title:box.querySelectorAll('.storySceneTitle')[i]?.value||'',brief:box.querySelectorAll('.storySceneBrief')[i]?.value||''}));
   const assignments=new Map([...box.querySelectorAll('.sceneCharacterCheck')].map(input=>[`${input.dataset.scene}:${input.value}`,input.checked]));
   const selected=getSelectedStoryCharacters();
-  if(!selected.length){box.innerHTML='<div class="notice">Select your saved characters above first.</div>';return;}
+  if(!selected.length){box.innerHTML='<div class="notice">Select at least one saved character to assign to your scenes. Your story idea is preserved.</div>';return;}
   box.innerHTML=Array.from({length:count},(_,idx)=>{
     return '<div class="block" style="margin:8px 0"><div class="label">Scene '+(idx+1)+'</div><div class="chips">'+selected.map(ci=>{const c=characters[ci];return '<label class="chip" style="cursor:pointer"><input type="checkbox" class="sceneCharacterCheck" data-scene="'+idx+'" value="'+ci+'" '+(assignments.get(idx+':'+ci)===false?'':'checked')+' style="margin-right:6px">🔒 '+escapeNeneText(c.name)+'</label>';}).join('')+'</div></div>';
   }).join('');
-  box.querySelectorAll('.block').forEach((block,i)=>{const label=document.createElement('label');label.textContent='Scene sound';const select=document.createElement('select');select.className='storySceneAudio';select.dataset.scene=i;select.innerHTML='<option value="audio">AI scene sound</option><option value="silent">Silent</option>';select.value=sounds[i]?.audio||'audio';const sound=document.createElement('textarea');sound.className='storySceneSound';sound.dataset.scene=i;sound.maxLength=500;sound.placeholder='Optional sound direction: dialogue, ambience or effects';sound.value=sounds[i]?.sound||'';sound.setAttribute('aria-label','Scene '+(i+1)+' sound direction');select.setAttribute('aria-label','Scene '+(i+1)+' sound');select.onchange=()=>sound.disabled=select.value==='silent';select.onchange();label.append(select);block.append(label,sound);});
+  box.querySelectorAll('.block').forEach((block,i)=>{
+    const titles=['Opening','Inciting moment','Rising action','Turning point','Resolution'];
+    const briefs=['Introduce the setting and characters.','Reveal the central problem or discovery.','Build the conflict and stakes.','Show a meaningful turning point.','Resolve the story with a memorable final image.'];
+    const titleLabel=document.createElement('label');titleLabel.textContent='Scene title';
+    const titleInput=document.createElement('input');titleInput.className='field storySceneTitle';titleInput.maxLength=120;titleInput.value=sounds[i]?.title||titles[Math.min(i,4)]||'Scene '+(i+1);titleLabel.append(titleInput);
+    const briefLabel=document.createElement('label');briefLabel.textContent='Scene action and visuals';
+    const briefInput=document.createElement('textarea');briefInput.className='field storySceneBrief';briefInput.maxLength=1200;briefInput.value=sounds[i]?.brief||briefs[Math.min(i,4)];briefLabel.append(briefInput);
+    block.append(titleLabel,briefLabel);
+    const label=document.createElement('label');label.textContent='Scene sound';const select=document.createElement('select');select.className='storySceneAudio';select.dataset.scene=i;select.innerHTML='<option value="audio">AI scene sound</option><option value="silent">Silent</option>';select.value=sounds[i]?.audio||'audio';const sound=document.createElement('textarea');sound.className='storySceneSound';sound.dataset.scene=i;sound.maxLength=500;sound.placeholder='Optional sound direction: dialogue, ambience or effects';sound.value=sounds[i]?.sound||'';sound.setAttribute('aria-label','Scene '+(i+1)+' sound direction');select.setAttribute('aria-label','Scene '+(i+1)+' sound');select.onchange=()=>sound.disabled=select.value==='silent';select.onchange();label.append(select);block.append(label,sound);});
 }
 function storyCharacterSelectionChanged(){
   renderStoryCharacterAssignments();
@@ -566,10 +655,12 @@ function buildStoryPlan(){
     const t=templates[scenes===2&&i===1?templates.length-1:Math.min(i,templates.length-1)];
     const checks=[...document.querySelectorAll('.sceneCharacterCheck[data-scene="'+i+'"]:checked')].map(el=>Number(el.value));
     const sceneCharacters=checks.map(ci=>characters[ci]).filter(Boolean);
+    if(!(document.querySelectorAll('.storySceneTitle')[i]?.value||'').trim()){alert('Give scene '+(i+1)+' a title.');return;}
+    if(!(document.querySelectorAll('.storySceneBrief')[i]?.value||'').trim()){alert('Describe the action for scene '+(i+1)+'.');return;}
     scenePlans.push({
       number:i+1,
-      title:i<templates.length?t[0]:'Scene '+(i+1),
-      brief:t[1],
+      title:(document.querySelectorAll('.storySceneTitle')[i]?.value||t[0]).trim().slice(0,120),
+      brief:(document.querySelectorAll('.storySceneBrief')[i]?.value||t[1]).trim().slice(0,1200),
       characterLock:true,
       generate_audio:document.querySelector('.storySceneAudio[data-scene="'+i+'"]')?.value!=='silent',
       sound_direction:(document.querySelector('.storySceneSound[data-scene="'+i+'"]')?.value||'').trim(),
@@ -601,9 +692,11 @@ function buildStoryPlan(){
   const button=document.getElementById('neneGenerateBtn');
   if(button){button.disabled=true;button.innerHTML='✓ Story plan prepared with character guidance';}
   const main=document.querySelector('main');
+  document.getElementById('neneStoryPlanPreview')?.remove();
+  document.getElementById('neneGenerateStoryScenesBtn')?.remove();
   if(main){
     const cards=scenePlans.map(sc=>'<div class="creation"><div class="thumb">🎬</div><div><b>Scene '+sc.number+': '+escapeNeneText(sc.title)+'</b><small>'+escapeNeneText(sc.brief)+'</small><small style="display:block;color:#d8b55b">🔒 '+escapeNeneText(sc.characters.map(c=>c.name).join(' + '))+' · character guidance</small></div></div>').join('');
-    main.insertAdjacentHTML('beforeend','<div class="block" style="margin-top:16px"><div class="label">Your scene plan</div><div class="list">'+cards+'</div><div class="notice" style="margin-top:10px">🎭 Character guidance: '+escapeNeneText(selectedCharacters.map(c=>c.name).join(', '))+' '+(selectedCharacters.length===1?'is':'are')+' assigned to the story scenes. Descriptions guide the outputs; exact visual identity is not guaranteed.</div></div>');
+    main.insertAdjacentHTML('beforeend','<div id="neneStoryPlanPreview" class="block" style="margin-top:16px"><div class="label">Your scene plan</div><div class="list">'+cards+'</div><div class="notice" style="margin-top:10px">🎭 Character guidance: '+escapeNeneText(selectedCharacters.map(c=>c.name).join(', '))+' '+(selectedCharacters.length===1?'is':'are')+' assigned to the story scenes. Descriptions guide the outputs; exact visual identity is not guaranteed.</div></div>');
   }
   window.neneCurrentStoryPlan = plan;
   toast('Story plan prepared with character guidance');
