@@ -1,6 +1,18 @@
 <!doctype html>
 <html lang="en">
 <head>
+<script>
+/* Hide the startup dashboard while restoring an account's saved page. */
+try {
+ const page=JSON.parse(sessionStorage.getItem('nene_last_page_v1')||'null');
+ if(page&&page.owner&&page.method&&page.method!=='renderHome')document.documentElement.dataset.neneRestoring='true';
+} catch (_) {}
+</script>
+<style>
+html[data-nene-restoring="true"] #screen > * { display:none !important; }
+html[data-nene-restoring="true"] #screen::before { content:"Opening your saved page…"; display:block; padding:40px 24px; color:#d7c28f; font:16px system-ui,sans-serif; }
+</style>
+
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
  <link rel="manifest" href="./manifest.webmanifest">
