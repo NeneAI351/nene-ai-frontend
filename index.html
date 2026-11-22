@@ -617,7 +617,7 @@ function renderStoryCharacterAssignments(){
   const sounds=[...box.querySelectorAll('.storySceneAudio')].map((n,i)=>({audio:n.value,sound:box.querySelectorAll('.storySceneSound')[i]?.value||'',title:box.querySelectorAll('.storySceneTitle')[i]?.value||'',brief:box.querySelectorAll('.storySceneBrief')[i]?.value||''}));
   const assignments=new Map([...box.querySelectorAll('.sceneCharacterCheck')].map(input=>[`${input.dataset.scene}:${input.value}`,input.checked]));
   const selected=getSelectedStoryCharacters();
-  if(!selected.length){box.innerHTML='<div class="notice">Select your saved characters above first.</div>';return;}
+  if(!selected.length){box.innerHTML='<div class="notice">Select at least one saved character to assign to your scenes. Your story idea is preserved.</div>';return;}
   box.innerHTML=Array.from({length:count},(_,idx)=>{
     return '<div class="block" style="margin:8px 0"><div class="label">Scene '+(idx+1)+'</div><div class="chips">'+selected.map(ci=>{const c=characters[ci];return '<label class="chip" style="cursor:pointer"><input type="checkbox" class="sceneCharacterCheck" data-scene="'+idx+'" value="'+ci+'" '+(assignments.get(idx+':'+ci)===false?'':'checked')+' style="margin-right:6px">🔒 '+escapeNeneText(c.name)+'</label>';}).join('')+'</div></div>';
   }).join('');
@@ -655,6 +655,7 @@ function buildStoryPlan(){
     const t=templates[scenes===2&&i===1?templates.length-1:Math.min(i,templates.length-1)];
     const checks=[...document.querySelectorAll('.sceneCharacterCheck[data-scene="'+i+'"]:checked')].map(el=>Number(el.value));
     const sceneCharacters=checks.map(ci=>characters[ci]).filter(Boolean);
+    if(!(document.querySelectorAll('.storySceneTitle')[i]?.value||'').trim()){alert('Give scene '+(i+1)+' a title.');return;}
     if(!(document.querySelectorAll('.storySceneBrief')[i]?.value||'').trim()){alert('Describe the action for scene '+(i+1)+'.');return;}
     scenePlans.push({
       number:i+1,
