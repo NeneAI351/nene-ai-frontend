@@ -494,6 +494,62 @@ function previewCharacterReference(e){
   }).catch(err=>alert(err.message||'Could not read the reference image.'));
 }
 
+// Keep unfinished Story Studio edits while visiting Character Studio.
+function neneSaveStoryDraft(){
+ const owner=window.NENECharacters?.owner;
+ if(!owner)return false;
+ const selected=[...document.querySelectorAll('.storyCharacterCheck:checked')].map(el=>characters[Number(el.value)]?.id).filter(Boolean);
+ const sceneDrafts=[...document.querySelectorAll('.storySceneTitle')].map((el,i)=>({
+  title:el.value,brief:document.querySelectorAll('.storySceneBrief')[i]?.value||'',
+  audio:document.querySelectorAll('.storySceneAudio')[i]?.value||'audio',
+  sound:document.querySelectorAll('.storySceneSound')[i]?.value||'',
+  characterIds:[...document.querySelectorAll('.sceneCharacterCheck[data-scene="'+i+'"]:checked')].map(c=>characters[Number(c.value)]?.id).filter(Boolean)
+ }));
+ try{
+  sessionStorage.setItem('nene_story_draft:'+owner,JSON.stringify({
+   prompt:document.getElementById('prompt')?.value||'',
+   direction:document.getElementById('storyCharacter')?.value||'',
+   count:document.getElementById('storyScenes')?.value||'5',
+   duration:document.getElementById('neneDuration')?.value||'6',
+   resolution:document.getElementById('neneResolution')?.value||'720p',
+   selected,sceneDrafts
+  }));
+  return true;
+ }catch(_){toast('Could not save your story draft on this device.');return false;}
+}
+function neneStoryCreateCharacter(){
+ if(!neneSaveStoryDraft())return;
+ if(!window.NENECharacters?.render){toast('Character Studio is unavailable. Try again later.');return;}
+ window.NENECharacters.render();
+}
+function neneRestoreStoryDraft(){
+ const owner=window.NENECharacters?.owner;
+ if(!owner)return;
+ let draft;
+ try{draft=JSON.parse(sessionStorage.getItem('nene_story_draft:'+owner)||'null');}catch(_){return;}
+ if(!draft)return;
+ document.getElementById('prompt').value=draft.prompt||'';
+ document.getElementById('storyCharacter').value=draft.direction||'';
+ const count=document.getElementById('storyScenes');if([...count.options].some(o=>o.value===draft.count))count.value=draft.count;
+ for(const checkbox of document.querySelectorAll('.storyCharacterCheck')){
+  const c=characters[Number(checkbox.value)];
+  checkbox.checked=!!c&&draft.selected.includes(c.id);
+ }
+ renderStoryCharacterAssignments();
+ (draft.sceneDrafts||[]).forEach((scene,i)=>{
+  const title=document.querySelectorAll('.storySceneTitle')[i],brief=document.querySelectorAll('.storySceneBrief')[i],
+   audio=document.querySelectorAll('.storySceneAudio')[i],sound=document.querySelectorAll('.storySceneSound')[i];
+  if(title)title.value=scene.title||'';if(brief)brief.value=scene.brief||'';
+  if(audio){audio.value=scene.audio||'audio';audio.dispatchEvent(new Event('change'));}
+  if(sound)sound.value=scene.sound||'';
+  document.querySelectorAll('.sceneCharacterCheck[data-scene="'+i+'"]').forEach(el=>{
+   el.checked=scene.characterIds?.includes(characters[Number(el.value)]?.id)||false;
+  });
+ });
+ for(const [id,value] of [['neneDuration',draft.duration],['neneResolution',draft.resolution]]){
+  const input=document.getElementById(id);if(input&&[...input.options].some(o=>o.value===value))input.value=value;
+ }
+}
 function openTool(type){
  if(type==='text'||type==='image'){if(window.neneOpenVideoStudio)return window.neneOpenVideoStudio(type);toast('Video Studio could not load. Refresh the app.');return;}
  if(type==='social'){if(window.neneOpenSocialContent)return window.neneOpenSocialContent();toast('Social Content could not load. Refresh the app.');return;}
@@ -516,7 +572,15 @@ function openTool(type){
  screen.innerHTML=`<main><div class="toolhead"><button class="back" onclick="renderHome()">‹</button><div><div class="eyebrow">${icons[type]} NENE AI</div><h1 style="font-size:28px">${titles[type]}</h1></div></div>${extra}${options}<div class="row block"><select id="neneDuration"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option></select><select id="neneResolution"><option value="1920x1080">1080p HD</option><option value="1280x720">720p</option><option value="3840x2160">4K (Pro)</option></select></div><div class="block"><div class="label">Video provider</div><select id="neneProvider" onchange="syncVideoProviderOptions()"><option value="auto">Auto (Best available)</option><option value="pixazo">Pixazo</option><option value="magic-hour">Magic Hour (free may watermark)</option><option value="ltx">LTX (provider plan)</option></select></div><div class="notice" id="neneProviderNotice">Real video generation is enabled when your secure NENE AI backend is connected. NENE AI does not add a watermark to your generated media. Provider branding, if any, is controlled by the provider and its plan.</div><div class="block"><button type="button" id="neneGenerateBtn" class="btn gold">${type==="story" ? "✨ Build Story Plan" : "✨ Generate "+titles[type]+" · Paid credits required"}</button></div></main>`;
  const genBtn=document.getElementById('neneGenerateBtn');
 window.currentNeneToolType=type;
-if(type==="story"){document.querySelectorAll('.storyCharacterCheck').forEach(el=>el.addEventListener('change',storyCharacterSelectionChanged));renderStoryCharacterAssignments();}
+if(type==="story"){
+ document.querySelectorAll('.storyCharacterCheck').forEach(el=>el.addEventListener('change',storyCharacterSelectionChanged));
+ renderStoryCharacterAssignments();
+ const characterList=document.getElementById('storyCharacterList');
+ const shortcut=document.createElement('button');shortcut.type='button';shortcut.className='btn';shortcut.textContent='＋ Create character in Character Studio';
+ shortcut.onclick=neneStoryCreateCharacter;characterList?.after(shortcut);
+ const returnNote=document.createElement('small');returnNote.textContent='Your unfinished story is saved on this device. Return to Story → Video after saving the character.';shortcut.after(returnNote);
+ neneRestoreStoryDraft();
+}
 if(genBtn){
   genBtn.type='button';
   genBtn.onclick=function(ev){ ev.preventDefault(); ev.stopPropagation(); if(genBtn.disabled) return false; if(type==="story") buildStoryPlan(); else window.generate(type); return false; };
