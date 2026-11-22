@@ -4,7 +4,7 @@
   const tools = [
     ['🎭','Character Studio','Create reusable characters, outfits and reference looks.','characters'],
     ['✍️','AI Script Writer','Hooks, scripts, scenes, dialogue and CTAs.','script'],
-    ['🎙️','AI Voice','Narration, voices and lip-sync workflow.','voice'],
+    ['🎙️','AI Voice','Create and preview narration or dialogue.','voice'],
     ['🎵','Music + SFX','Import music and sound effects into your film.','audio'],
     ['💬','Captions','Add timed text and import or export SRT.','captions'],
     ['🌍','Translate & Dub','Import translated text and voiceovers.','translate'],
