@@ -28,3 +28,34 @@ test('actual story planner retains per-scene sound choices after character selec
  w.eval('const characters=[{id:"'+USER+'",name:"Ada"}];'+html.slice(start,end));w.NENECharacters={owner:USER};w.escapeNeneText=String;w.toast=()=>{};w.generateStoryScenes=()=>{};
  w.renderStoryCharacterAssignments();const choices=w.document.querySelectorAll('.storySceneAudio');assert.equal(choices.length,3);choices[1].value='silent';w.document.querySelector('.storySceneSound').value='River water';w.renderStoryCharacterAssignments();assert.equal(w.document.querySelectorAll('.storySceneAudio')[1].value,'silent');w.buildStoryPlan();assert.equal(w.neneCurrentStoryPlan.scenes[0].sound_direction,'River water');assert.equal(w.neneCurrentStoryPlan.scenes[1].generate_audio,false);dom.window.close();
 });
+
+test('editable scene titles and visual descriptions survive character assignment rerender',()=>{
+ const html=fs.readFileSync(__dirname+'/../index.html','utf8');
+ const start=html.indexOf('function getSelectedStoryCharacters(){'),end=html.indexOf('async function generateStoryScenes(){',start);
+ const dom=new JSDOM('<main><textarea id="prompt">River friends</textarea><input type="checkbox" class="storyCharacterCheck" checked value="0"><select id="storyScenes"><option value="2">2</option></select><div id="storySceneCharacters"></div><button id="neneGenerateBtn"></button></main>',{url:'https://app.test',runScripts:'outside-only'}),w=dom.window;
+ w.eval('const characters=[{id:"'+USER+'",name:"Ada"}];'+html.slice(start,end));w.NENECharacters={owner:USER};w.escapeNeneText=String;w.toast=()=>{};w.generateStoryScenes=()=>{};
+ w.renderStoryCharacterAssignments();
+ w.document.querySelectorAll('.storySceneTitle')[0].value='Crossing';
+ w.document.querySelectorAll('.storySceneBrief')[0].value='Ada crosses the river at sunset.';
+ w.renderStoryCharacterAssignments();
+ assert.equal(w.document.querySelectorAll('.storySceneTitle')[0].value,'Crossing');
+ assert.equal(w.document.querySelectorAll('.storySceneBrief')[0].value,'Ada crosses the river at sunset.');
+ w.buildStoryPlan();
+ assert.equal(w.neneCurrentStoryPlan.scenes[0].title,'Crossing');
+ assert.equal(w.neneCurrentStoryPlan.scenes[0].brief,'Ada crosses the river at sunset.');
+ dom.window.close();
+});
+test('story guidance requires approval and keeps original when cancelled',()=>{
+ const html=fs.readFileSync(__dirname+'/../index.html','utf8');
+ const start=html.indexOf('function neneEnhanceStoryIdea(){'),end=html.indexOf('function neneSaveStoryDraft(){',start);
+ const dom=new JSDOM('<textarea id="prompt">A river journey</textarea>',{url:'https://app.test',runScripts:'outside-only'}),w=dom.window;
+ w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.dispatchEvent(new w.Event('close'));};
+ w.eval(html.slice(start,end));
+ w.neneEnhanceStoryIdea();
+ assert.equal(w.document.getElementById('prompt').value,'A river journey');
+ w.document.querySelector('dialog button').click();
+ assert.equal(w.document.getElementById('prompt').value,'A river journey');
+ w.neneEnhanceStoryIdea();w.document.querySelector('dialog .gold').click();
+ assert.match(w.document.getElementById('prompt').value,/Story direction/);
+ dom.window.close();
+});
