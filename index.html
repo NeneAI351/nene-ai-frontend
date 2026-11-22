@@ -495,6 +495,21 @@ function previewCharacterReference(e){
 }
 
 // Keep unfinished Story Studio edits while visiting Character Studio.
+function neneEnhanceStoryIdea(){
+ const field=document.getElementById('prompt');
+ if(!field||!field.value.trim()){alert('Write a story idea first.');return;}
+ const original=field.value.trim();
+ const proposed=original+'\n\nStory direction: Introduce the setting and main characters, show a clear goal or conflict, build tension through meaningful choices, and finish with a memorable resolution. Include visual actions, locations and emotional changes that can be filmed as short scenes.';
+ const preview=document.createElement('dialog');
+ preview.style.cssText='background:#15120c;color:#f7edda;border:1px solid #967735;border-radius:16px;padding:18px;max-width:min(560px,90vw)';
+ const heading=document.createElement('h2');heading.textContent='Review enhanced story idea';
+ const note=document.createElement('p');note.textContent='Optional writing guidance generated on this device. This is not an AI model response. No credits are charged.';
+ const edit=document.createElement('textarea');edit.value=proposed;edit.maxLength=6000;edit.style.cssText='width:100%;min-height:180px';
+ const cancel=document.createElement('button');cancel.type='button';cancel.className='btn';cancel.textContent='Keep original';cancel.onclick=()=>preview.close();
+ const apply=document.createElement('button');apply.type='button';apply.className='btn gold';apply.textContent='Use this version';apply.onclick=()=>{if(!edit.value.trim())return;field.value=edit.value.trim();preview.close();};
+ preview.append(heading,note,edit,cancel,apply);document.body.append(preview);
+ preview.addEventListener('close',()=>preview.remove(),{once:true});preview.showModal();
+}
 function neneSaveStoryDraft(){
  const owner=window.NENECharacters?.owner;
  if(!owner)return false;
@@ -575,6 +590,8 @@ window.currentNeneToolType=type;
 if(type==="story"){
  document.querySelectorAll('.storyCharacterCheck').forEach(el=>el.addEventListener('change',storyCharacterSelectionChanged));
  renderStoryCharacterAssignments();
+ const promptField=document.getElementById('prompt');
+ const enhance=document.createElement('button');enhance.type='button';enhance.className='btn';enhance.textContent='✨ Enhance my story';enhance.onclick=neneEnhanceStoryIdea;promptField?.after(enhance);
  const characterList=document.getElementById('storyCharacterList');
  const shortcut=document.createElement('button');shortcut.type='button';shortcut.className='btn';shortcut.textContent='＋ Create character in Character Studio';
  shortcut.onclick=neneStoryCreateCharacter;characterList?.after(shortcut);
