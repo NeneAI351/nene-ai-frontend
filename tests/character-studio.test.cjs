@@ -68,3 +68,20 @@ test('story entry loads only the current account characters and ignores legacy s
  assert.equal(s.tool,'story');assert.equal(s.w.characters.length,1);assert.equal(s.w.characters[0].name,'Amara');
  s.setUser('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');await s.w.openTool('story');assert.equal(s.w.characters.length,0);s.dom.window.close();
 });
+
+test('large phone reference is compressed to the existing private 400 KB payload limit',async()=>{
+ const s=setup(),w=s.w;
+ const source=code.slice(code.indexOf(' async function prepareReference(file){'),code.indexOf(' async function save(event){'));
+ assert.ok(source.startsWith(' async function prepareReference('));
+ w.FileReader=class{readAsDataURL(){this.result='data:image/png;base64,AAAA';this.onload();}};
+ w.Image=class{constructor(){this.naturalWidth=3000;this.naturalHeight=2000;}set src(value){this.onload();}};
+ let attempts=0;
+ w.HTMLCanvasElement.prototype.getContext=function(){return {drawImage:()=>{}};};
+ w.HTMLCanvasElement.prototype.toDataURL=function(){attempts++;return 'data:image/jpeg;base64,'+'A'.repeat(2000);};
+ w.eval(source+'window.testPrepareReference=prepareReference;');
+ const output=await w.testPrepareReference({type:'image/png',size:5*1024*1024});
+ assert.match(output,/^data:image\/jpeg;base64,/);assert.ok(attempts>0);
+ await assert.rejects(w.testPrepareReference({type:'image/svg+xml',size:1000}),/PNG, JPEG or WebP/);
+ await assert.rejects(w.testPrepareReference({type:'image/jpeg',size:21*1024*1024}),/20 MB maximum/);
+ s.dom.window.close();
+});
