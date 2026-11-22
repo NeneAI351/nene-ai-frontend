@@ -175,7 +175,8 @@
       }
       if(state.batchMode&&selectedIndices?.length){
         const batch=await send(state.owner,`/api/stories/${state.storyId}/generate-selected`,{scenes:state.scenes.filter(s=>selectedIndices.includes(s.scene_index)).map(s=>({scene_index:s.scene_index,credit_limit:s.body.credit_limit}))});
-        for(const result of batch.scenes||[]){const scene=state.scenes.find(s=>s.scene_index===result.scene_index);if(!scene||!UUID.test(result.generation_id))throw Error('Check saved batch progress before continuing.');scene.generationId=result.generation_id;scene.linked=true;}save(state);
+        if(!Array.isArray(batch.scenes)||batch.scenes.length!==selectedIndices.length||new Set(batch.scenes.map(s=>s.scene_index)).size!==selectedIndices.length||batch.scenes.some(s=>!selectedIndices.includes(s.scene_index)))throw Error('The batch response could not be confirmed. Check saved progress before continuing.');
+        for(const result of batch.scenes){const scene=state.scenes.find(s=>s.scene_index===result.scene_index);if(!scene||!UUID.test(result.generation_id))throw Error('Check saved batch progress before continuing.');scene.generationId=result.generation_id;scene.linked=true;}save(state);
       }
       for(const scene of state.scenes){
         if(state.batchMode&&!scene.generationId)continue;
