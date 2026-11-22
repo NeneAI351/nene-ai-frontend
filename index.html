@@ -577,7 +577,7 @@ function buildStoryPlan(){
     if(!(document.querySelectorAll('.storySceneBrief')[i]?.value||'').trim()){alert('Describe the action for scene '+(i+1)+'.');return;}
     scenePlans.push({
       number:i+1,
-      title:(document.querySelector('.storySceneTitle:nth-of-type(1)')?.value && false) || (document.querySelectorAll('.storySceneTitle')[i]?.value||t[0]).trim().slice(0,120),
+      title:(document.querySelectorAll('.storySceneTitle')[i]?.value||t[0]).trim().slice(0,120),
       brief:(document.querySelectorAll('.storySceneBrief')[i]?.value||t[1]).trim().slice(0,1200),
       characterLock:true,
       generate_audio:document.querySelector('.storySceneAudio[data-scene="'+i+'"]')?.value!=='silent',
