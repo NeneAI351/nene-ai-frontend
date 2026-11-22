@@ -68,3 +68,19 @@ test('story entry loads only the current account characters and ignores legacy s
  assert.equal(s.tool,'story');assert.equal(s.w.characters.length,1);assert.equal(s.w.characters[0].name,'Amara');
  s.setUser('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');await s.w.openTool('story');assert.equal(s.w.characters.length,0);s.dom.window.close();
 });
+
+test('Android gallery image can load through blob URL when FileReader fails',async()=>{
+ const s=setup(),w=s.w;
+ const source=code.slice(code.indexOf(' async function prepareReference(file){'),code.indexOf(' async function save(event){'));
+ let revoked=false,read=false;
+ w.URL.createObjectURL=()=> 'blob:https://nene.test/phone-photo';
+ w.URL.revokeObjectURL=()=>{revoked=true;};
+ w.FileReader=class{readAsDataURL(){read=true;this.onerror();}};
+ w.Image=class{constructor(){this.naturalWidth=1800;this.naturalHeight=1200;}set src(value){if(value.startsWith('blob:'))this.onload();else this.onerror();}};
+ w.HTMLCanvasElement.prototype.getContext=function(){return {drawImage:()=>{}};};
+ w.HTMLCanvasElement.prototype.toDataURL=function(){return 'data:image/jpeg;base64,'+'A'.repeat(2000);};
+ w.eval(source+'window.testPrepareReference=prepareReference;');
+ const output=await w.testPrepareReference({type:'image/jpeg',size:4*1024*1024});
+ assert.match(output,/^data:image\/jpeg;base64,/);assert.equal(read,false);assert.equal(revoked,true);
+ s.dom.window.close();
+});

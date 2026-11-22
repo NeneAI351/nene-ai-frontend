@@ -81,12 +81,23 @@
   f.onsubmit=save;box.scrollIntoView?.({behavior:'smooth',block:'start'});
  }
  async function prepareReference(file){
-  const types=['image/png','image/jpeg','image/webp'];
-  if(!types.includes(file.type))throw Error('Choose a PNG, JPEG or WebP image.');
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw Error('Choose a PNG, JPEG or WebP image.');
   if(file.size>20*1024*1024)throw Error('This photo is too large to process (20 MB maximum).');
-  const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read the image.'));reader.readAsDataURL(file);});
-  const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(Error('This image could not be opened.'));image.src=data;});
-  if(file.size<=400*1024)return data;
+  const decode=src=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('This image could not be opened.'));img.src=src;});
+  let img,objectUrl=null;
+  try{
+   // Android WebViews can reject FileReader for photos selected from gallery providers.
+   // Decode the selected File through a temporary blob URL instead.
+   if(typeof URL.createObjectURL==='function'){
+    objectUrl=URL.createObjectURL(file);
+    img=await decode(objectUrl);
+   }
+  }catch(error){img=null;}
+  finally{if(objectUrl)URL.revokeObjectURL(objectUrl);}
+  if(!img){
+   const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read this photo. Try selecting it from your gallery again.'));reader.readAsDataURL(file);});
+   img=await decode(data);
+  }
   if(!img.naturalWidth||!img.naturalHeight)throw Error('This image has invalid dimensions.');
   for(const maxEdge of [1600,1280,1024,800,640,480,320]){
    const scale=Math.min(1,maxEdge/Math.max(img.naturalWidth,img.naturalHeight));
