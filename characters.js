@@ -37,6 +37,15 @@
   try{await account();}catch(error){if(page())message(error.message);return;}
   const ticket=++epoch;form=null;reference=null;
   document.getElementById('screen').innerHTML=`<main data-character-studio><div class="toolhead"><button class="back" type="button" id="characterBack" aria-label="Back to AI Studio">‹</button><div><div class="eyebrow">Your cast</div><h1>Character Studio</h1></div></div><p class="subtitle">Save a character’s appearance, personality, wardrobe and reference privately to your account.</p><div class="notice">Character guidance reuses your descriptions in story scenes. A single-character scene can use its reference image. Multiple-character scenes use descriptions; identical faces across outputs are not guaranteed.</div><p id="characterStatus" role="status" aria-live="polite">Loading your characters…</p><div id="characterList" class="list"></div><div class="block"><button class="btn gold" id="newCharacter" type="button" disabled>Create character</button><button class="btn" id="refreshCharacters" type="button" style="margin-top:8px">Reload characters</button></div><div id="characterEditor"></div></main>`;
+  const draftKey='nene_story_draft:'+owner;
+  let hasStoryDraft=false;try{hasStoryDraft=!!sessionStorage.getItem(draftKey);}catch(_){}
+  if(hasStoryDraft){
+   const backToStory=document.createElement('button');
+   backToStory.type='button';backToStory.className='btn';backToStory.id='returnToStory';
+   backToStory.textContent='← Return to unfinished story';
+   backToStory.onclick=()=>{if(form?.busy)return;window.openTool('story');};
+   document.getElementById('characterBack').after(backToStory);
+  }
   document.getElementById('characterBack').onclick=()=>window.renderCreateHub();
   document.getElementById('refreshCharacters').onclick=render;
   document.getElementById('newCharacter').onclick=()=>edit();
