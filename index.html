@@ -533,14 +533,22 @@ function renderStoryCharacterAssignments(){
   const box=document.getElementById('storySceneCharacters');
   const count=Number(document.getElementById('storyScenes')?.value||5);
   if(!box)return;
-  const sounds=[...box.querySelectorAll('.storySceneAudio')].map((n,i)=>({audio:n.value,sound:box.querySelectorAll('.storySceneSound')[i]?.value||''}));
+  const sounds=[...box.querySelectorAll('.storySceneAudio')].map((n,i)=>({audio:n.value,sound:box.querySelectorAll('.storySceneSound')[i]?.value||'',title:box.querySelectorAll('.storySceneTitle')[i]?.value||'',brief:box.querySelectorAll('.storySceneBrief')[i]?.value||''}));
   const assignments=new Map([...box.querySelectorAll('.sceneCharacterCheck')].map(input=>[`${input.dataset.scene}:${input.value}`,input.checked]));
   const selected=getSelectedStoryCharacters();
   if(!selected.length){box.innerHTML='<div class="notice">Select your saved characters above first.</div>';return;}
   box.innerHTML=Array.from({length:count},(_,idx)=>{
     return '<div class="block" style="margin:8px 0"><div class="label">Scene '+(idx+1)+'</div><div class="chips">'+selected.map(ci=>{const c=characters[ci];return '<label class="chip" style="cursor:pointer"><input type="checkbox" class="sceneCharacterCheck" data-scene="'+idx+'" value="'+ci+'" '+(assignments.get(idx+':'+ci)===false?'':'checked')+' style="margin-right:6px">🔒 '+escapeNeneText(c.name)+'</label>';}).join('')+'</div></div>';
   }).join('');
-  box.querySelectorAll('.block').forEach((block,i)=>{const label=document.createElement('label');label.textContent='Scene sound';const select=document.createElement('select');select.className='storySceneAudio';select.dataset.scene=i;select.innerHTML='<option value="audio">AI scene sound</option><option value="silent">Silent</option>';select.value=sounds[i]?.audio||'audio';const sound=document.createElement('textarea');sound.className='storySceneSound';sound.dataset.scene=i;sound.maxLength=500;sound.placeholder='Optional sound direction: dialogue, ambience or effects';sound.value=sounds[i]?.sound||'';sound.setAttribute('aria-label','Scene '+(i+1)+' sound direction');select.setAttribute('aria-label','Scene '+(i+1)+' sound');select.onchange=()=>sound.disabled=select.value==='silent';select.onchange();label.append(select);block.append(label,sound);});
+  box.querySelectorAll('.block').forEach((block,i)=>{
+    const titles=['Opening','Inciting moment','Rising action','Turning point','Resolution'];
+    const briefs=['Introduce the setting and characters.','Reveal the central problem or discovery.','Build the conflict and stakes.','Show a meaningful turning point.','Resolve the story with a memorable final image.'];
+    const titleLabel=document.createElement('label');titleLabel.textContent='Scene title';
+    const titleInput=document.createElement('input');titleInput.className='field storySceneTitle';titleInput.maxLength=120;titleInput.value=sounds[i]?.title||titles[Math.min(i,4)]||'Scene '+(i+1);titleLabel.append(titleInput);
+    const briefLabel=document.createElement('label');briefLabel.textContent='Scene action and visuals';
+    const briefInput=document.createElement('textarea');briefInput.className='field storySceneBrief';briefInput.maxLength=1200;briefInput.value=sounds[i]?.brief||briefs[Math.min(i,4)];briefLabel.append(briefInput);
+    block.append(titleLabel,briefLabel);
+    const label=document.createElement('label');label.textContent='Scene sound';const select=document.createElement('select');select.className='storySceneAudio';select.dataset.scene=i;select.innerHTML='<option value="audio">AI scene sound</option><option value="silent">Silent</option>';select.value=sounds[i]?.audio||'audio';const sound=document.createElement('textarea');sound.className='storySceneSound';sound.dataset.scene=i;sound.maxLength=500;sound.placeholder='Optional sound direction: dialogue, ambience or effects';sound.value=sounds[i]?.sound||'';sound.setAttribute('aria-label','Scene '+(i+1)+' sound direction');select.setAttribute('aria-label','Scene '+(i+1)+' sound');select.onchange=()=>sound.disabled=select.value==='silent';select.onchange();label.append(select);block.append(label,sound);});
 }
 function storyCharacterSelectionChanged(){
   renderStoryCharacterAssignments();
@@ -566,10 +574,11 @@ function buildStoryPlan(){
     const t=templates[scenes===2&&i===1?templates.length-1:Math.min(i,templates.length-1)];
     const checks=[...document.querySelectorAll('.sceneCharacterCheck[data-scene="'+i+'"]:checked')].map(el=>Number(el.value));
     const sceneCharacters=checks.map(ci=>characters[ci]).filter(Boolean);
+    if(!(document.querySelectorAll('.storySceneBrief')[i]?.value||'').trim()){alert('Describe the action for scene '+(i+1)+'.');return;}
     scenePlans.push({
       number:i+1,
-      title:i<templates.length?t[0]:'Scene '+(i+1),
-      brief:t[1],
+      title:(document.querySelector('.storySceneTitle:nth-of-type(1)')?.value && false) || (document.querySelectorAll('.storySceneTitle')[i]?.value||t[0]).trim().slice(0,120),
+      brief:(document.querySelectorAll('.storySceneBrief')[i]?.value||t[1]).trim().slice(0,1200),
       characterLock:true,
       generate_audio:document.querySelector('.storySceneAudio[data-scene="'+i+'"]')?.value!=='silent',
       sound_direction:(document.querySelector('.storySceneSound[data-scene="'+i+'"]')?.value||'').trim(),
