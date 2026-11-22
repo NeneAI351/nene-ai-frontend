@@ -59,3 +59,28 @@ test('story guidance requires approval and keeps original when cancelled',()=>{
  assert.match(w.document.getElementById('prompt').value,/Story direction/);
  dom.window.close();
 });
+
+test('character studio round-trip restores story text, scene edits, audio and character assignments',()=>{
+ const html=fs.readFileSync(__dirname+'/../index.html','utf8');
+ const start=html.indexOf('function neneSaveStoryDraft(){'),end=html.indexOf('function openTool(type){',start);
+ const plannerStart=html.indexOf('function getSelectedStoryCharacters(){'),plannerEnd=html.indexOf('function buildStoryPlan(){',plannerStart);
+ const markup='<main><textarea id="prompt">Original story</textarea><textarea id="storyCharacter">Blue jacket</textarea><label><input type="checkbox" class="storyCharacterCheck" value="0" checked></label><select id="storyScenes"><option value="2">2</option></select><select id="neneDuration"><option value="6">6</option><option value="8">8</option></select><select id="neneResolution"><option value="720p">720p</option></select><div id="storySceneCharacters"></div></main>';
+ const dom=new JSDOM(markup,{url:'https://app.test',runScripts:'outside-only'}),w=dom.window;
+ w.eval('const characters=[{id:"'+USER+'",name:"Ada"}];'+html.slice(plannerStart,plannerEnd)+html.slice(start,end));
+ w.NENECharacters={owner:USER,render:()=>{}};w.escapeNeneText=String;w.toast=()=>{};
+ w.renderStoryCharacterAssignments();
+ w.document.querySelector('.storySceneTitle').value='A new beginning';
+ w.document.querySelector('.storySceneBrief').value='Ada boards the ferry.';
+ w.document.querySelector('.storySceneAudio').value='silent';
+ assert.equal(w.neneSaveStoryDraft(),true);
+ w.document.getElementById('prompt').value='';
+ w.document.querySelector('.storyCharacterCheck').checked=false;
+ w.renderStoryCharacterAssignments();
+ w.neneRestoreStoryDraft();
+ assert.equal(w.document.getElementById('prompt').value,'Original story');
+ assert.equal(w.document.querySelector('.storyCharacterCheck').checked,true);
+ assert.equal(w.document.querySelector('.storySceneTitle').value,'A new beginning');
+ assert.equal(w.document.querySelector('.storySceneBrief').value,'Ada boards the ferry.');
+ assert.equal(w.document.querySelector('.storySceneAudio').value,'silent');
+ dom.window.close();
+});
