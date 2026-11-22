@@ -19,3 +19,14 @@ function refreshSetup({saved,owner='owner-a',historyState}={}){const dom=new JSD
 test('refresh restores the same account page and Back still returns Home',async()=>{const {dom,w}=refreshSetup({saved:{owner:'owner-a',method:'openFeature',arg:'director'},historyState:{neneView:'tool'}});const initial=w.history.length;await wait();assert.equal(w.document.getElementById('screen').textContent,'director');assert.equal(w.history.length,initial);w.history.back();await wait();assert.ok(w.document.getElementById('homePaidBalance'));dom.window.close();});
 test('page changes are remembered and Home replaces the remembered tool',async()=>{const {dom,w}=refreshSetup();await wait();w.openFeature('story');await wait();assert.equal(JSON.parse(w.sessionStorage.getItem('nene_last_page_v1')).arg,'story');w.renderHome();await wait();assert.equal(JSON.parse(w.sessionStorage.getItem('nene_last_page_v1')).method,'renderHome');dom.window.close();});
 test('refresh never restores another account or an unapproved action',async()=>{for(const saved of [{owner:'other',method:'openFeature',arg:'director'},{owner:'owner-a',method:'neneGenerateDurableStory',arg:'story'}]){const {dom,w}=refreshSetup({saved});await wait();assert.ok(w.document.getElementById('homePaidBalance'));assert.equal(w.sessionStorage.getItem('nene_last_page_v1'),null);dom.window.close();}});
+
+test('refresh keeps the dashboard hidden until the signed-in story page is ready',async()=>{
+ const html=fs.readFileSync(__dirname+'/../index.html','utf8'),bootstrap=html.match(/<script>([\s\S]*?)<\/script>/)[1],style=html.match(/<style>([\s\S]*?)<\/style>/)[1];
+ const dom=new JSDOM('<head><style>'+style+'</style></head><body><div id="screen"><main><b id="homePaidBalance">194</b></main></div></body>',{url:'https://neneai.app/',runScripts:'outside-only'}),w=dom.window;
+ w.sessionStorage.setItem('nene_last_page_v1',JSON.stringify({owner:'owner-a',method:'openTool',arg:'story'}));w.eval(bootstrap);
+ let ready;const authentication=new Promise(r=>{ready=r;});w.neneAuthGetUserId=()=>authentication;w.syncLocalAccount=async()=>{};w.closeModal=()=>{};
+ w.renderHome=()=>{w.document.getElementById('screen').innerHTML='<main><b id="homePaidBalance">194</b></main>';};w.openTool=()=>{w.document.getElementById('screen').innerHTML='<main>Story → Video</main>';};
+ assert.equal(w.document.documentElement.dataset.neneRestoring,'true');assert.equal(w.getComputedStyle(w.document.querySelector('#screen main')).display,'none');
+ w.eval(source);await wait();assert.equal(w.getComputedStyle(w.document.querySelector('#screen main')).display,'none');ready('owner-a');await wait();
+ assert.equal(w.document.getElementById('screen').textContent,'Story → Video');assert.equal(w.document.documentElement.hasAttribute('data-nene-restoring'),false);assert.notEqual(w.getComputedStyle(w.document.querySelector('#screen main')).display,'none');dom.window.close();
+});
