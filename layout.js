@@ -15,6 +15,9 @@
     ['🪄','AI Image Studio','Image generation availability and image animation.','images'],
     ['✨','Enhance & Upscale','Enhancement availability and video reframing.','enhance']
   ];
+  if (window.NENE_PHOTO_DESIGN_PREVIEW === true) {
+    tools.push(['📷', 'Photo Design', 'Edit an uploaded photo with a prompt.', 'photo-design']);
+  }
   const node=(tag,text,cls)=>{const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el;};
   const card = ([icon,title,description,key]) => {
     const button=node('button',undefined,'tool-mini');button.type='button';button.dataset.studioTool=key;
@@ -65,7 +68,7 @@
   };
   window.neneOpenStudio=()=>{
     const main=node('main');const header=node('div',undefined,'toolhead');const back=node('button','‹','back');back.type='button';back.setAttribute('aria-label','Back to Home');back.onclick=()=>window.renderHome();
-    header.append(back,node('h1','AI Studio'));main.append(header,node('p','Explore all 12 Studio tools. Choose a tool to continue.','subtitle'));
+    header.append(back,node('h1','AI Studio'));main.append(header,node('p',`Explore all ${tools.length} Studio tools. Choose a tool to continue.`,'subtitle'));
     const grid=node('div',undefined,'studio-all-grid');for(const tool of tools)grid.append(card(tool));main.append(grid);
     window.setNav('create');document.getElementById('screen').replaceChildren(main);window.scrollTo?.({top:0,behavior:'auto'});
   };
