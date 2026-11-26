@@ -107,7 +107,7 @@
     const prompt = node('textarea');
     prompt.required = true;
     prompt.maxLength = 2000;
-    prompt.placeholder = 'Make the wall two rows taller. Keep the gate and background as they are.';
+    prompt.placeholder = 'Change my shirt to a navy blazer. Keep my face, pose, and background the same.';
     promptLabel.append(prompt);
     const original = node('img');
     original.alt = 'Original photo';
@@ -128,7 +128,7 @@
     let edit;
     let objectUrl;
     let busy = false;
-    status.textContent = 'Choose a PNG, JPEG, or WebP photo up to 7 MB.';
+    status.textContent = 'Choose a PNG, JPEG, or WebP photo up to 7 MB. Describe the change you want, such as changing an outfit, replacing the background, or removing an object.';
 
     function reset() {
       quote = undefined;
