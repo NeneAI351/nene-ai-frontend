@@ -21,7 +21,7 @@ async function setup({ signedIn=true, available=true, fail=false }={}) {
     else if(options.method==='POST') {
       if(fail)return {ok:false,status:503,json:async()=>({detail:'Planning provider is not configured.'})};
       data=plan;
-    } else data={items:[]};
+    } else data={items:[plan]};
     return {ok:true,status:200,json:async()=>data};
   };
   w.eval(source);await w.neneOpenDirector();return {dom,w,calls};
@@ -43,6 +43,23 @@ async function setup({ signedIn=true, available=true, fail=false }={}) {
     assert.equal(w.document.getElementById('neneDuration').value,'6');
     assert.equal(w.document.getElementById('neneAspectRatio').value,'9:16');
     assert.equal(submits.length,2,'Opening a scene must not generate a video');
+    dom.window.close();
+  }
+  {
+    const {dom,w,calls}=await setup();
+    await w.neneOpenDirectorPlans();
+    assert.equal(w.document.querySelector('#screen h1').textContent,'AI Director plans');
+    assert.equal(w.document.getElementById('directorIdea'),null);
+    w.document.querySelector('#directorSaved button').click();
+    w.openTool=async type=>{
+      assert.equal(type,'story');
+      w.document.getElementById('screen').innerHTML='<textarea id="prompt"></textarea><select id="storyScenes"><option value="2">2</option></select><input class="storySceneTitle"><textarea class="storySceneBrief"></textarea><textarea class="storySceneSound"></textarea>';
+    };
+    [...w.document.querySelectorAll('button')].find(x=>x.textContent==='Use plan in Story → Video').click();
+    await tick();
+    assert.equal(w.document.getElementById('storyScenes').value,'1');
+    assert.equal(w.document.querySelector('.storySceneBrief').value,'A baker opens her shop.');
+    assert.equal(calls.filter(call=>call.options.method==='POST').length,0);
     dom.window.close();
   }
   {
