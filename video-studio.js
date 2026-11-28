@@ -292,6 +292,32 @@
       if(attempt<120)v.speechTimer=setTimeout(()=>pollSpeech(v,job,attempt+1),5000);
     }catch(e){speechSay(v,e.message+' Use Saved voice tracks to check the same job again.');}
   }
+  window.neneLoadPendingVideos=async function(root){
+    if(!root)return;
+    root.textContent='Checking pending videos…';
+    try{
+      const owner=await window.neneAuthGetUserId?.();
+      if(!root.isConnected)return;
+      if(!owner){root.textContent='Sign in to see your pending videos.';return;}
+      const modes=['text','image','talking'];
+      const jobs=modes.flatMap(mode=>read({owner,mode},'jobs',[]));
+      const unique=[...new Map(jobs.filter(job=>UUID.test(job?.id)).map(job=>[job.id,job])).values()].slice(0,20);
+      const results=await Promise.allSettled(unique.map(async job=>({
+        job, status:(await api({owner},'/api/generations/'+job.id)).generation?.status
+      })));
+      if(!root.isConnected || await window.neneAuthGetUserId?.()!==owner)return;
+      root.replaceChildren();
+      for(const result of results){
+        if(result.status!=='fulfilled')continue;
+        const {job,status}=result.value;
+        if(!status || ['succeeded','failed','cancelled','canceled'].includes(status))continue;
+        const card=el('article',undefined,'block');
+        card.append(el('b',job.title||'Video generation'),el('p','Creating…','subtitle'));
+        root.append(card);
+      }
+      if(!root.childElementCount)root.textContent=results.some(result=>result.status==='rejected')?'Some generations could not be checked. Tap Refresh to try again.':'No pending videos on this device.';
+    }catch(_){if(root.isConnected)root.textContent='Pending videos could not load. Tap Refresh to try again.';}
+  };
   window.neneLoadFinishedVideos=async function(root){
     if(!root)return;
     root.textContent='Loading your finished videos…';
