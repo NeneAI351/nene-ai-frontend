@@ -1107,16 +1107,46 @@ function closeModal(){document.getElementById('modal').classList.remove('show')}
 function saveCreation(){toast("Saved to My Creations");closeModal();renderCreations()}
 function shareDemo(){toast("Share flow is ready for the real app");}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
-function renderCreations(){
+function renderCreations(category){
  setNav('creations');
- screen.innerHTML='<main><div class="eyebrow">Your library</div><h1>My Creations</h1><p class="subtitle">Videos, projects and reusable creative assets in one place.</p><div class="grid"><button class="card" onclick="createProject()"><div class="icon">＋</div><b>New Project</b><small>Start a dedicated creative workspace.</small></button><button class="card" onclick="renderProjects()"><div class="icon">📁</div><b>Projects</b><small>'+projects.length+' organized workspaces.</small></button><button class="card" onclick="openFeature(\'characters\')"><div class="icon">🎭</div><b>Characters</b><small>'+characters.length+' saved characters.</small></button></div><div class="section-title">Saved work</div><div class="grid"><button class="card" onclick="neneOpenVideoStudio(\'text\')"><b>Videos</b><small>Open saved videos and pending generations.</small></button><button class="card" onclick="openTool(\'story\')"><b>Story films</b><small>Open your saved stories and assembled films.</small></button><button class="card" onclick="openFeature(\'voice\')"><b>Voice tracks</b><small>Open saved narration and downloads.</small></button></div><div class="section-title">Story films</div><div id="neneStoryFilms" class="list"></div><div class="section-title">Finished videos</div><div id="neneFinishedVideos" class="list" aria-live="polite"></div><div class="section-title">Projects on this device</div><div class="list">'+projects.slice(0,4).map(p=>'<div class="creation"><div class="thumb">'+(p.icon||'📁')+'</div><div style="flex:1;min-width:0"><b>'+escapeNeneText(p.name)+'</b><div><span class="badge">'+escapeNeneText(p.type)+'</span> <span class="badge">'+escapeNeneText(p.status)+'</span></div><small>'+creations.filter(c=>c.projectId===p.id).length+' linked creations</small></div><button class="btn" style="width:auto;padding:8px 11px" onclick="openProject(\''+p.id+'\')">Open</button></div>').join('')+'</div><button class="btn secondary" style="margin-top:10px" onclick="renderProjects()">View all projects</button><div class="section-title">Creations</div><div class="list">'+creations.map(c=>'<div class="creation" style="align-items:flex-start"><div class="thumb">'+(c.icon||'🎬')+'</div><div style="flex:1;min-width:0"><b>'+ (c.name||'NENE AI Creation') +'</b><div><span class="badge">'+(c.type||'Video')+'</span>'+(c.provider?' <span class="badge">'+escapeNeneText(c.provider)+'</span>':'')+(projectForCreation(c)?' <span class="badge">📁 '+projectForCreation(c).name+'</span>':'')+'</div><small>'+(c.createdAt?new Date(c.createdAt).toLocaleString():'Saved creation')+'</small>'+(c.videoUrl?'<video controls playsinline preload="metadata" style="width:100%;margin-top:9px;border-radius:12px;background:#000" src="'+c.videoUrl+'"></video><div style="margin-top:7px"><a href="'+c.videoUrl+'" target="_blank" rel="noopener" style="color:var(--gold2);font-size:12px">Open video</a></div>':'')+'</div></div>').join('')+'</div></main>';
- if(window.NENE_PHOTO_DESIGN_PREVIEW === true){
-  const photos=document.createElement('section');
-  screen.querySelector('main').append(photos);
-  window.neneLoadSavedPhotos?.(photos);
+ const sections={
+  videos:['Videos','Finished videos and pending generations.'],
+  photos:['Photos','Edited photos and edits in progress.'],
+  stories:['Story films','Saved stories and assembled films.'],
+  voice:['Voice tracks','Saved narration and downloads.']
+ };
+ if(category==='voice')return openFeature('voice');
+ if(category && Object.hasOwn(sections,category)){
+  screen.innerHTML='<main><div class="toolhead"><button type="button" class="back" aria-label="Back to My Creations" onclick="renderCreations()">‹</button><h1>'+sections[category][0]+'</h1></div><button type="button" class="btn secondary" onclick="renderCreations(\''+category+'\')">Refresh</button><div class="list" id="neneCreationCategory" aria-live="polite"></div></main>';
+  const list=document.getElementById('neneCreationCategory');
+  if(category==='videos'){
+   list.innerHTML='<h2>Pending generations</h2><div id="nenePendingVideos" class="list"></div><h2>Finished videos</h2><div id="neneFinishedVideos" class="list"></div>';
+   window.neneLoadPendingVideos?.(document.getElementById('nenePendingVideos'));
+   window.neneLoadFinishedVideos?.(document.getElementById('neneFinishedVideos'));
+   const local=creations.filter(item=>item.videoUrl && !item.generationId && /^https?:\/\//i.test(item.videoUrl));
+   for(const item of local){
+    const article=document.createElement('article');
+    article.className='block';
+    const title=document.createElement('b');
+    title.textContent=item.name||'Saved video';
+    const video=document.createElement('video');
+    video.controls=true;
+    video.playsInline=true;
+    video.preload='metadata';
+    video.style.width='100%';
+    video.src=item.videoUrl;
+    article.append(title,video);
+    list.append(article);
+   }
+  }
+  if(category==='photos')window.neneLoadSavedPhotos?.(list);
+  if(category==='stories'){
+   list.id='neneStoryFilms';
+   window.neneLoadStoryLibrary?.(list);
+  }
+  return;
  }
- window.neneLoadFinishedVideos?.(document.getElementById('neneFinishedVideos'));
- window.neneLoadStoryLibrary?.(document.getElementById('neneStoryFilms'));
+ screen.innerHTML='<main><h1>My Creations</h1><div class="grid">'+Object.entries(sections).filter(([key])=>key!=='photos'||window.NENE_PHOTO_DESIGN_PREVIEW===true).map(([key,[title,description]])=>'<button type="button" class="card" onclick="renderCreations(\''+key+'\')"><b>'+title+'</b><small>'+description+'</small></button>').join('')+'<button type="button" class="card" onclick="renderProjects()"><b>Projects</b><small>Open your creative workspaces.</small></button><button type="button" class="card" onclick="openFeature(\'characters\')"><b>Characters</b><small>Open your saved characters.</small></button><button type="button" class="card" onclick="createProject()"><b>New Project</b></button></div></main>';
 }
 // The dedicated Profile module installs the account and settings actions.
 function renderProfile(){
@@ -1171,11 +1201,11 @@ if ('serviceWorker' in navigator) {
 <script src="./social-content.js?v=50"></script>
 <script src="./prompt-assist.js?v=50"></script>
 <script src="./output-report.js?v=50"></script>
-<script src="./video-studio.js?v=57"></script>
+<script src="./video-studio.js?v=58"></script>
 <script src="./story-studio.js?v=61"></script>
 <script src="./privacy-actions.js?v=50"></script>
 <script>window.NENE_PHOTO_DESIGN_PREVIEW = true;</script>
-<script src="./photo-design.js?v=3"></script>
+<script src="./photo-design.js?v=4"></script>
 <script src="./layout.js?v=61"></script>
 </body>
 </html>
