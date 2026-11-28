@@ -48,19 +48,54 @@
       status.textContent = 'Subtitles ready. Import the SRT in Video Editor → Captions.';
     });
     download.hidden = true;
+    async function translateOnServer(source) {
+      const owner = await window.neneAuthGetUserId?.();
+      const token = await window.neneAuthGetAccessToken?.();
+      if (!owner || !token) throw Error('Sign in to translate on this device.');
+      if (source.reduce((sum,text) => sum + Array.from(text).length, 0) > 4000) throw Error('Use up to 4,000 characters per translation.');
+      const base = new URL(window.NENE_DIRECTOR_CONFIG?.backendUrl);
+      if (base.protocol !== 'https:') throw Error('The secure translation service is unavailable.');
+      const endpoint = new URL('/api/translation',base);
+      const availability = await fetch(endpoint.href + '/availability',{cache:'no-store'});
+      const quote = await availability.json();
+      if (!availability.ok || !quote.available || !Number.isInteger(quote.credit_cost) || quote.credit_cost < 1) {
+        throw Error('Automatic translation is unavailable. You can still edit subtitle wording manually.');
+      }
+      if (!window.confirm('Translate for ' + quote.credit_cost + ' paid credits?')) return null;
+      if (owner !== await window.neneAuthGetUserId?.()) throw Error('Account changed. Reopen Translate & Dub.');
+      const body = JSON.stringify({source:from.value,target:to.value,segments:source,credit_limit:quote.credit_cost});
+      const hash = await crypto.subtle.digest('SHA-256',new TextEncoder().encode(body));
+      const digest = Array.from(new Uint8Array(hash),value=>value.toString(16).padStart(2,'0')).join('');
+      const keyName = 'nene-translation:' + owner + ':' + digest;
+      const key = localStorage.getItem(keyName) || crypto.randomUUID();
+      localStorage.setItem(keyName,key);
+      const response = await fetch(endpoint,{method:'POST',cache:'no-store',
+        headers:{Authorization:'Bearer '+token,'Content-Type':'application/json','Idempotency-Key':key},body});
+      const data = await response.json();
+      if (owner !== await window.neneAuthGetUserId?.()) throw Error('Account changed. Reopen Translate & Dub.');
+      if (!response.ok) throw Error(data.detail || 'Translation could not finish.');
+      if (!Array.isArray(data.segments) || data.segments.length !== source.length) throw Error('Translation could not be displayed. Retry the same text to recover it.');
+      void window.neneRefreshPaidWallet?.();
+      return data.segments;
+    }
     const translate = button('Translate', async () => {
       if (busy) return;
       const source = entries.length ? entries.map(cue => cue.text) : [script.value.trim()];
       if (!source[0]) { status.textContent = 'Enter a script or import an SRT file.'; return; }
-      if (!window.Translator?.availability || !window.Translator?.create) {
-        status.textContent = 'Automatic translation is unavailable in this browser. You can enter translated wording manually.';
-        return;
-      }
       if (from.value === to.value) { status.textContent = 'Choose a different target language.'; return; }
       busy = true;
       for (const field of [from,to,file,script,translate,download,translated,...inputs]) field.disabled = true;
       let translator;
       try {
+        if (!window.Translator?.availability || !window.Translator?.create) {
+          status.textContent = 'Checking translation price…';
+          const results = await translateOnServer(source);
+          if (!results || !main.isConnected) return;
+          if (entries.length) inputs.forEach((input,i) => {input.value = results[i];});
+          else {translated.hidden = false;translated.value = results[0];}
+          status.textContent = 'Review the translation before using it.';
+          return;
+        }
         const options = {sourceLanguage:from.value,targetLanguage:to.value};
         if (await window.Translator.availability(options) === 'unavailable') {
           status.textContent = 'This language pair is unavailable. Choose another pair or enter the translation yourself.'; return;
@@ -76,8 +111,8 @@
         if (entries.length) inputs.forEach((input, i) => {input.value = results[i];});
         else {translated.hidden = false; translated.value = results[0];}
         status.textContent = 'Review the translation before using it.';
-      } catch {
-        status.textContent = 'Translation could not finish. Try again or enter translated wording manually.';
+      } catch (error) {
+        status.textContent = error.message || 'Translation could not finish. Retry the same text or enter translated wording manually.';
       } finally {
         translator?.destroy?.();
         busy = false;
@@ -106,12 +141,24 @@
       entries = []; inputs = []; cues.replaceChildren(); file.value = ''; scriptLabel.hidden = false;
       download.hidden = true; translated.hidden = true; status.textContent = '';
     });
+    const voice = button('Use reviewed text in AI Voice', async () => {
+      if (busy) return;
+      const text = (entries.length ? inputs.map(input=>input.value.trim()).join(' ') : translated.value).trim();
+      if (!text || text.length > 120) {
+        status.textContent = 'Use reviewed text of 1–120 characters for a voice track.';return;
+      }
+      const owner = await window.neneAuthGetUserId?.();
+      if (!owner) {status.textContent = 'Sign in to create a voice track.';return;}
+      await window.neneOpenVideoStudio?.('talking',{voiceOnly:true});
+      if (owner !== await window.neneAuthGetUserId?.()) return;
+      const dialogue = document.getElementById('talking-dialogue');
+      if (dialogue && !dialogue.value) {
+        dialogue.value = text;
+        dialogue.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+    });
     const editor = button('Open Video Editor', () => window.neneOpenVideoEditor?.({tool:'Captions'}));
-    main.append(fileLabel, scriptLabel, clear, translate, status, cues, translated, download, editor);
-    if (!window.Translator?.create) {
-      translate.disabled = true;
-      status.textContent = 'Automatic translation is unavailable in this browser. Import an SRT and enter your translated wording to keep the original timing.';
-    }
+    main.append(fileLabel, scriptLabel, clear, translate, status, cues, translated, download, voice, editor);
     window.setNav('create');
     document.getElementById('screen').replaceChildren(main);
   };
