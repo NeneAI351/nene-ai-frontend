@@ -40,7 +40,7 @@
     try {
       const { edits } = await request(owner, 'edits');
       if (!container.isConnected || !edits?.length) return;
-      container.append(node('h2', 'Saved photos'));
+      container.append(node('h2', 'Edited photos'));
       for (const edit of edits) {
         const url = new URL(edit.image_url);
         if (url.protocol !== 'https:') continue;
@@ -57,7 +57,7 @@
         container.append(link);
       }
     } catch {
-      if (container.isConnected) container.append(node('p', 'Saved photos are unavailable right now.'));
+      if (container.isConnected) container.append(node('p', 'Edited photos are unavailable right now.'));
     }
   };
 
@@ -118,24 +118,27 @@
     for (const image of [original, edited]) image.style.maxWidth = '100%';
     const button = node('button', 'Review credit cost', 'btn gold');
     button.type = 'submit';
-    const save = node('button', 'Save to My Creations', 'btn');
-    save.type = 'button';
-    save.hidden = true;
-    form.append(fileLabel, promptLabel, button);
-    root.append(form, original, edited, save);
+    const openResult = node('a', 'Open edited photo', 'btn');
+    openResult.target = '_blank';
+    openResult.rel = 'noopener';
+    openResult.hidden = true;
+    const creations = node('button', 'Open My Creations', 'btn');
+    creations.type = 'button';
+    creations.onclick = () => window.renderCreations();
+    form.append(fileLabel, promptLabel, button, status);
+    root.append(form, edited, openResult, creations, original);
 
     let quote;
-    let edit;
     let objectUrl;
     let busy = false;
     status.textContent = 'Choose a PNG, JPEG, or WebP photo up to 7 MB. Describe the change you want, such as changing an outfit, replacing the background, or removing an object.';
 
     function reset() {
       quote = undefined;
-      edit = undefined;
       edited.removeAttribute('src');
       edited.hidden = true;
-      save.hidden = true;
+      openResult.hidden = true;
+      openResult.removeAttribute('href');
       button.textContent = 'Review credit cost';
     }
 
@@ -180,7 +183,8 @@
           const body = new FormData();
           body.append('image', photo);
           body.append('prompt', direction);
-          status.textContent = 'Checking the price…';
+          button.textContent = 'Checking price…';
+          status.textContent = 'Uploading your photo and checking the price…';
           const reviewed = await request(owner, 'quote', { method: 'POST', body });
           if (!reviewed.quote_id || !Number.isFinite(Number(reviewed.credit_cost)) || Number(reviewed.credit_cost) <= 0) {
             throw new Error('A valid price could not be confirmed.');
@@ -190,7 +194,8 @@
           status.textContent = `This edit costs ${quote.credit_cost} paid credits.`;
           return;
         }
-        status.textContent = 'Editing your photo…';
+        button.textContent = 'Creating…';
+        status.textContent = 'Creating your edit. It will appear in My Creations when ready.';
         const result = await request(owner, 'edits', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -199,34 +204,25 @@
         const url = new URL(result.image_url);
         if (!result.id || url.protocol !== 'https:') throw new Error('The edited photo is unavailable.');
         if (!root.isConnected) return;
-        edit = result;
         quote = undefined;
+        openResult.href = url.href;
+        openResult.hidden = false;
+        edited.hidden = false;
         edited.src = url.href;
-        edited.hidden = save.hidden = false;
-        button.textContent = 'Review credit cost';
-        status.textContent = 'Compare the original and edited photos, then save your result.';
+        status.textContent = 'Done. Your edited photo is in My Creations.';
       } catch (error) {
-        status.textContent = error.message;
+        status.textContent = quote && error instanceof TypeError
+          ? 'The connection was interrupted. Check My Creations or retry this edit to recover the result.'
+          : error.message;
       } finally {
+        button.textContent = quote ? `Edit photo · ${quote.credit_cost} paid credits` : 'Review credit cost';
         busy = file.disabled = prompt.disabled = button.disabled = false;
       }
     };
 
-    save.onclick = async () => {
-      if (!edit || busy || save.disabled) return;
-      const current = edit;
-      save.disabled = true;
-      try {
-        await request(owner, 'edits/' + encodeURIComponent(current.id) + '/save', { method: 'POST' });
-        if (edit === current) {
-          status.textContent = 'Saved to My Creations.';
-          save.hidden = true;
-        }
-      } catch (error) {
-        if (edit === current) status.textContent = error.message;
-      } finally {
-        save.disabled = false;
-      }
+    edited.onerror = () => {
+      edited.hidden = true;
+      status.textContent = 'The preview could not load. Open the edited photo or reload it from My Creations.';
     };
   };
 })();
