@@ -117,6 +117,12 @@ const observer=new MutationObserver(()=>{if(!v.root.isConnected)v.dispose();});o
  async function refreshHistory(){try{const records=await store.list(owner);await sameOwner();history.replaceChildren();if(!records.length)history.append(el('p','No exports saved on this device yet.','editor-note'));for(const item of records){const row=el('div',undefined,'editor-history-item');row.append(el('p',`${item.extension.toUpperCase()} · ${item.duration.toFixed(1)} seconds · ${new Date(item.createdAt).toLocaleString()}`),btn('Open / check paid receipt',async()=>{if(v.busy)return;await setReady(item);await reviewReady();}),btn('Remove local copy',async()=>{if(v.busy||!window.confirm('Remove this file from the device? Its paid account receipt remains.'))return;await sameOwner();await store.remove(owner,'export:'+item.digest);if(v.ready?.digest===item.digest)changed();await refreshHistory();}));history.append(row);}}catch(e){v.say(e.message);}}
  async function restore(){if(v.busy)return;v.busy=true;v.restoreFailed=false;recovery.hidden=true;v.controller=new AbortController();controls();try{const saved=await store.get(owner,'draft');await sameOwner();if(saved){for(const entry of saved.sources||[]){const resource=entry.kind==='audio'?await media.loadAudio(entry.file,{signal:v.controller.signal}):await media.loadVideo(entry.file,{signal:v.controller.signal});if(v.controller.signal.aborted){release(resource);throw Error('Draft restore cancelled.');}if(!live()){release(resource);return;}await sameOwner();v.resources.set(resource.source,resource);}v.project=saved.project;let repaired=false,total=0;for(const c of v.project.clips){const d=v.resources.get(c.source)?.duration;if(!d)continue;const gap=Math.min(.201,d),start=Math.max(0,Math.min(Number(c.start)||0,d-gap)),end=Math.max(start+gap,Math.min(Number(c.end)||d,d));if(start!==Number(c.start)||end!==Number(c.end))repaired=true;c.start=start;c.end=end;total+=end-start;}format.field.value=v.project.format;fit.field.value=v.project.fit;title.value=v.project.title||'';for(const key of ['music','voice'])if(v.project[key]){const u=audioUi[key],t=v.project[key];u.name.textContent=v.resources.get(t.source)?.file.name||'Missing source';u.start.value=t.start;u.volume.value=t.volume*100;u.loop.checked=t.loop;const r=v.resources.get(t.source);if(r){u.listen.src=r.url||URL.createObjectURL(r.file);if(!r.url)r.url=u.listen.src;u.listen.hidden=false;u.importStatus.textContent='Saved audio restored. Listen above or use Play film.';}u.timing.textContent='Starts at '+Number(t.start).toFixed(1)+' s · '+Math.round(t.volume*100)+'%';}v.say(repaired?'Your draft was restored and an invalid trim range was repaired. Check each clip before exporting.':'Your local draft was restored. Preview before exporting.');}renderClips();renderCaptions();syncPositions();await refreshHistory();}catch(e){v.resources.forEach(release);v.resources.clear();v.project=blank();v.restoreFailed=true;recovery.hidden=false;renderClips();v.say(e.message+' Your saved draft has been kept. Retry it or choose Start a new edit.');}finally{v.controller=null;v.busy=false;controls();renderTracks();if(v.restoreFailed)openPanel('Clips');else if(options.tool&&panels[options.tool])openPanel(options.tool);else if(v.project.clips.length)openPanel('Edit');showFrame(0);}}
  await restore();
+ if(options.exportDigest && options.owner===owner && live()){
+  const item=await store.get(owner,'export:'+options.exportDigest);
+  await sameOwner();
+  if(item){openPanel('Export');await setReady(item);await reviewReady();}
+  else v.say('That export is no longer on this device.');
+ }
  if(options.importFiles?.length){
   if(options.owner!==owner){v.say('Account changed. Reopen the story.');return;}
   if(v.restoreFailed)return;
@@ -127,6 +133,31 @@ const observer=new MutationObserver(()=>{if(!v.root.isConnected)v.dispose();});o
   }catch(e){v.say(e.message);}finally{v.busy=false;controls();openPanel('Edit');showFrame(0);}
  }
 }
+window.neneLoadVideoEdits=async root=>{
+ if(!root)return;
+ root.textContent='Checking this device for video edits…';
+ try{
+  const owner=await window.neneAuthGetUserId?.();
+  if(!root.isConnected)return;
+  if(!owner){root.textContent='Sign in to see your video edits.';return;}
+  const store=window.NENEEditorStore;
+  const [draft,exports]=await Promise.all([store.get(owner,'draft'),store.list(owner)]);
+  if(!root.isConnected||owner!==await window.neneAuthGetUserId?.())return;
+  root.replaceChildren(el('p','Video editor drafts and export files are saved on this device.','subtitle'));
+  if(draft?.project?.clips?.length){
+   const resume=btn('Continue video draft',()=>open({owner,tool:'Edit'}));
+   root.append(el('h2','Draft'),el('p',draft.project.title||'Untitled video edit'),resume);
+  }
+  root.append(el('h2','Exports'));
+  if(!exports.length)root.append(el('p','No exports on this device yet.'));
+  for(const item of exports){
+   const row=el('article',undefined,'block');
+   row.append(el('p',new Date(item.updatedAt).toLocaleString()+' · '+String(item.extension||'video').toUpperCase()),
+    btn('Open export',()=>open({owner,exportDigest:item.digest})));
+   root.append(row);
+  }
+ }catch(_){if(root.isConnected)root.textContent='Video edits could not load. Tap Refresh to try again.';}
+};
 window.neneOpenVideoEditor=open;
 window.addEventListener('nene-auth-changed',()=>{epoch++;const v=active;if(v){v.dispose();if(v.root.isConnected)v.root.replaceChildren(el('p','Account changed. Reopen AI Video Editor for the signed-in account.','notice'));}});
 })();

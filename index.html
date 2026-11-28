@@ -1115,6 +1115,7 @@ function renderCreations(category){
   stories:['Story films','Saved stories and assembled films.'],
   ads:['Advertisements','Pending and finished ads.'],
   social:['Social videos','Pending and finished social clips.'],
+  edits:['Video edits','Drafts and exports from Video Editor.'],
   voice:['Voice tracks','Saved narration and downloads.']
  };
  if(category==='voice')return openFeature('voice');
@@ -1143,6 +1144,7 @@ function renderCreations(category){
   }
   if(category==='ads')window.neneLoadAdvertisements?.(list);
   if(category==='social')window.neneLoadSocialVideos?.(list);
+  if(category==='edits')window.neneLoadVideoEdits?.(list);
   if(category==='photos')window.neneLoadSavedPhotos?.(list);
   if(category==='stories'){
    list.id='neneStoryFilms';
@@ -1196,7 +1198,7 @@ if ('serviceWorker' in navigator) {
 <script src="./editor-mp4.js?v=51"></script>
 <script src="./editor-media.js?v=51"></script>
 <script src="./editor-billing.js?v=50"></script>
-<script src="./video-editor.js?v=58"></script>
+<script src="./video-editor.js?v=59"></script>
 <script src="./auth.js?v=52"></script>
 <script src="./studio-ui.js?v=51"></script>
 <script src="./director.js?v=51"></script>
@@ -1209,7 +1211,7 @@ if ('serviceWorker' in navigator) {
 <script src="./story-studio.js?v=61"></script>
 <script src="./privacy-actions.js?v=50"></script>
 <script>window.NENE_PHOTO_DESIGN_PREVIEW = true;</script>
-<script src="./photo-design.js?v=4"></script>
+<script src="./photo-design.js?v=5"></script>
 <script src="./layout.js?v=61"></script>
 </body>
 </html>

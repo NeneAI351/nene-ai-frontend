@@ -51,33 +51,33 @@
     }
   }
 
-  window.neneLoadSavedPhotos = async container => {
+  window.neneLoadSavedPhotos = async (container, offset = 0) => {
     if (!container) return;
     const owner = await window.neneAuthGetUserId?.();
     if (!owner) {
       container.textContent = 'Sign in to see your photos.';
       return;
     }
-    container.textContent = 'Loading your photos…';
+    if (!offset) container.textContent = 'Loading your photos…';
     try {
-      const data = await request(owner, 'edits');
+      const data = await request(owner, offset ? 'edits?offset=' + offset : 'edits');
       if (!container.isConnected || await window.neneAuthGetUserId?.() !== owner) return;
       const edits = Array.isArray(data.edits) ? data.edits : [];
       for (const edit of edits) pendingPhotos(owner, edit.id, false);
       const pending = Object.values(pendingPhotos(owner));
-      container.replaceChildren();
-      if (pending.length) {
+      if (!offset) container.replaceChildren();
+      if (!offset && pending.length) {
         const recent = pending.some(started => Date.now() - started < 150000);
         container.append(node('p', recent ? 'Creating your photo edit…' : 'Waiting for an edit result. Tap Refresh to check again.', 'notice'));
         if (recent) setTimeout(() => {
-          if (container.isConnected) window.neneLoadSavedPhotos(container);
+          if (container.isConnected && !container.dataset.loadingOlderPhotos) window.neneLoadSavedPhotos(container);
         }, 10000);
       }
       if (!edits.length) {
         if (!pending.length) container.textContent = 'No edited photos yet.';
         return;
       }
-      container.append(node('h2', 'Edited photos'));
+      if (!offset) container.append(node('h2', 'Edited photos'));
       for (const edit of edits) {
         const url = new URL(edit.image_url);
         if (url.protocol !== 'https:') continue;
@@ -92,6 +92,16 @@
         image.style.maxWidth = '100%';
         link.append(image);
         container.append(link);
+      }
+      if (Number.isInteger(data.next_offset) && data.next_offset > offset) {
+        const more = node('button', 'Load older photos', 'btn');
+        more.type = 'button';
+        more.onclick = () => {
+          container.dataset.loadingOlderPhotos = 'true';
+          more.remove();
+          void window.neneLoadSavedPhotos(container, data.next_offset);
+        };
+        container.append(more);
       }
     } catch {
       if (container.isConnected) container.textContent = 'Photos could not load. Tap Refresh to try again.';
