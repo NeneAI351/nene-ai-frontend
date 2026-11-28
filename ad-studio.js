@@ -54,7 +54,6 @@
         lock(v,true);v.generate.textContent='Retry pending submission safely';v.generate.disabled=!v.accepting;
         say(v,'A pending submission is saved on this device. Retry it with the same request key to avoid duplicate charges. '+(v.accepting?'':state.message));
       }else{v.pending=null;lock(v,false);v.generate.textContent='Generate advertisement';}
-      renderJobs(v);
     }catch(error){say(v,error.message);}
   }
   async function review(v){
@@ -101,7 +100,7 @@
       if(!alive(v))return;
       rememberJob(v,result.generation_id,v.pending.draft.product);
       localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
-      v.generate.textContent='Review price before creating another ad';renderJobs(v);
+      v.generate.textContent='Review price before creating another ad';
       await poll(v,result.generation_id,0);
       try{await window.neneRefreshPaidWallet?.();}catch(_){}
     }catch(error){
@@ -131,6 +130,7 @@
     v.jobs.replaceChildren();const jobs=read(v,'jobs',[]);
     if(!Array.isArray(jobs))return;
     for(const job of jobs){if(!UUID.test(job.id))continue;const button=el('button',job.title||'Saved advertisement','btn');button.type='button';button.onclick=()=>poll(v,job.id,0);v.jobs.append(button);}
+    if(!v.jobs.childElementCount)v.jobs.textContent='No saved ads yet.';
   }
   async function media(v,id){
     const data=await api(v,`/api/generations/${id}/media-url`);if(!alive(v)||v.selected!==id)return;
@@ -152,10 +152,35 @@
         say(v,'Advertisement generation failed. Check your wallet for restored credits. Creating another ad is a separate paid request.');
         try{await window.neneRefreshPaidWallet?.();}catch(_){}return;
       }
-      say(v,`Advertisement status: ${String(job.status||'pending')}. Keep this saved job; do not submit another copy.`);
+      say(v,['canceled','cancelled'].includes(job.status)?'Advertisement canceled.':'Creating…');
+      if(['canceled','cancelled'].includes(job.status))return;
       if(attempt<120)v.timer=setTimeout(()=>poll(v,id,attempt+1),7000);
     }catch(error){say(v,error.message+' Your job remains saved. Use Refresh saved video status.');}
   }
+  window.neneLoadAdvertisements=async function(root){
+    if(!root)return;
+    if(active)clearTimeout(active.timer);
+    const v={root,library:true,owner:null};active=v;
+    v.jobs=el('div',undefined,'list');v.jobs.id='ad-jobs';
+    v.message=el('p','Loading advertisements…','notice');v.message.setAttribute('role','status');
+    v.refresh=el('button','Refresh video status or link','btn');v.refresh.type='button';v.refresh.disabled=true;
+    v.refresh.onclick=()=>v.selected&&poll(v,v.selected,0);
+    v.output=el('div');v.output.id='ad-output';
+    root.append(v.jobs,v.message,v.refresh,v.output);
+    v.owner=await window.neneAuthGetUserId?.();
+    if(!alive(v))return;
+    if(!v.owner){say(v,'Sign in to see your advertisements.');return;}
+    renderJobs(v);
+    say(v,'');
+    if(read(v,'pending',null)){
+      const resume=el('button','Resume pending advertisement','btn');resume.type='button';
+      resume.onclick=()=>window.neneOpenAdvertisement();
+      v.jobs.append(resume);
+    }
+    const jobs=read(v,'jobs',[]);
+    const latest=Array.isArray(jobs)&&jobs.find(job=>UUID.test(job.id));
+    if(latest)await poll(v,latest.id,0);
+  };
   window.neneOpenAdvertisement=async function(){
     if(active?.busy){toast('Please wait for the current advertisement request.');return;}
     if(active)clearTimeout(active.timer);
@@ -179,16 +204,18 @@
     const signin=el('button','Sign in / account','btn');signin.onclick=()=>window.neneOpenAuth?.();
     const check=el('button','Check account and availability','btn');check.onclick=()=>checkAccount(v);
     v.refresh=el('button','Refresh saved video status / link','btn');v.refresh.disabled=true;v.refresh.onclick=()=>v.selected&&poll(v,v.selected,0);
-    v.output=el('div');v.output.id='ad-output';v.jobs=el('div',undefined,'list');v.jobs.id='ad-jobs';
-    root.append(v.form,v.message,v.review,v.generate,signin,check,v.refresh,v.output,el('h2','Saved advertisements'),v.jobs,
-      el('p','Pending submissions and job IDs are saved on this device for this account. Finished videos are retrieved through your private account.','subtitle'));
+    v.output=el('div');v.output.id='ad-output';
+    const library=el('button','Open advertisements in My Creations','btn');library.type='button';
+    library.onclick=()=>{if(v.busy){say(v,'Please wait for the current submission.');return;}window.renderCreations('ads');};
+    root.append(v.form,v.message,v.review,v.generate,signin,check,v.refresh,v.output,library);
     document.getElementById('screen').replaceChildren(root);
-    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,jobs:v.jobs,getState:()=>v,settings:true});
+    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,getState:()=>v,settings:true});
     await checkAccount(v);
   };
   window.addEventListener('nene-auth-changed',()=>{
     const v=active;if(!v||!alive(v))return;
-    clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();lock(v,false);v.generate.disabled=true;
+    if(v.library){clearTimeout(v.timer);v.owner=null;v.root.replaceChildren();void window.neneLoadAdvertisements(v.root);return;}
+    clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.form.reset();lock(v,false);v.generate.disabled=true;
     say(v,'Account changed. Check your account and availability before continuing.');
   });
 })();
