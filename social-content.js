@@ -64,7 +64,6 @@
         lock(v,true);v.generate.textContent='Retry pending submission safely';v.generate.disabled=!v.accepting;
         say(v,'A pending submission is saved on this device. Retry it with the same request key to avoid duplicate charges. '+(v.accepting?'':state.message));
       }else{v.pending=null;lock(v,false);v.generate.textContent='Generate social video';}
-      renderJobs(v);
     }catch(error){say(v,error.message);}
   }
   async function review(v){
@@ -78,6 +77,18 @@
       if(!Number.isFinite(amount)||amount<=0)throw new Error('No valid paid price is available for this social video.');
       if(!alive(v))return;
       v.quote={draft:JSON.stringify(d),body,cost:String(q.recommended_credits)};
+      v.preview.replaceChildren(el('h2','Review your video brief'));
+      const details=[
+        ['Format', `${d.platform} · ${d.ratio} · ${d.duration} seconds · ${d.resolution}`],
+        ['Style and template', `${d.style} · ${d.template}`],
+        ['Opening', d.hook || 'An opening visual based on your idea'],
+        ['Main action', d.idea],
+        ['Audience', d.audience],
+        ['Ending', d.cta || 'A clear visual payoff']
+      ];
+      const summary=el('dl');
+      for(const [label,value] of details)summary.append(el('dt',label),el('dd',value));
+      v.preview.append(summary);
       v.generate.textContent=`Generate social video · ${q.recommended_credits} paid credits`;
       v.generate.disabled=!v.accepting;
       say(v,`${q.recommended_credits} paid credits for this video. Credits are reserved when you submit. ${v.accepting?'Review your brief, then choose Generate social video.':'Paid generation is not enabled yet; nothing has been submitted.'}`);
@@ -104,10 +115,11 @@
       requestStarted=true;
       say(v,'Submitting your paid social video once…');
       const result=await api(v,'/api/generations',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':v.pending.key},body:JSON.stringify(v.pending.payload)});
-      if(!alive(v))return;
       rememberJob(v,result.generation_id,v.pending.draft.idea.slice(0,100));
       localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
-      v.generate.textContent='Review price before creating another social video';renderJobs(v);
+      if(!alive(v))return;
+      v.preview.replaceChildren();
+      v.generate.textContent='Review price before creating another social video';
       await poll(v,result.generation_id,0);
       try{await window.neneRefreshPaidWallet?.();}catch(_){}
     }catch(error){
@@ -131,6 +143,7 @@
     v.jobs.replaceChildren();const jobs=read(v,'jobs',[]);
     if(!Array.isArray(jobs))return;
     for(const job of jobs){if(!UUID.test(job.id))continue;const button=el('button',job.title||'Saved social video','btn');button.type='button';button.onclick=()=>poll(v,job.id,0);v.jobs.append(button);}
+    if(!v.jobs.childElementCount)v.jobs.textContent='No saved social videos yet.';
   }
   async function media(v,id){
     const data=await api(v,`/api/generations/${id}/media-url`);if(!alive(v)||v.selected!==id)return;
@@ -152,10 +165,35 @@
         say(v,'Social video generation failed. Check your wallet for restored credits. Creating another social video is a separate paid request.');
         try{await window.neneRefreshPaidWallet?.();}catch(_){}return;
       }
-      say(v,`Social video status: ${String(job.status||'pending')}. Keep this saved job; do not submit another copy.`);
+      say(v,['canceled','cancelled'].includes(job.status)?'Canceled.':'Creating…');
+      if(['canceled','cancelled'].includes(job.status))return;
       if(attempt<120)v.timer=setTimeout(()=>poll(v,id,attempt+1),7000);
     }catch(error){say(v,error.message+' Your job remains saved. Use Refresh saved video status.');}
   }
+  window.neneLoadSocialVideos=async function(root){
+    if(!root)return;
+    if(active)clearTimeout(active.timer);
+    const v={root,library:true,owner:null};active=v;
+    v.jobs=el('div',undefined,'list');v.jobs.id='social-jobs';
+    v.message=el('p','Loading social videos…','notice');v.message.setAttribute('role','status');
+    v.refresh=el('button','Refresh video status or link','btn');v.refresh.type='button';v.refresh.disabled=true;
+    v.refresh.onclick=()=>v.selected&&poll(v,v.selected,0);
+    v.output=el('div');v.output.id='social-output';
+    root.append(v.jobs,v.message,v.refresh,v.output);
+    v.owner=await window.neneAuthGetUserId?.();
+    if(!alive(v))return;
+    if(!v.owner){say(v,'Sign in to see your social videos.');return;}
+    renderJobs(v);
+    say(v,'');
+    if(read(v,'pending',null)){
+      const resume=el('button','Resume pending social video','btn');resume.type='button';
+      resume.onclick=()=>window.neneOpenSocialContent();
+      v.jobs.append(resume);
+    }
+    const jobs=read(v,'jobs',[]);
+    const latest=Array.isArray(jobs)&&jobs.find(job=>UUID.test(job.id));
+    if(latest)await poll(v,latest.id,0);
+  };
   window.neneOpenSocialContent=async function(){
     if(!await window.neneRequireAccount?.())return;
     if(active?.busy){toast('Please wait for the current social video request.');return;}
@@ -174,7 +212,7 @@
       for(const value of options){const option=el('option',value);option.value=value;select.append(option);}block.append(caption,select);v.form.append(block);
     }
     v.form.elements.platform.onchange=()=>{v.form.elements.ratio.value=['LinkedIn','X'].includes(v.form.elements.platform.value)?'16:9':'9:16';};
-    v.form.addEventListener('input',()=>{if(!v.pending){v.quote=null;v.generate.disabled=true;v.generate.textContent='Review price before generating';}});
+    v.form.addEventListener('input',()=>{if(!v.pending){v.quote=null;v.preview.replaceChildren();v.generate.disabled=true;v.generate.textContent='Review price before generating';}});
     v.message=el('p','Checking paid generation availability…','notice');v.message.id='social-message';v.message.setAttribute('role','status');v.message.setAttribute('aria-live','polite');
     v.review=el('button','Review price','btn');v.review.type='button';v.review.id='social-review';v.review.onclick=()=>review(v);
     v.generate=el('button','Generate social video','btn gold');v.generate.type='button';v.generate.id='social-generate';v.generate.disabled=true;v.generate.onclick=()=>submit(v);
@@ -182,15 +220,18 @@
     const check=el('button','Check account and availability','btn');check.onclick=()=>checkAccount(v);
     v.refresh=el('button','Refresh saved video status / link','btn');v.refresh.disabled=true;v.refresh.onclick=()=>v.selected&&poll(v,v.selected,0);
     v.output=el('div');v.output.id='social-output';v.jobs=el('div',undefined,'list');v.jobs.id='social-jobs';
-    root.append(v.form,v.message,v.review,v.generate,signin,check,v.refresh,v.output,el('h2','Saved social videos on this device'),v.jobs,
-      el('p','Pending submissions and job IDs are saved on this device for this account. Finished videos are retrieved through your private account.','subtitle'));
+    v.preview=el('section',undefined,'block');v.preview.id='social-brief-preview';
+    const library=el('button','Open Social videos in My Creations','btn');library.type='button';
+    library.onclick=()=>{if(!v.busy)window.renderCreations('social');};
+    root.append(v.form,v.message,v.review,v.preview,v.generate,signin,check,v.refresh,v.output,library);
     document.getElementById('screen').replaceChildren(root);
-    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,jobs:v.jobs,getState:()=>v,settings:true});
+    window.NENEStudioUI?.enhance({root,form:v.form,signin,check,refresh:v.refresh,review:v.review,generate:v.generate,getState:()=>v,settings:true});
     await checkAccount(v);
   };
   window.addEventListener('nene-auth-changed',()=>{
     const v=active;if(!v||!alive(v))return;
-    clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.jobs.replaceChildren();v.form.reset();lock(v,false);v.generate.disabled=true;
+    if(v.library){clearTimeout(v.timer);v.owner=null;v.root.replaceChildren();void window.neneLoadSocialVideos(v.root);return;}
+    clearTimeout(v.timer);v.owner=null;v.quote=null;v.pending=null;v.accepting=false;v.selected=null;v.output.replaceChildren();v.preview.replaceChildren();v.form.reset();lock(v,false);v.generate.disabled=true;
     say(v,'Account changed. Check your account and availability before continuing.');
   });
 })();
