@@ -1,4 +1,4 @@
-const CACHE = 'nene-ai-shell-v73';
+const CACHE = 'nene-ai-shell-v74';
 
 const SHELL = [
   './',
@@ -33,7 +33,7 @@ const SHELL = [
   './photo-design.js?v=4',
   './layout.js?v=61',
   './layout.css?v=56',
-  './director.js?v=50',
+  './director.js?v=51',
   './studio-ui.js?v=51',
   './studio-ui.css?v=50',
   './manifest.webmanifest',

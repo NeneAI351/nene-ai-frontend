@@ -78,7 +78,46 @@
       a.href = url; a.download = 'nene-ai-production-plan.json'; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     };
-    result.append(download);
+    const story = node('button', 'Use plan in Story → Video', 'btn gold');
+    story.type = 'button';
+    story.onclick = async () => {
+      const owner = view.owner;
+      if (!owner || owner !== await window.neneAuthGetUserId?.() || !view.isConnected) return;
+      story.disabled = true;
+      try {
+        await window.openTool('story');
+        if (owner !== await window.neneAuthGetUserId?.()) return;
+        const count = document.getElementById('storyScenes');
+        const prompt = document.getElementById('prompt');
+        const scenes = record.plan.scenes;
+        if (!count || !prompt || scenes.length < 1 || scenes.length > 10) return;
+        if (![...count.options].some(option => option.value === String(scenes.length))) {
+          const option = node('option', scenes.length + ' scenes');
+          option.value = String(scenes.length);
+          count.append(option);
+        }
+        count.value = String(scenes.length);
+        count.dispatchEvent(new Event('change', { bubbles: true }));
+        prompt.value = record.brief?.idea || record.plan.summary || record.plan.title;
+        const duration = document.getElementById('neneDuration');
+        if (duration && [...duration.options].some(option => option.value === String(record.brief?.scene_seconds))) {
+          duration.value = String(record.brief.scene_seconds);
+        }
+        const titles = document.querySelectorAll('.storySceneTitle');
+        const briefs = document.querySelectorAll('.storySceneBrief');
+        const sounds = document.querySelectorAll('.storySceneSound');
+        scenes.forEach((scene, index) => {
+          if (titles[index]) titles[index].value = String(scene.title || '').slice(0, 120);
+          if (briefs[index]) briefs[index].value = String(scene.visual_prompt || '').slice(0, 1200);
+          if (sounds[index]) sounds[index].value = [scene.narration, scene.sound_direction].filter(Boolean).join('\n').slice(0, 500);
+        });
+        const notice = document.getElementById('neneProviderNotice');
+        if (notice) notice.textContent = 'Director scenes loaded. Choose your characters and review the credit cost before generating. Story films are assembled in landscape format.';
+      } finally {
+        story.disabled = false;
+      }
+    };
+    result.append(story, download);
   }
   async function loadPlans(view) {
     const data = await api(view, '/plans');
@@ -116,6 +155,27 @@
       await window.neneRefreshPaidWallet?.();
     } catch (error) { if (activeView === view) message(view, error.message); }
     finally { busy = false; if (view.isConnected) button.disabled = !view.available || owner!==view.owner; }
+  };
+  window.neneOpenDirectorPlans = async function () {
+    const view = node('main'); view.savedOnly = true; activeView = view;
+    setNav('creations');
+    const back = node('button', '‹', 'back'); back.type = 'button';
+    back.setAttribute('aria-label', 'Back to Projects'); back.onclick = () => window.renderProjects();
+    const heading = node('div', undefined, 'toolhead'); heading.append(back, node('h1', 'AI Director plans'));
+    const status = node('p', 'Loading plans…', 'notice'); status.id = 'directorMessage'; status.setAttribute('role', 'status');
+    const saved = node('div', undefined, 'list'); saved.id = 'directorSaved';
+    const result = node('div'); result.id = 'directorResult';
+    view.append(heading, status, saved, result);
+    document.getElementById('screen').replaceChildren(view);
+    view.owner = await window.neneAuthGetUserId?.();
+    if (!view.isConnected) return;
+    if (!view.owner) { message(view, 'Sign in to see your saved plans.'); return; }
+    try {
+      await loadPlans(view);
+      if (view.isConnected) message(view, '');
+    } catch (error) {
+      if (view.isConnected) message(view, error.message);
+    }
   };
   window.neneOpenDirector = async function () {
     if (busy) { toast('Please wait for the current planning request.'); return; }
@@ -165,6 +225,7 @@
   };
   window.addEventListener('nene-auth-changed',()=>{
     const view=activeView;if(!view?.isConnected)return;
+    if(view.savedOnly){view.owner=null;void window.neneOpenDirectorPlans();return;}
     view.owner=null;view.available=false;view.refreshTicket=(view.refreshTicket||0)+1;retryRequest=null;
     view.querySelector('#directorGenerate').disabled=true;view.querySelector('#directorSaved').replaceChildren();view.querySelector('#directorResult').replaceChildren();
     view.querySelector('#directorIdea').value='';
