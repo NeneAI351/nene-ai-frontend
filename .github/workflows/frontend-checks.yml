@@ -30,6 +30,8 @@ jobs:
 
       - name: Verify paid advertisement workflow
         run: node scripts/check_ad_studio.cjs
+      - name: Verify Social Content review and playback
+        run: node scripts/check_social_content.cjs
 
       - name: Verify fullscreen layout and Studio paging
         run: node scripts/check_layout.cjs
