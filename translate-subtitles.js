@@ -158,7 +158,8 @@
       }
     });
     const editor = button('Open Video Editor', () => window.neneOpenVideoEditor?.({tool:'Captions'}));
-    main.append(fileLabel, scriptLabel, clear, translate, status, cues, translated, download, voice, editor);
+    const lipSync = button('Lip-sync a saved video', () => window.neneOpenLipSync?.());
+    main.append(fileLabel, scriptLabel, clear, translate, status, cues, translated, download, voice, editor, lipSync);
     window.setNav('create');
     document.getElementById('screen').replaceChildren(main);
   };
