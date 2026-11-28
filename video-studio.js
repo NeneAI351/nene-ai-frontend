@@ -280,7 +280,34 @@
         const download=el('a','Open / download voice track','btn');download.id='voice-download';download.href=url.href;download.target='_blank';download.rel='noopener noreferrer';download.download='nene-ai-voice.wav';
         const refresh=el('button','Refresh voice link','btn');refresh.type='button';refresh.onclick=()=>pollSpeech(v,job,0);
         preview.onerror=()=>speechSay(v,'The voice preview could not load. Refresh the voice link to reopen this saved track; no new voice will be generated.');
-        v.voiceOutput.append(download,refresh);
+        const addToEditor=el('button','Add voiceover to Video Editor','btn gold');addToEditor.type='button';
+        addToEditor.onclick=async()=>{
+          if(addToEditor.disabled||!alive(v)||v.speechSelected!==job.id)return;
+          const owner=v.owner;
+          addToEditor.disabled=true;
+          const controller=new AbortController();
+          const timeout=setTimeout(()=>controller.abort(),30000);
+          try{
+            speechSay(v,'Opening your saved voiceover…');
+            const latest=await api(v,`/api/speech/generations/${job.id}`);
+            if(!alive(v)||v.speechSelected!==job.id||owner!==v.owner)return;
+            if(latest.status!=='succeeded'||latest.audio?.private!==true||latest.audio.source_audio_id!==data.source_audio_id)throw Error('The saved voice track could not be confirmed.');
+            const mediaUrl=new URL(latest.audio.url);
+            if(mediaUrl.protocol!=='https:')throw Error('A secure voice link is unavailable.');
+            const response=await fetch(mediaUrl.href,{signal:controller.signal,cache:'no-store',redirect:'error'});
+            if(!response.ok)throw Error('The saved voiceover could not load.');
+            const blob=await response.blob();
+            if(!blob.size||blob.size>16*1024*1024)throw Error('The saved voiceover is empty or too large.');
+            if(!alive(v)||v.speechSelected!==job.id||owner!==await window.neneAuthGetUserId?.())return;
+            if(!window.neneOpenVideoEditor)throw Error('Video Editor could not load. Refresh NENE AI.');
+            await window.neneOpenVideoEditor({owner,tool:'Audio',voiceFile:new File([blob],'nene-ai-voiceover.wav',{type:'audio/wav'})});
+          }catch(error){
+            if(alive(v)&&v.speechSelected===job.id)speechSay(v,error.message+' You can still download the track.');
+          }finally{
+            clearTimeout(timeout);addToEditor.disabled=false;
+          }
+        };
+        v.voiceOutput.append(download,refresh,addToEditor);
         const report=el('button','Report AI content','btn');report.type='button';report.onclick=()=>window.neneOpenOutputReport?.({kind:'voice',id:job.id,owner:v.owner});v.voiceOutput.append(report);
         const approve=el('button',v.voiceOnly?'Animate a character with this voice':'Use this voice and script for video','btn gold');approve.type='button';approve.id='voice-approve';approve.disabled=data.can_animate!==true;
         approve.onclick=()=>{if(!alive(v)||v.speechSelected!==job.id)return;v.form.elements.dialogue.value=job.text;v.form.elements.ttsVoice.value=job.voice;v.form.querySelector('[data-choice-for="ttsVoice"]').textContent=job.voice;if(v.animationDetails)v.animationDetails.open=true;v.audioAsset=data;v.approvedSpeech={script:job.text,voice:job.voice,id:data.source_audio_id};v.quote=null;v.generate.disabled=true;speechSay(v,'Voice approved. Review the video price below; the saved voice will be used without another voice-generation charge.');};v.voiceOutput.append(approve);
