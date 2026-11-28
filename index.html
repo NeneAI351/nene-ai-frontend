@@ -395,6 +395,7 @@ function openFeature(type){
  if(type==='photo-design' && window.NENE_PHOTO_DESIGN_PREVIEW === true) return window.neneOpenPhotoDesign?.();
  const editingTools={audio:'Audio',captions:'Captions',formats:'Format'};
  if(editingTools[type]){if(window.neneOpenVideoEditor)return window.neneOpenVideoEditor({tool:editingTools[type]});toast('Video Editor could not load. Refresh the app.');return;}
+ if(type==='translate' && window.neneOpenTranslateSubtitles)return window.neneOpenTranslateSubtitles();
  if(['models','images','enhance','translate'].includes(type))return openStudioAvailability(type);
 
  if(type==='text'||type==='image'){if(window.neneOpenVideoStudio)return window.neneOpenVideoStudio(type);toast('Video Studio could not load. Refresh the app.');return;}
@@ -1212,6 +1213,7 @@ if ('serviceWorker' in navigator) {
 <script src="./privacy-actions.js?v=50"></script>
 <script>window.NENE_PHOTO_DESIGN_PREVIEW = true;</script>
 <script src="./photo-design.js?v=5"></script>
+<script src="./translate-subtitles.js?v=1"></script>
 <script src="./layout.js?v=61"></script>
 </body>
 </html>
