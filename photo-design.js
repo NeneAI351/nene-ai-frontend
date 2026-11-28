@@ -28,18 +28,55 @@
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(typeof data.detail === 'string' ? data.detail : 'Photo Design is unavailable.');
+      const error = new Error(typeof data.detail === 'string' ? data.detail : 'Photo Design is unavailable.');
+      error.status = response.status;
+      throw error;
     }
     return data;
+  }
+
+  function pendingPhotos(owner, id, active) {
+    const key = 'nene_photo_pending_v1:' + owner;
+    try {
+      const stored = JSON.parse(localStorage.getItem(key) || '{}');
+      const pending = Object.fromEntries(Object.entries(stored).filter(([, started]) => Date.now() - started < 15 * 60 * 1000));
+      if (id) {
+        if (active) pending[id] = Date.now();
+        else delete pending[id];
+        localStorage.setItem(key, JSON.stringify(pending));
+      }
+      return pending;
+    } catch {
+      return {};
+    }
   }
 
   window.neneLoadSavedPhotos = async container => {
     if (!container) return;
     const owner = await window.neneAuthGetUserId?.();
-    if (!owner) return;
+    if (!owner) {
+      container.textContent = 'Sign in to see your photos.';
+      return;
+    }
+    container.textContent = 'Loading your photos…';
     try {
-      const { edits } = await request(owner, 'edits');
-      if (!container.isConnected || !edits?.length) return;
+      const data = await request(owner, 'edits');
+      if (!container.isConnected || await window.neneAuthGetUserId?.() !== owner) return;
+      const edits = Array.isArray(data.edits) ? data.edits : [];
+      for (const edit of edits) pendingPhotos(owner, edit.id, false);
+      const pending = Object.values(pendingPhotos(owner));
+      container.replaceChildren();
+      if (pending.length) {
+        const recent = pending.some(started => Date.now() - started < 150000);
+        container.append(node('p', recent ? 'Creating your photo edit…' : 'Waiting for an edit result. Tap Refresh to check again.', 'notice'));
+        if (recent) setTimeout(() => {
+          if (container.isConnected) window.neneLoadSavedPhotos(container);
+        }, 10000);
+      }
+      if (!edits.length) {
+        if (!pending.length) container.textContent = 'No edited photos yet.';
+        return;
+      }
       container.append(node('h2', 'Edited photos'));
       for (const edit of edits) {
         const url = new URL(edit.image_url);
@@ -57,7 +94,7 @@
         container.append(link);
       }
     } catch {
-      if (container.isConnected) container.append(node('p', 'Edited photos are unavailable right now.'));
+      if (container.isConnected) container.textContent = 'Photos could not load. Tap Refresh to try again.';
     }
   };
 
@@ -124,7 +161,7 @@
     openResult.hidden = true;
     const creations = node('button', 'Open My Creations', 'btn');
     creations.type = 'button';
-    creations.onclick = () => window.renderCreations();
+    creations.onclick = () => window.renderCreations('photos');
     form.append(fileLabel, promptLabel, button, status);
     root.append(form, edited, openResult, creations, original);
 
@@ -196,6 +233,7 @@
         }
         button.textContent = 'Creating…';
         status.textContent = 'Creating your edit. It will appear in My Creations when ready.';
+        pendingPhotos(owner, quote.quote_id, true);
         const result = await request(owner, 'edits', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -203,6 +241,7 @@
         });
         const url = new URL(result.image_url);
         if (!result.id || url.protocol !== 'https:') throw new Error('The edited photo is unavailable.');
+        pendingPhotos(owner, quote.quote_id, false);
         if (!root.isConnected) return;
         quote = undefined;
         openResult.href = url.href;
@@ -211,6 +250,9 @@
         edited.src = url.href;
         status.textContent = 'Done. Your edited photo is in My Creations.';
       } catch (error) {
+        if (quote && (error.status < 500 || error.message.includes('No credits were charged'))) {
+          pendingPhotos(owner, quote.quote_id, false);
+        }
         status.textContent = quote && error instanceof TypeError
           ? 'The connection was interrupted. Check My Creations or retry this edit to recover the result.'
           : error.message;
