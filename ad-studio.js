@@ -97,9 +97,9 @@
       requestStarted=true;
       say(v,'Submitting your paid advertisement once…');
       const result=await api(v,'/api/generations',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':v.pending.key},body:JSON.stringify(v.pending.payload)});
-      if(!alive(v))return;
       rememberJob(v,result.generation_id,v.pending.draft.product);
       localStorage.removeItem(storageKey(v,'pending'));v.pending=null;v.quote=null;
+      if(!alive(v))return;
       v.generate.textContent='Review price before creating another ad';
       await poll(v,result.generation_id,0);
       try{await window.neneRefreshPaidWallet?.();}catch(_){}
